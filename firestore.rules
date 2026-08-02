@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function categoryIsPublic(categoryId) {
+      return exists(/databases/$(database)/documents/categories/$(categoryId)) &&
+        get(/databases/$(database)/documents/categories/$(categoryId)).data.isActive == true &&
+        get(/databases/$(database)/documents/categories/$(categoryId)).data.isArchived == false;
+    }
+
+    match /categories/{categoryId} {
+      allow read: if resource.data.isActive == true && resource.data.isArchived == false;
+      allow write: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if resource.data.isActive == true &&
+        resource.data.isArchived == false &&
+        categoryIsPublic(resource.data.categoryId);
+      allow write: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow create: if
+        request.auth == null &&
+        request.resource.data.status == 'new_request' &&
+        request.resource.data.items.size() > 0 &&
+        request.resource.data.estimatedTotalCentavos >= 0 &&
+        request.resource.data.finalQuotedTotalCentavos == 0 &&
+        request.resource.data.bestSellerMetricsApplied == false &&
+        request.resource.data.customer.name is string &&
+        request.resource.data.customer.name.size() > 0 &&
+        request.resource.data.customer.mobileNumber is string &&
+        request.resource.data.customer.mobileNumber.size() >= 11 &&
+        request.resource.data.customer.barangay is string &&
+        request.resource.data.customer.barangay.size() > 0;
+
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /orders/{orderId}/status_history/{historyId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /app_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
