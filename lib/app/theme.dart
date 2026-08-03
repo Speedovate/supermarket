@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../core/constants/app_colors.dart';
+
 ThemeData buildAppTheme() {
-  const primary = Color(0xFF2439B8);
-  const primaryDark = Color(0xFF172A91);
+  const primary = AppColors.logoBlue;
+  const primaryDark = AppColors.logoBlueDark;
   const accent = Color(0xFFE31E24);
   const bg = Color(0xFFF7F8FC);
   const text = Color(0xFF172033);

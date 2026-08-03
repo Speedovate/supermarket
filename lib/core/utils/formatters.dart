@@ -5,12 +5,21 @@ import '../models/app_models.dart';
 final _currency = NumberFormat.currency(
   locale: 'en_PH',
   symbol: 'PHP ',
-  decimalDigits: 2,
+  decimalDigits: 1,
+);
+final _currencyWhole = NumberFormat.currency(
+  locale: 'en_PH',
+  symbol: 'PHP ',
+  decimalDigits: 0,
 );
 final _shortDate = DateFormat('MMM d, yyyy');
 
-String formatPesos(int centavos) =>
-    _currency.format(centavos / 100).replaceFirst('PHP ', '₱');
+String formatPesos(int centavos) {
+  final pesos = centavos / 100;
+  final hasDecimal = centavos % 100 != 0;
+  final formatted = (hasDecimal ? _currency : _currencyWhole).format(pesos);
+  return formatted.replaceFirst('PHP ', '₱');
+}
 
 String formatAsOfDate(DateTime date) => _shortDate.format(date);
 

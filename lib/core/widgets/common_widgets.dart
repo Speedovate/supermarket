@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../constants/app_colors.dart';
 import '../models/app_models.dart';
 import '../utils/formatters.dart';
 
@@ -16,23 +17,23 @@ class BrandLogo extends StatelessWidget {
     final mainStyle = GoogleFonts.inter(
       textStyle: Theme.of(context).textTheme.titleLarge,
       fontWeight: FontWeight.w800,
-      color: onDark ? Colors.white : const Color(0xFF172A91),
+      color: onDark ? Colors.white : AppColors.logoBlue,
       height: 1,
-      fontSize: compact ? 20 : 28,
+      fontSize: compact ? 20 : 24,
     );
     final subStyle = GoogleFonts.inter(
       textStyle: Theme.of(context).textTheme.titleMedium,
       fontWeight: FontWeight.w800,
       color: onDark ? const Color(0xFFFFB9BD) : const Color(0xFFE31E24),
       height: 1,
-      fontSize: compact ? 13 : 19.5,
+      fontSize: compact ? 13 : 17,
     );
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          height: compact ? 44 : 66,
+          height: compact ? 44 : 60,
           decoration: BoxDecoration(color: Colors.white),
           clipBehavior: Clip.antiAlias,
           child: Image.asset(
@@ -158,7 +159,9 @@ class EmptyStateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: const [BoxShadow(color: Color(0x12172A91), blurRadius: 18)],
+        boxShadow: const [
+          BoxShadow(color: AppColors.logoBlueShadow, blurRadius: 18),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(28),
@@ -168,7 +171,7 @@ class EmptyStateCard extends StatelessWidget {
             const Icon(
               Icons.inbox_outlined,
               size: 42,
-              color: Color(0xFF2439B8),
+              color: AppColors.logoBlue,
             ),
             const SizedBox(height: 14),
             Text(
@@ -210,7 +213,9 @@ class SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: const [BoxShadow(color: Color(0x12172A91), blurRadius: 18)],
+        boxShadow: const [
+          BoxShadow(color: AppColors.logoBlueShadow, blurRadius: 18),
+        ],
       ),
       child: Padding(padding: padding, child: child),
     );
@@ -222,10 +227,14 @@ class CartFab extends StatelessWidget {
     super.key,
     required this.itemCount,
     required this.totalCentavos,
+    this.fullWidth = false,
+    this.horizontalMargin = 0,
   });
 
   final int itemCount;
   final int totalCentavos;
+  final bool fullWidth;
+  final double horizontalMargin;
 
   @override
   Widget build(BuildContext context) {
@@ -233,14 +242,36 @@ class CartFab extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return FloatingActionButton.extended(
-      onPressed: () => context.push('/cart'),
-      backgroundColor: const Color(0xFF2439B8),
-      foregroundColor: Colors.white,
-      icon: const Icon(Icons.shopping_cart_checkout),
-      label: Text(
-        '$itemCount item${itemCount == 1 ? '' : 's'} • ${formatPesos(totalCentavos)}',
+    final button = SizedBox(
+      height: 56,
+      width: fullWidth ? double.infinity : null,
+      child: FloatingActionButton.extended(
+        onPressed: () => context.push('/cart'),
+        backgroundColor: AppColors.logoBlue,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(1000),
+        ),
+        icon: const Icon(Icons.shopping_cart_checkout),
+        label: Text(
+          '$itemCount item${itemCount == 1 ? '' : 's'} • ${formatPesos(totalCentavos)}',
+        ),
       ),
+    );
+
+    if (!fullWidth) {
+      final additionalRightInset = horizontalMargin > 16
+          ? horizontalMargin - 16
+          : 0.0;
+      return Padding(
+        padding: EdgeInsets.only(right: additionalRightInset),
+        child: button,
+      );
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: horizontalMargin),
+      child: button,
     );
   }
 }

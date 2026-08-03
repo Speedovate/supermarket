@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -353,7 +354,7 @@ class _CartSummary extends ConsumerWidget {
                 formatPesos(totalCentavos),
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFF172A91),
+                  color: AppColors.logoBlue,
                 ),
               ),
             ],

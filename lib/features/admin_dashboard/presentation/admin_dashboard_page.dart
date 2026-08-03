@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/admin_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -31,7 +32,7 @@ class AdminDashboardPage extends ConsumerWidget {
               borderRadius: BorderRadius.circular(28),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x1A172A91),
+                  color: AppColors.logoBlueShadowStrong,
                   blurRadius: 24,
                   offset: Offset(0, 12),
                 ),
@@ -71,7 +72,7 @@ class AdminDashboardPage extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: const [
                         BoxShadow(
-                          color: Color(0x12172A91),
+                          color: AppColors.logoBlueShadow,
                           blurRadius: 18,
                           offset: Offset(0, 10),
                         ),
@@ -104,7 +105,7 @@ class AdminDashboardPage extends ConsumerWidget {
               borderRadius: BorderRadius.circular(28),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x1A172A91),
+                  color: AppColors.logoBlueShadowStrong,
                   blurRadius: 24,
                   offset: Offset(0, 12),
                 ),
@@ -130,7 +131,7 @@ class AdminDashboardPage extends ConsumerWidget {
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       headingRowColor: WidgetStateProperty.all(
-                        const Color(0xFFF4F7FF),
+                        AppColors.logoBlueSoft,
                       ),
                       columns: const [
                         DataColumn(label: Text('Customer')),

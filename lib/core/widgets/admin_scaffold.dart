@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../constants/app_colors.dart';
 import '../../features/app_state/app_controller.dart';
 import 'common_widgets.dart';
 
@@ -55,7 +56,7 @@ class AdminScaffold extends ConsumerWidget {
       drawer: isDesktop
           ? null
           : Drawer(
-              backgroundColor: const Color(0xFF172A91),
+              backgroundColor: AppColors.logoBlue,
               child: _NavList(selectedRoute: selectedRoute),
             ),
       appBar: AppBar(
@@ -84,12 +85,12 @@ class AdminScaffold extends ConsumerWidget {
                 gradient: const LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFF1E39C8), Color(0xFF11277F)],
+                  colors: [AppColors.logoBlue, AppColors.logoBlueDark],
                 ),
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x332439B8),
+                    color: AppColors.logoBlueGlow,
                     blurRadius: 28,
                     offset: Offset(0, 18),
                   ),
