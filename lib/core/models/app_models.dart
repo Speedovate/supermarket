@@ -358,7 +358,9 @@ class CustomerDraft {
     'name': name,
     'mobileNumber': mobileNumber,
     'normalizedMobileNumber': normalizedMobileNumber,
-    'barangay': barangay,
+    'barangay': fulfillmentMethod == FulfillmentMethod.delivery
+        ? barangay
+        : null,
     'addressLandmark': addressLandmark,
     'note': note,
     'fulfillmentMethod': fulfillmentMethod.name,

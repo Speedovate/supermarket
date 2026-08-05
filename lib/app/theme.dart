@@ -25,7 +25,41 @@ ThemeData buildAppTheme() {
     scaffoldBackgroundColor: bg,
   );
 
+  Color? resolvePrimaryButtonOverlay(Set<WidgetState> states) {
+    return Colors.transparent;
+  }
+
+  Color resolvePrimaryButtonBackground(Set<WidgetState> states) {
+    return AppColors.brandingBlueInteractiveBackground(
+      states,
+      baseColor: primary,
+    );
+  }
+
+  Color? resolveSecondaryButtonOverlay(Set<WidgetState> states) {
+    if (states.contains(WidgetState.pressed)) {
+      return Colors.black.withValues(
+        alpha: AppColors.neutralPressedOverlayAlpha,
+      );
+    }
+    if (states.contains(WidgetState.hovered)) {
+      return Colors.black.withValues(
+        alpha: AppColors.neutralHoverOverlayAlpha,
+      );
+    }
+    if (states.contains(WidgetState.focused)) {
+      return Colors.black.withValues(
+        alpha: AppColors.neutralFocusOverlayAlpha,
+      );
+    }
+    return null;
+  }
+
   return base.copyWith(
+    splashFactory: NoSplash.splashFactory,
+    highlightColor: Colors.transparent,
+    splashColor: Colors.transparent,
+    hoverColor: Colors.transparent,
     textTheme: GoogleFonts.poppinsTextTheme(
       base.textTheme,
     ).apply(bodyColor: text, displayColor: text),
@@ -69,9 +103,19 @@ ThemeData buildAppTheme() {
       style: ElevatedButton.styleFrom(
         backgroundColor: primary,
         foregroundColor: Colors.white,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        splashFactory: NoSplash.splashFactory,
+        enableFeedback: false,
         minimumSize: const Size(0, 52),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         textStyle: const TextStyle(fontWeight: FontWeight.w700),
+      ).copyWith(
+        animationDuration: Duration.zero,
+        backgroundColor: WidgetStateProperty.resolveWith(
+          resolvePrimaryButtonBackground,
+        ),
+        overlayColor: WidgetStateProperty.resolveWith(resolvePrimaryButtonOverlay),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -79,7 +123,30 @@ ThemeData buildAppTheme() {
         minimumSize: const Size(0, 52),
         foregroundColor: primaryDark,
         side: const BorderSide(color: border),
+        splashFactory: NoSplash.splashFactory,
+        enableFeedback: false,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ).copyWith(
+        animationDuration: Duration.zero,
+        overlayColor: WidgetStateProperty.resolveWith(resolveSecondaryButtonOverlay),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: primaryDark,
+        splashFactory: NoSplash.splashFactory,
+        enableFeedback: false,
+      ).copyWith(
+        animationDuration: Duration.zero,
+        overlayColor: WidgetStateProperty.resolveWith(resolveSecondaryButtonOverlay),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        splashFactory: NoSplash.splashFactory,
+        foregroundColor: text,
+      ).copyWith(
+        overlayColor: WidgetStateProperty.resolveWith(resolveSecondaryButtonOverlay),
       ),
     ),
     appBarTheme: const AppBarTheme(

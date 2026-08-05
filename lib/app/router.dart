@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../features/admin_auth/presentation/admin_login_page.dart';
 import '../features/admin_dashboard/presentation/admin_dashboard_page.dart';
 import '../features/app_state/app_controller.dart';
-import '../features/cart/presentation/cart_page.dart';
 import '../features/catalog/presentation/catalog_page.dart';
 import '../features/category_management/presentation/admin_categories_page.dart';
 import '../features/checkout/presentation/order_review_page.dart';
@@ -40,7 +39,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/', builder: (context, state) => const CatalogPage()),
-      GoRoute(path: '/cart', builder: (context, state) => const CartPage()),
       GoRoute(
         path: '/order-review',
         builder: (context, state) => const OrderReviewPage(),

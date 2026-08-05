@@ -49,7 +49,7 @@ class AdminDashboardPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Operational snapshot for products, categories, and incoming order requests.',
+                  'Operational snapshot for products, categories, and incoming orders.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: const Color(0xFF667085),
                   ),
@@ -115,7 +115,7 @@ class AdminDashboardPage extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Recent Order Requests',
+                  'Recent Orders',
                   style: Theme.of(
                     context,
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -123,7 +123,7 @@ class AdminDashboardPage extends ConsumerWidget {
                 const SizedBox(height: 14),
                 if (vm.recentOrders.isEmpty)
                   const EmptyStateCard(
-                    title: 'No order requests',
+                    title: 'No orders',
                     message: 'Customer submissions will appear here.',
                   )
                 else

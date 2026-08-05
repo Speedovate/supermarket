@@ -52,8 +52,9 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage> {
             if (!mounted) {
               return;
             }
+            messenger.clearSnackBars();
             messenger.showSnackBar(
-              const SnackBar(content: Text('Settings saved.')),
+              successSnackBar('Settings saved.'),
             );
           },
           icon: const Icon(Icons.save_outlined),

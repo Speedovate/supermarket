@@ -1,10 +1,149 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../constants/app_colors.dart';
 import '../models/app_models.dart';
 import '../utils/formatters.dart';
+
+const _snackbarSuccessColor = Color(0xFF2E7D32);
+const _snackbarErrorColor = Color(0xFFE31E24);
+
+SnackBar successSnackBar(String message) {
+  return SnackBar(
+    backgroundColor: _snackbarSuccessColor,
+    content: Text(
+      message,
+      style: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+        height: 1.15,
+      ),
+    ),
+  );
+}
+
+SnackBar errorSnackBar(String message) {
+  return SnackBar(
+    backgroundColor: _snackbarErrorColor,
+    content: Text(
+      message,
+      style: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+        height: 1.15,
+      ),
+    ),
+  );
+}
+
+class MousePressable extends StatefulWidget {
+  const MousePressable({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.enabled = true,
+    this.cursor = SystemMouseCursors.click,
+    this.behavior = HitTestBehavior.opaque,
+    this.borderRadius,
+    this.shape = BoxShape.rectangle,
+    this.hoverOverlayAlpha = AppColors.neutralHoverOverlayAlpha,
+    this.pressedOverlayAlpha = AppColors.neutralPressedOverlayAlpha,
+    this.stateBuilder,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final bool enabled;
+  final MouseCursor cursor;
+  final HitTestBehavior behavior;
+  final BorderRadius? borderRadius;
+  final BoxShape shape;
+  final double hoverOverlayAlpha;
+  final double pressedOverlayAlpha;
+  final Widget Function(
+    BuildContext context,
+    bool hovered,
+    bool pressed,
+    Widget child,
+  )? stateBuilder;
+
+  @override
+  State<MousePressable> createState() => _MousePressableState();
+}
+
+class _MousePressableState extends State<MousePressable> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final overlayColor = !widget.enabled
+        ? null
+        : _pressed
+        ? Colors.black.withValues(alpha: widget.pressedOverlayAlpha)
+        : (_hovered ? Colors.black.withValues(alpha: widget.hoverOverlayAlpha) : null);
+
+    Widget child = Stack(
+      fit: StackFit.passthrough,
+      children: [
+        widget.child,
+        if (overlayColor != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: overlayColor,
+                  shape: widget.shape,
+                  borderRadius: widget.shape == BoxShape.rectangle
+                      ? widget.borderRadius
+                      : null,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+
+    if (widget.stateBuilder != null) {
+      child = widget.stateBuilder!(
+        context,
+        widget.enabled && _hovered,
+        widget.enabled && _pressed,
+        widget.child,
+      );
+    }
+
+    if (widget.shape == BoxShape.circle) {
+      child = ClipOval(child: child);
+    } else if (widget.borderRadius != null) {
+      child = ClipRRect(
+        borderRadius: widget.borderRadius!,
+        child: child,
+      );
+    }
+
+    return MouseRegion(
+      cursor: widget.enabled && widget.onTap != null
+          ? widget.cursor
+          : MouseCursor.defer,
+      onEnter: (_) => setState(() => _hovered = widget.enabled),
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _pressed = false;
+      }),
+      child: Listener(
+        onPointerDown: (_) => setState(() => _pressed = widget.enabled),
+        onPointerUp: (_) => setState(() => _pressed = false),
+        onPointerCancel: (_) => setState(() => _pressed = false),
+        child: GestureDetector(
+          behavior: widget.behavior,
+          onTap: widget.enabled ? widget.onTap : null,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
 
 class BrandLogo extends StatelessWidget {
   const BrandLogo({super.key, this.compact = false, this.onDark = false});
@@ -104,9 +243,14 @@ class ProductPlaceholder extends StatelessWidget {
 }
 
 class StatusBadge extends StatelessWidget {
-  const StatusBadge({super.key, required this.status});
+  const StatusBadge({
+    super.key,
+    required this.status,
+    this.fontSize = 14,
+  });
 
   final OrderStatus status;
+  final double fontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -125,14 +269,19 @@ class StatusBadge extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
+        color: color,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Text(
           displayStatus(status),
-          style: TextStyle(color: color, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: fontSize,
+            height: 1.15,
+          ),
         ),
       ),
     );
@@ -159,9 +308,7 @@ class EmptyStateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(color: AppColors.logoBlueShadow, blurRadius: 18),
-        ],
+        border: Border.all(color: const Color(0xFFE4E7EC)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(28),
@@ -178,17 +325,40 @@ class EmptyStateCard extends StatelessWidget {
               title,
               style: Theme.of(
                 context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                height: 1.15,
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(height: 1.15),
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 18),
-              ElevatedButton(onPressed: onAction, child: Text(actionLabel!)),
+              SizedBox(
+                height: 36,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.logoBlue,
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    minimumSize: const Size(0, 36),
+                    maximumSize: const Size(double.infinity, 36),
+                    fixedSize: const Size(double.infinity, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  onPressed: onAction,
+                  child: Text(actionLabel!),
+                ),
+              ),
             ],
           ],
         ),
@@ -227,6 +397,7 @@ class CartFab extends StatelessWidget {
     super.key,
     required this.itemCount,
     required this.totalCentavos,
+    required this.onTap,
     this.fullWidth = false,
     this.horizontalMargin = 0,
   });
@@ -235,6 +406,7 @@ class CartFab extends StatelessWidget {
   final int totalCentavos;
   final bool fullWidth;
   final double horizontalMargin;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -245,17 +417,41 @@ class CartFab extends StatelessWidget {
     final button = SizedBox(
       height: 56,
       width: fullWidth ? double.infinity : null,
-      child: FloatingActionButton.extended(
-        onPressed: () => context.push('/cart'),
-        backgroundColor: AppColors.logoBlue,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(1000),
-        ),
-        icon: const Icon(Icons.shopping_cart_checkout),
-        label: Text(
-          '$itemCount item${itemCount == 1 ? '' : 's'} • ${formatPesos(totalCentavos)}',
-        ),
+      child: MousePressable(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(1000),
+        stateBuilder: (context, hovered, pressed, child) {
+          final states = <WidgetState>{
+            if (hovered) WidgetState.hovered,
+            if (pressed) WidgetState.pressed,
+          };
+          return Container(
+            height: 56,
+            width: fullWidth ? double.infinity : null,
+            decoration: BoxDecoration(
+              color: AppColors.brandingBlueInteractiveBackground(states),
+              borderRadius: BorderRadius.circular(1000),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisSize: fullWidth ? MainAxisSize.max : MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.shopping_cart_checkout, color: Colors.white),
+                const SizedBox(width: 10),
+                Text(
+                  '$itemCount item${itemCount == 1 ? '' : 's'} • ${formatPesos(totalCentavos)}',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    height: 1.15,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+        child: const SizedBox.shrink(),
       ),
     );
 

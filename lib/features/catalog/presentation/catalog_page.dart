@@ -4,15 +4,79 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../../core/constants/barangays.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
 import 'catalog_view_model.dart';
+
+typedef _CustomerControllers = ({
+  TextEditingController name,
+  TextEditingController mobile,
+  TextEditingController barangay,
+});
+
+Future<void> _showProductDetailsModal(
+  BuildContext context,
+  Product product,
+) async {
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => _ProductModal(product: product),
+  );
+}
+
+void _popAllRoutesUntilFirst(BuildContext context) {
+  Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
+}
+
+class _PhilippineMobileInputFormatter extends TextInputFormatter {
+  const _PhilippineMobileInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final raw = newValue.text;
+    final digitsOnly = raw.replaceAll(RegExp(r'[^0-9]'), '');
+
+    String nextText;
+    if (raw.startsWith('+639')) {
+      final localDigits = digitsOnly.replaceFirst(RegExp(r'^639'), '');
+      nextText = '09$localDigits';
+    } else if (digitsOnly.startsWith('639')) {
+      final localDigits = digitsOnly.substring(3);
+      nextText = '09$localDigits';
+    } else if (digitsOnly.startsWith('9')) {
+      nextText = '0$digitsOnly';
+    } else {
+      nextText = digitsOnly;
+    }
+
+    if (nextText.length > 11) {
+      nextText = nextText.substring(0, 11);
+    }
+
+    if (nextText == oldValue.text) {
+      return newValue.copyWith(
+        selection: TextSelection.collapsed(offset: nextText.length),
+        composing: TextRange.empty,
+      );
+    }
+
+    return TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextText.length),
+      composing: TextRange.empty,
+    );
+  }
+}
 
 class CatalogPage extends ConsumerStatefulWidget {
   const CatalogPage({super.key});
@@ -24,12 +88,18 @@ class CatalogPage extends ConsumerStatefulWidget {
 class _CatalogPageState extends ConsumerState<CatalogPage> {
   final _searchController = TextEditingController();
   final _bestSellersScrollController = ScrollController();
+  late final TextEditingController _customerNameController;
+  late final TextEditingController _customerMobileController;
+  late final TextEditingController _customerBarangayController;
   Timer? _debounce;
   String _query = '';
   String _categoryId = 'all';
   CatalogSortOption _sortOption = CatalogSortOption.defaultOrder;
   CatalogSortOption _bestSellersSortOption = CatalogSortOption.defaultOrder;
   bool _isBestSellersInteracting = false;
+  bool _desktopCartPanelOpen = false;
+  bool _previousOrdersExpanded = false;
+  String _selectedCartThreadId = 'current';
 
   bool get _showBestSellersLeftControl =>
       _bestSellersScrollController.hasClients &&
@@ -58,6 +128,10 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   @override
   void initState() {
     super.initState();
+    final draft = ref.read(appControllerProvider).customerDraft;
+    _customerNameController = TextEditingController(text: draft.name);
+    _customerMobileController = TextEditingController(text: draft.mobileNumber);
+    _customerBarangayController = TextEditingController(text: draft.barangay);
     _bestSellersScrollController.addListener(_handleBestSellersScroll);
     _scheduleBestSellersVisibilityRefresh();
   }
@@ -66,9 +140,54 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   void dispose() {
     _debounce?.cancel();
     _searchController.dispose();
+    _customerNameController.dispose();
+    _customerMobileController.dispose();
+    _customerBarangayController.dispose();
     _bestSellersScrollController.removeListener(_handleBestSellersScroll);
     _bestSellersScrollController.dispose();
     super.dispose();
+  }
+
+  _CustomerControllers get _customerControllers => (
+    name: _customerNameController,
+    mobile: _customerMobileController,
+    barangay: _customerBarangayController,
+  );
+
+  CustomerDraft _buildCustomerDraft(FulfillmentMethod method) {
+    return CustomerDraft(
+      name: _customerNameController.text,
+      mobileNumber: _customerMobileController.text,
+      normalizedMobileNumber: normalizePhoneNumber(
+        _customerMobileController.text,
+      ),
+      barangay: method == FulfillmentMethod.delivery
+          ? _customerBarangayController.text
+          : '',
+      addressLandmark: '',
+      fulfillmentMethod: method,
+    );
+  }
+
+  Future<void> _persistCustomerDraft({FulfillmentMethod? method}) async {
+    final currentMethod =
+        method ??
+        ref.read(appControllerProvider).customerDraft.fulfillmentMethod;
+    await ref
+        .read(appControllerProvider.notifier)
+        .updateCustomerDraft(_buildCustomerDraft(currentMethod));
+  }
+
+  Future<void> _handleCartTap(double width) async {
+    if (width >= 1040) {
+      if (mounted) {
+        setState(() => _desktopCartPanelOpen = !_desktopCartPanelOpen);
+      }
+    }
+  }
+
+  List<OrderRequest> _matchingCustomerOrders(AppState state) {
+    return state.orders;
   }
 
   Future<void> _snapBestSellersToNearest(double itemExtent) async {
@@ -152,6 +271,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   @override
   Widget build(BuildContext context) {
     final vm = ref.watch(catalogViewModelProvider);
+    final appState = ref.watch(appControllerProvider);
     final controller = ref.watch(appControllerProvider.notifier);
     final products = controller.publicProductsFor(
       categoryId: _categoryId,
@@ -169,13 +289,18 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final selectedCategoryTitle = _categoryId == 'all'
         ? 'All Products'
         : selectedCategory?.name ?? 'All Products';
-    final width = MediaQuery.of(context).size.width;
-    final isMobile = width < 700;
+    final media = MediaQuery.of(context);
+    final width = media.size.width;
+    final isDesktopCartCapable = width >= 1040;
+    final showDesktopCartPanel = isDesktopCartCapable && _desktopCartPanelOpen;
+    final mainContentWidth =
+        width - (showDesktopCartPanel ? _kDesktopCartPanelWidth : 0);
+    final isMobile = mainContentWidth < 700;
     const maxContentWidth = 1440.0;
-    final gridPadding = _outerHorizontalPaddingForWidth(width);
+    final gridPadding = _outerHorizontalPaddingForWidth(mainContentWidth);
     const gridSpacing = 16.0;
-    final availableGridWidth = width - (gridPadding * 2);
-    final columns = _catalogColumnsForWidth(width);
+    final availableGridWidth = mainContentWidth - (gridPadding * 2);
+    final columns = _catalogColumnsForWidth(mainContentWidth);
     final resolvedCardWidth = columns == 1
         ? availableGridWidth
         : (availableGridWidth - ((columns - 1) * gridSpacing)) / columns;
@@ -190,22 +315,21 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       _ => resolvedCardWidth + lerpDouble(173.0, 160.0, gridCardDensity)!,
     };
     final gridAspectRatio = resolvedCardWidth / resolvedCardHeight;
-    final bottomScrollPadding = vm.cartCount > 0
+    final bottomScrollPadding = vm.cartCount > 0 && !showDesktopCartPanel
         ? (_kFloatingCartButtonBottomOffset * 2) + _kFloatingCartButtonHeight
         : gridPadding;
+    final matchingOrders = _matchingCustomerOrders(appState);
+    final selectedThreadId =
+        {
+          'current',
+          ...matchingOrders.map((order) => order.id),
+        }.contains(_selectedCartThreadId)
+        ? _selectedCartThreadId
+        : 'current';
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      floatingActionButtonLocation: columns <= 2
-          ? FloatingActionButtonLocation.centerFloat
-          : FloatingActionButtonLocation.endFloat,
-      floatingActionButton: CartFab(
-        itemCount: vm.cartCount,
-        totalCentavos: vm.cartTotalCentavos,
-        fullWidth: columns <= 2,
-        horizontalMargin: gridPadding,
-      ),
-      body: SafeArea(
+    final mainPane = MediaQuery(
+      data: media.copyWith(size: Size(mainContentWidth, media.size.height)),
+      child: SafeArea(
         child: Column(
           children: [
             Align(
@@ -225,6 +349,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                   categories: vm.categories,
                   selectedId: _categoryId,
                   onSelected: (value) => setState(() => _categoryId = value),
+                  showCartPanelOpenState: showDesktopCartPanel,
+                  onCartTap: () => _handleCartTap(mainContentWidth),
                 ),
               ),
             ),
@@ -233,12 +359,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                 slivers: [
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        0,
-                        18,
-                        0,
-                        0,
-                      ),
+                      padding: const EdgeInsets.fromLTRB(0, 18, 0, 0),
                       child: _HeroBanner(
                         isMobile: isMobile,
                         horizontalPadding: gridPadding,
@@ -274,12 +395,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                   if (vm.bestSellers.isNotEmpty)
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          0,
-                          18,
-                          0,
-                          0,
-                        ),
+                        padding: const EdgeInsets.fromLTRB(0, 18, 0, 0),
                         child: SizedBox(
                           height: resolvedCardHeight,
                           child: Stack(
@@ -321,14 +437,19 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                 Positioned(
                                   left:
                                       gridPadding -
-                                      (_controlExtentForWidth(width) / 2) +
+                                      (_controlExtentForWidth(
+                                            mainContentWidth,
+                                          ) /
+                                          2) +
                                       2,
                                   top: 0,
                                   bottom: 0,
                                   child: Center(
                                     child: _ScrollChevronButton(
                                       icon: Icons.chevron_left_rounded,
-                                      size: _controlExtentForWidth(width),
+                                      size: _controlExtentForWidth(
+                                        mainContentWidth,
+                                      ),
                                       onTap: () => _scrollBestSellersBy(
                                         -_currentBestSellerItemExtent!,
                                       ),
@@ -339,14 +460,19 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                 Positioned(
                                   right:
                                       gridPadding -
-                                      (_controlExtentForWidth(width) / 2) +
+                                      (_controlExtentForWidth(
+                                            mainContentWidth,
+                                          ) /
+                                          2) +
                                       2,
                                   top: 0,
                                   bottom: 0,
                                   child: Center(
                                     child: _ScrollChevronButton(
                                       icon: Icons.chevron_right_rounded,
-                                      size: _controlExtentForWidth(width),
+                                      size: _controlExtentForWidth(
+                                        mainContentWidth,
+                                      ),
                                       onTap: () => _scrollBestSellersBy(
                                         _currentBestSellerItemExtent!,
                                       ),
@@ -400,7 +526,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                           message: _query.isNotEmpty
                               ? 'Try a different search term or switch categories.'
                               : 'There are no active products in this section yet.',
-                          actionLabel: 'Reset filters',
+                          actionLabel: 'Reset Filters',
                           onAction: () {
                             _searchController.clear();
                             setState(() {
@@ -443,6 +569,112 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         ),
       ),
     );
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
+      floatingActionButtonLocation: columns <= 2
+          ? FloatingActionButtonLocation.centerFloat
+          : FloatingActionButtonLocation.endFloat,
+      floatingActionButton: showDesktopCartPanel
+          ? null
+          : CartFab(
+              itemCount: vm.cartCount,
+              totalCentavos: vm.cartTotalCentavos,
+              fullWidth: columns <= 2,
+              horizontalMargin: gridPadding,
+              onTap: () => _handleCartTap(mainContentWidth),
+            ),
+      body: showDesktopCartPanel
+          ? Row(
+              children: [
+                Expanded(child: mainPane),
+                _DesktopCartPanel(
+                  width: _kDesktopCartPanelWidth,
+                  customerDraft: appState.customerDraft,
+                  customerControllers: _customerControllers,
+                  cart: appState.cart,
+                  matchingOrders: matchingOrders,
+                  selectedThreadId: selectedThreadId,
+                  previousOrdersExpanded: _previousOrdersExpanded,
+                  totalCentavos: appState.cartTotalCentavos,
+                  submitting: appState.submittingOrder,
+                  onClose: () => setState(() => _desktopCartPanelOpen = false),
+                  onContactUs: () => _showContactUsDialog(context),
+                  onThreadSelected: (value) {
+                    setState(() {
+                      _selectedCartThreadId = value;
+                      _previousOrdersExpanded = false;
+                    });
+                  },
+                  onPreviousOrdersExpandedChanged: (value) {
+                    setState(() => _previousOrdersExpanded = value);
+                  },
+                  onDraftChanged: _persistCustomerDraft,
+                  onReviewOrder: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    await _persistCustomerDraft();
+                    if (!mounted) {
+                      return;
+                    }
+                    final nextDraft = ref
+                        .read(appControllerProvider)
+                        .customerDraft;
+                    final error = ref
+                        .read(appControllerProvider.notifier)
+                        .validateCheckoutDraft(nextDraft);
+                    if (error != null) {
+                      messenger.clearSnackBars();
+                      messenger.showSnackBar(errorSnackBar(error));
+                      return;
+                    }
+                    final orderId = await ref
+                        .read(appControllerProvider.notifier)
+                        .submitOrder();
+                    if (!mounted || orderId == null) {
+                      return;
+                    }
+                    _customerNameController.clear();
+                    _customerMobileController.clear();
+                    _customerBarangayController.clear();
+                    setState(() {
+                      _previousOrdersExpanded = false;
+                      _selectedCartThreadId = orderId;
+                    });
+                    if (!context.mounted) {
+                      return;
+                    }
+                    await _showOrderPlacedDialog(context);
+                  },
+                  onOrderAgain: (order) async {
+                    final shouldOrderAgain = await _showOrderAgainDialog(
+                      context,
+                    );
+                    if (!mounted || shouldOrderAgain != true) {
+                      return;
+                    }
+                    await ref
+                        .read(appControllerProvider.notifier)
+                        .addOrderToCart(order);
+                    if (!mounted) {
+                      return;
+                    }
+                    final nextDraft = ref
+                        .read(appControllerProvider)
+                        .customerDraft;
+                    _customerNameController.text = nextDraft.name;
+                    _customerMobileController.text = nextDraft.mobileNumber;
+                    _customerBarangayController.text = nextDraft.barangay;
+                    setState(() {
+                      _selectedCartThreadId = 'current';
+                      _previousOrdersExpanded = false;
+                    });
+                  },
+                ),
+              ],
+            )
+          : mainPane,
+    );
   }
 }
 
@@ -462,6 +694,98 @@ enum CatalogSortOption {
 const _kHeaderControlHeight = 44.0;
 const _kFloatingCartButtonHeight = 56.0;
 const _kFloatingCartButtonBottomOffset = 16.0;
+const _kDesktopCartPanelWidth = 420.0;
+const _kSharedModalMaxWidth = 332.0;
+const _kCartPanelStatusFontSize = 12.0;
+const _kCartPanelActionFontSize = 12.0;
+
+WidgetStateProperty<Color?> _transparentInteractionOverlay() {
+  return WidgetStateProperty.all(Colors.transparent);
+}
+
+TextStyle _cartPanelActionTextStyle({
+  double fontSize = _kCartPanelActionFontSize,
+  Color color = const Color(0xFF172033),
+}) {
+  return TextStyle(
+    fontSize: fontSize,
+    fontWeight: FontWeight.w700,
+    color: color,
+    height: 1.15,
+  );
+}
+
+class _InlineCartCountBadge extends StatelessWidget {
+  const _InlineCartCountBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Color(0xFFE31E24),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        formatCompactCount(count),
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          height: 1,
+        ),
+      ),
+    );
+  }
+}
+
+ThemeData _interactiveMenuTheme(BuildContext context) {
+  return Theme.of(context).copyWith(
+    focusColor: Colors.transparent,
+    hoverColor: Colors.black.withValues(
+      alpha: AppColors.neutralHoverOverlayAlpha,
+    ),
+    highlightColor: Colors.black.withValues(
+      alpha: AppColors.neutralPressedOverlayAlpha,
+    ),
+    splashColor: Colors.transparent,
+  );
+}
+
+WidgetStateProperty<Color?> _strongBlueBackground({Color? baseColor}) {
+  return WidgetStateProperty.resolveWith((states) {
+    return AppColors.brandingBlueInteractiveBackground(
+      states,
+      baseColor: baseColor ?? AppColors.logoBlue,
+    );
+  });
+}
+
+WidgetStateProperty<Color?> _lightBlueBackground({required Color baseColor}) {
+  return WidgetStateProperty.resolveWith((states) {
+    if (states.contains(WidgetState.pressed)) {
+      return AppColors.darken(baseColor, AppColors.neutralPressedOverlayAlpha);
+    }
+    if (states.contains(WidgetState.hovered)) {
+      return AppColors.darken(baseColor, AppColors.neutralHoverOverlayAlpha);
+    }
+    if (states.contains(WidgetState.focused)) {
+      return AppColors.darken(baseColor, AppColors.neutralFocusOverlayAlpha);
+    }
+    return baseColor;
+  });
+}
+
+WidgetStateProperty<Color?> _strongBlueOverlay() {
+  return WidgetStateProperty.resolveWith((states) {
+    return Colors.transparent;
+  });
+}
 
 double _controlExtentForWidth(double width) {
   return _catalogColumnsForWidth(width) == 1 ? 36.0 : _kHeaderControlHeight;
@@ -580,12 +904,16 @@ class _Header extends StatelessWidget {
     required this.query,
     required this.onSearchChanged,
     required this.cartCount,
+    required this.showCartPanelOpenState,
+    required this.onCartTap,
   });
 
   final TextEditingController searchController;
   final String query;
   final ValueChanged<String> onSearchChanged;
   final int cartCount;
+  final bool showCartPanelOpenState;
+  final VoidCallback onCartTap;
 
   @override
   Widget build(BuildContext context) {
@@ -597,6 +925,7 @@ class _Header extends StatelessWidget {
         stackSearch && ((columns == 2 && width < 430) || columns == 1);
     final horizontalInset = _outerHorizontalPaddingForWidth(width);
     final searchGap = stackSearch ? 0.0 : 40.0;
+    final trailingSearchPadding = showCartPanelOpenState ? 0.0 : searchGap;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -616,7 +945,7 @@ class _Header extends StatelessWidget {
               if (!stackSearch)
                 Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(right: searchGap),
+                    padding: EdgeInsets.only(right: trailingSearchPadding),
                     child: _SearchField(
                       searchController: searchController,
                       query: query,
@@ -624,10 +953,12 @@ class _Header extends StatelessWidget {
                     ),
                   ),
                 ),
-              _CartButton(
-                cartCount: cartCount,
-                showLabel: !hideCartLabel,
-              ),
+              if (!showCartPanelOpenState)
+                _CartButton(
+                  cartCount: cartCount,
+                  showLabel: !hideCartLabel,
+                  onTap: onCartTap,
+                ),
             ],
           ),
           if (stackSearch) ...[
@@ -654,6 +985,8 @@ class _TopBar extends StatelessWidget {
     required this.categories,
     required this.selectedId,
     required this.onSelected,
+    required this.showCartPanelOpenState,
+    required this.onCartTap,
   });
 
   final TextEditingController searchController;
@@ -663,6 +996,8 @@ class _TopBar extends StatelessWidget {
   final List<Category> categories;
   final String selectedId;
   final ValueChanged<String> onSelected;
+  final bool showCartPanelOpenState;
+  final VoidCallback onCartTap;
 
   @override
   Widget build(BuildContext context) {
@@ -679,6 +1014,8 @@ class _TopBar extends StatelessWidget {
               query: query,
               onSearchChanged: onSearchChanged,
               cartCount: cartCount,
+              showCartPanelOpenState: showCartPanelOpenState,
+              onCartTap: onCartTap,
             ),
             const Divider(height: 1, thickness: 1, color: Color(0xFFE4E7EC)),
             _CategoryStrip(
@@ -732,34 +1069,47 @@ class _CartButton extends StatelessWidget {
   const _CartButton({
     required this.cartCount,
     this.showLabel = true,
+    required this.onTap,
   });
 
   final int cartCount;
   final bool showLabel;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: () => context.push('/cart'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Badge.count(
-              count: cartCount,
-              isLabelVisible: cartCount > 0,
-              child: const Icon(Icons.shopping_cart_outlined, size: 28),
-            ),
-            if (showLabel) ...[
-              const SizedBox(width: 8),
-              const Text(
-                'Cart',
-                style: TextStyle(fontWeight: FontWeight.w700, height: 1.15),
+    return MousePressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        height: 48,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Badge(
+                isLabelVisible: cartCount > 0,
+                label: Text(
+                  formatCompactCount(cartCount),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                  ),
+                ),
+                child: const Icon(Icons.shopping_cart_outlined, size: 28),
               ),
+              if (showLabel) ...[
+                const SizedBox(width: 8),
+                const Text(
+                  'Cart',
+                  style: TextStyle(fontWeight: FontWeight.w700, height: 1.15),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -862,70 +1212,86 @@ class _SortButton extends StatelessWidget {
     final controlExtent = _controlExtentForWidth(
       MediaQuery.of(context).size.width,
     );
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () async {
-        final button = context.findRenderObject() as RenderBox;
-        final overlay =
-            Overlay.of(context).context.findRenderObject() as RenderBox;
-        final result = await showMenu<CatalogSortOption>(
-          context: context,
-          color: Colors.white,
-          surfaceTintColor: Colors.white,
-          menuPadding: EdgeInsets.zero,
-          position: RelativeRect.fromRect(
-            Rect.fromPoints(
-              button.localToGlobal(Offset.zero, ancestor: overlay),
-              button.localToGlobal(
-                button.size.bottomRight(Offset.zero),
-                ancestor: overlay,
-              ),
-            ),
-            Offset.zero & overlay.size,
+    final popupTheme = _interactiveMenuTheme(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!isMobile) ...[
+          const Text(
+            'Sort by:',
+            style: TextStyle(fontWeight: FontWeight.w700, height: 1.15),
           ),
-          items: [
-            for (final option in CatalogSortOption.values)
-              PopupMenuItem<CatalogSortOption>(
-                value: option,
-                child: Text(option.label, style: const TextStyle(height: 1.15)),
-              ),
-          ],
-        );
-        if (result != null) {
-          onSelected(result);
-        }
-      },
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!isMobile) ...[
-            const Text(
-              'Sort by:',
-              style: TextStyle(fontWeight: FontWeight.w700, height: 1.15),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Container(
-            height: controlExtent,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: const Color(0xFFE4E7EC)),
-            ),
-            child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(selected.label, style: const TextStyle(height: 1.15)),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.keyboard_arrow_down),
-                ],
-              ),
-            ),
-          ),
+          const SizedBox(width: 8),
         ],
-      ),
+        Theme(
+          data: popupTheme,
+          child: Builder(
+            builder: (themedContext) {
+              return MousePressable(
+                onTap: () async {
+                  final button = themedContext.findRenderObject() as RenderBox;
+                  final overlay =
+                      Overlay.of(themedContext).context.findRenderObject()
+                          as RenderBox;
+                  final result = await showMenu<CatalogSortOption>(
+                    context: themedContext,
+                    color: Colors.white,
+                    surfaceTintColor: Colors.white,
+                    menuPadding: EdgeInsets.zero,
+                    position: RelativeRect.fromRect(
+                      Rect.fromPoints(
+                        button.localToGlobal(Offset.zero, ancestor: overlay),
+                        button.localToGlobal(
+                          button.size.bottomRight(Offset.zero),
+                          ancestor: overlay,
+                        ),
+                      ),
+                      Offset.zero & overlay.size,
+                    ),
+                    items: [
+                      for (final option in CatalogSortOption.values)
+                        PopupMenuItem<CatalogSortOption>(
+                          value: option,
+                          mouseCursor: SystemMouseCursors.click,
+                          child: Text(
+                            option.label,
+                            style: const TextStyle(height: 1.15),
+                          ),
+                        ),
+                    ],
+                  );
+                  if (result != null) {
+                    onSelected(result);
+                  }
+                },
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  height: controlExtent,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0xFFE4E7EC)),
+                  ),
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          selected.label,
+                          style: const TextStyle(height: 1.15),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.keyboard_arrow_down),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -946,11 +1312,42 @@ class _CategoryPill extends StatelessWidget {
     final controlExtent = _controlExtentForWidth(
       MediaQuery.of(context).size.width,
     );
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
+    return MousePressable(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+      borderRadius: BorderRadius.circular(999),
+      stateBuilder: selected
+          ? (context, hovered, pressed, child) {
+              final states = <WidgetState>{
+                if (hovered) WidgetState.hovered,
+                if (pressed) WidgetState.pressed,
+              };
+              return Container(
+                height: controlExtent,
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                decoration: BoxDecoration(
+                  color: AppColors.brandingBlueInteractiveBackground(states),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: AppColors.brandingBlueInteractiveBackground(states),
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              );
+            }
+          : null,
+      hoverOverlayAlpha: selected ? 0 : AppColors.neutralHoverOverlayAlpha,
+      pressedOverlayAlpha: selected ? 0 : AppColors.neutralPressedOverlayAlpha,
+      child: Container(
         height: controlExtent,
         padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: BoxDecoration(
@@ -1027,8 +1424,8 @@ class _HeroBannerState extends State<_HeroBanner> {
   bool get _showBannerIndicator =>
       _bannerScrollController.hasClients &&
       (_bannerScrollController.position.maxScrollExtent -
-              _bannerScrollController.position.minScrollExtent)
-          .abs() >
+                  _bannerScrollController.position.minScrollExtent)
+              .abs() >
           0.5;
 
   void _handleBannerScroll() {
@@ -1175,7 +1572,10 @@ class _HeroBannerState extends State<_HeroBanner> {
                           SizedBox(width: bannerGap),
                       itemBuilder: (context, index) => SizedBox(
                         width: bannerWidth,
-                        child: const _PromoBannerPlaceholder(),
+                        child: const MousePressable(
+                          borderRadius: BorderRadius.all(Radius.circular(16)),
+                          child: _PromoBannerPlaceholder(),
+                        ),
                       ),
                     ),
                   ),
@@ -1187,26 +1587,21 @@ class _HeroBannerState extends State<_HeroBanner> {
                     ),
                   if (_showLeftControl)
                     Positioned(
-                      left:
-                          widget.horizontalPadding -
-                          (controlExtent / 2) +
-                          2,
+                      left: widget.horizontalPadding - (controlExtent / 2) + 2,
                       top: 0,
                       bottom: 0,
                       child: Center(
                         child: _ScrollChevronButton(
                           icon: Icons.chevron_left_rounded,
                           size: controlExtent,
-                          onTap: () => _scrollBannerBy(-bannerWidth - bannerGap),
+                          onTap: () =>
+                              _scrollBannerBy(-bannerWidth - bannerGap),
                         ),
                       ),
                     ),
                   if (_showRightControl)
                     Positioned(
-                      right:
-                          widget.horizontalPadding -
-                          (controlExtent / 2) +
-                          2,
+                      right: widget.horizontalPadding - (controlExtent / 2) + 2,
                       top: 0,
                       bottom: 0,
                       child: Center(
@@ -1284,25 +1679,21 @@ class _ScrollChevronButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      shape: const CircleBorder(),
-      elevation: 0,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFFE4E7EC)),
-          ),
-          child: Icon(
-            icon,
-            color: const Color(0xFF172033),
-            size: size >= 44 ? 24 : 20,
-          ),
+    return MousePressable(
+      onTap: onTap,
+      shape: BoxShape.circle,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFFE4E7EC)),
+        ),
+        child: Icon(
+          icon,
+          color: const Color(0xFF172033),
+          size: size >= 44 ? 24 : 20,
         ),
       ),
     );
@@ -1328,11 +1719,1362 @@ class _HorizontalEdgeMasks extends StatelessWidget {
   }
 }
 
-class _BannerIndexIndicator extends StatelessWidget {
-  const _BannerIndexIndicator({
-    required this.activeIndex,
-    required this.count,
+class _DesktopCartPanel extends ConsumerWidget {
+  const _DesktopCartPanel({
+    required this.width,
+    required this.customerDraft,
+    required this.customerControllers,
+    required this.cart,
+    required this.matchingOrders,
+    required this.selectedThreadId,
+    required this.previousOrdersExpanded,
+    required this.totalCentavos,
+    required this.submitting,
+    required this.onClose,
+    required this.onContactUs,
+    required this.onThreadSelected,
+    required this.onPreviousOrdersExpandedChanged,
+    required this.onDraftChanged,
+    required this.onReviewOrder,
+    required this.onOrderAgain,
   });
+
+  final double width;
+  final CustomerDraft customerDraft;
+  final _CustomerControllers customerControllers;
+  final List<CartItem> cart;
+  final List<OrderRequest> matchingOrders;
+  final String selectedThreadId;
+  final bool previousOrdersExpanded;
+  final int totalCentavos;
+  final bool submitting;
+  final VoidCallback onClose;
+  final VoidCallback onContactUs;
+  final ValueChanged<String> onThreadSelected;
+  final ValueChanged<bool> onPreviousOrdersExpandedChanged;
+  final Future<void> Function({FulfillmentMethod? method}) onDraftChanged;
+  final Future<void> Function() onReviewOrder;
+  final Future<void> Function(OrderRequest order) onOrderAgain;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedOrder = selectedThreadId == 'current'
+        ? null
+        : matchingOrders.cast<OrderRequest?>().firstWhere(
+            (order) => order?.id == selectedThreadId,
+            orElse: () => null,
+          );
+    final finalCartCount = cart.fold<int>(
+      0,
+      (sum, item) => sum + item.quantity,
+    );
+    final isCurrentSelection = selectedOrder == null;
+    final showPrimaryAction = isCurrentSelection ? cart.isNotEmpty : true;
+    final selectedItemCount = isCurrentSelection
+        ? finalCartCount
+        : selectedOrder.items.fold<int>(
+            0,
+            (sum, item) => sum + item.requestedQuantity,
+          );
+    final selectedTotalCentavos = isCurrentSelection
+        ? totalCentavos
+        : selectedOrder.estimatedTotalCentavos;
+
+    return SafeArea(
+      left: false,
+      child: Container(
+        width: width,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(left: BorderSide(color: Color(0xFFE4E7EC))),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              child: Row(
+                children: [
+                  MousePressable(
+                    onTap: isCurrentSelection
+                        ? null
+                        : () => onThreadSelected('current'),
+                    borderRadius: BorderRadius.circular(16),
+                    hoverOverlayAlpha: isCurrentSelection
+                        ? 0
+                        : AppColors.neutralHoverOverlayAlpha,
+                    pressedOverlayAlpha: isCurrentSelection
+                        ? 0
+                        : AppColors.neutralPressedOverlayAlpha,
+                    child: SizedBox(
+                      height: 48,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Badge(
+                              isLabelVisible: finalCartCount > 0,
+                              label: Text(
+                                formatCompactCount(finalCartCount),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.shopping_cart_outlined,
+                                size: 28,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Cart',
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.15,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  MousePressable(
+                    onTap: onClose,
+                    borderRadius: BorderRadius.circular(12),
+                    child: const SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Icon(Icons.close_rounded),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (matchingOrders.isNotEmpty) ...[
+                      _DesktopCartThreadsCard(
+                        matchingOrders: matchingOrders,
+                        selectedThreadId: selectedThreadId,
+                        customerDraft: customerDraft,
+                        currentCartCount: finalCartCount,
+                        previousOrdersExpanded: previousOrdersExpanded,
+                        onSelected: onThreadSelected,
+                        onPreviousOrdersExpandedChanged:
+                            onPreviousOrdersExpandedChanged,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    _DesktopCartCustomerCard(
+                      draft: customerDraft,
+                      controllers: customerControllers,
+                      selectedOrder: selectedOrder,
+                      onContactUs: onContactUs,
+                      onDraftChanged: onDraftChanged,
+                    ),
+                    const SizedBox(height: 12),
+                    _DesktopCartThreadDetailCard(
+                      selectedOrder: selectedOrder,
+                      previousOrdersExpanded: previousOrdersExpanded,
+                      currentCartCount: finalCartCount,
+                      cart: cart,
+                      totalCentavos: totalCentavos,
+                      onContactUs: onContactUs,
+                      onBackToCart: () => onThreadSelected('current'),
+                      onContinueShopping: onClose,
+                    ),
+                    if (showPrimaryAction) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '$selectedItemCount item${selectedItemCount == 1 ? '' : 's'}',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.15,
+                                  ),
+                            ),
+                          ),
+                          Text(
+                            formatPesos(selectedTotalCentavos),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: AppColors.logoBlue,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.15,
+                                ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            shape: const StadiumBorder(),
+                          ),
+                          onPressed: submitting
+                              ? null
+                              : isCurrentSelection
+                              ? onReviewOrder
+                              : () => onOrderAgain(selectedOrder),
+                          child: Text(
+                            submitting
+                                ? 'Preparing...'
+                                : isCurrentSelection
+                                ? 'Place Order'
+                                : 'Order Again',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopCartCustomerCard extends StatelessWidget {
+  const _DesktopCartCustomerCard({
+    required this.draft,
+    required this.controllers,
+    required this.selectedOrder,
+    required this.onContactUs,
+    required this.onDraftChanged,
+  });
+
+  final CustomerDraft draft;
+  final _CustomerControllers controllers;
+  final OrderRequest? selectedOrder;
+  final VoidCallback onContactUs;
+  final Future<void> Function({FulfillmentMethod? method}) onDraftChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isReadOnly = selectedOrder != null;
+    final effectiveDraft = selectedOrder?.customer ?? draft;
+    final barangays = {
+      ...puertoPrincesaBarangays,
+      if (controllers.barangay.text.trim().isNotEmpty)
+        controllers.barangay.text.trim(),
+    }.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Details',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF172033),
+                    height: 1.15,
+                  ),
+                ),
+              ),
+              if (isReadOnly)
+                const Icon(
+                  Icons.lock_rounded,
+                  size: 18,
+                  color: Color(0xFF667085),
+                )
+              else
+                MousePressable(
+                  onTap: onContactUs,
+                  hoverOverlayAlpha: 0,
+                  pressedOverlayAlpha: 0,
+                  child: Text(
+                    'Need Help?',
+                    style: _cartPanelActionTextStyle(color: AppColors.logoBlue),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (isReadOnly) ...[
+            _ReadOnlyDetailsField(label: 'Name', value: effectiveDraft.name),
+            const SizedBox(height: 12),
+            _ReadOnlyDetailsField(
+              label: 'Phone',
+              value: effectiveDraft.mobileNumber,
+            ),
+          ] else ...[
+            TextField(
+              controller: controllers.name,
+              onChanged: (_) => onDraftChanged(),
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controllers.mobile,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                LengthLimitingTextInputFormatter(11),
+                _PhilippineMobileInputFormatter(),
+              ],
+              onChanged: (_) => onDraftChanged(),
+              decoration: const InputDecoration(labelText: 'Phone'),
+            ),
+          ],
+          if (effectiveDraft.fulfillmentMethod ==
+              FulfillmentMethod.delivery) ...[
+            const SizedBox(height: 12),
+            if (isReadOnly)
+              _ReadOnlyDetailsField(
+                label: 'Place',
+                value: effectiveDraft.barangay,
+              )
+            else
+              _BarangayField(
+                controller: controllers.barangay,
+                items: barangays,
+                onChanged: () async {
+                  await onDraftChanged();
+                },
+              ),
+          ],
+          const SizedBox(height: 12),
+          IgnorePointer(
+            ignoring: isReadOnly,
+            child: Opacity(
+              opacity: isReadOnly ? 0.72 : 1,
+              child: RadioGroup<FulfillmentMethod>(
+                groupValue: effectiveDraft.fulfillmentMethod,
+                onChanged: (value) async {
+                  await onDraftChanged(method: value);
+                },
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: RadioListTile<FulfillmentMethod>(
+                        value: FulfillmentMethod.pickup,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: const VisualDensity(
+                          horizontal: -4,
+                          vertical: -4,
+                        ),
+                        title: const Text('Pickup'),
+                      ),
+                    ),
+                    Expanded(
+                      child: RadioListTile<FulfillmentMethod>(
+                        value: FulfillmentMethod.delivery,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: const VisualDensity(
+                          horizontal: -4,
+                          vertical: -4,
+                        ),
+                        title: const Text('Delivery'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadOnlyDetailsField extends StatelessWidget {
+  const _ReadOnlyDetailsField({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return InputDecorator(
+      decoration: InputDecoration(labelText: label),
+      child: Text(
+        value.trim().isEmpty ? '-' : value.trim(),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: const Color(0xFF172033),
+          height: 1.15,
+        ),
+      ),
+    );
+  }
+}
+
+class _BarangayField extends StatefulWidget {
+  const _BarangayField({
+    required this.controller,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final List<String> items;
+  final Future<void> Function() onChanged;
+
+  @override
+  State<_BarangayField> createState() => _BarangayFieldState();
+}
+
+class _BarangayFieldState extends State<_BarangayField> {
+  final LayerLink _layerLink = LayerLink();
+  final GlobalKey _fieldKey = GlobalKey();
+  late final TextEditingController _searchController;
+  late final FocusNode _searchFocusNode;
+  OverlayEntry? _overlayEntry;
+  bool _menuOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    _searchFocusNode = FocusNode()..addListener(_handleSearchFocusChange);
+    widget.controller.addListener(_handleControllerChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant _BarangayField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_handleControllerChange);
+      widget.controller.addListener(_handleControllerChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    _removeOverlay(notify: false);
+    _searchController.dispose();
+    _searchFocusNode
+      ..removeListener(_handleSearchFocusChange)
+      ..dispose();
+    widget.controller.removeListener(_handleControllerChange);
+    super.dispose();
+  }
+
+  void _handleSearchFocusChange() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _handleControllerChange() {
+    if (mounted) {
+      _overlayEntry?.markNeedsBuild();
+      setState(() {});
+    }
+  }
+
+  List<String> get _matches {
+    final query = _searchController.text.trim().toLowerCase();
+    return widget.items
+        .where((item) => query.isEmpty || item.toLowerCase().contains(query))
+        .toList();
+  }
+
+  bool get _showNoMatchState =>
+      _searchController.text.trim().isNotEmpty && _matches.isEmpty;
+
+  void _showOverlay() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _overlayEntry ??= _buildOverlayEntry();
+      final overlay = Overlay.of(context);
+      if (_overlayEntry!.mounted) {
+        _overlayEntry!.markNeedsBuild();
+      } else {
+        overlay.insert(_overlayEntry!);
+      }
+      _searchFocusNode.requestFocus();
+      if (mounted) {
+        setState(() => _menuOpen = true);
+      }
+    });
+  }
+
+  void _removeOverlay({bool notify = true}) {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    _searchController.clear();
+    if (notify && mounted) {
+      setState(() => _menuOpen = false);
+    }
+  }
+
+  OverlayEntry _buildOverlayEntry() {
+    return OverlayEntry(
+      builder: (context) {
+        final renderBox =
+            _fieldKey.currentContext?.findRenderObject() as RenderBox?;
+        if (renderBox == null) {
+          return const SizedBox.shrink();
+        }
+        final size = renderBox.size;
+        final matches = _matches;
+        final showNoMatchState = _showNoMatchState;
+        return Positioned.fill(
+          child: IgnorePointer(
+            ignoring: false,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: _removeOverlay,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+                CompositedTransformFollower(
+                  link: _layerLink,
+                  showWhenUnlinked: false,
+                  offset: Offset(0, size.height + 12),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      width: size.width,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE4E7EC)),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 320),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: TextField(
+                                controller: _searchController,
+                                focusNode: _searchFocusNode,
+                                onChanged: (_) {
+                                  _overlayEntry?.markNeedsBuild();
+                                  if (mounted) {
+                                    setState(() {});
+                                  }
+                                },
+                                decoration: const InputDecoration(
+                                  hintText: 'Search place...',
+                                ),
+                              ),
+                            ),
+                            const Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: Color(0xFFE4E7EC),
+                            ),
+                            if (showNoMatchState)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
+                                child: Text(
+                                  'No matching places',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: const Color(0xFF667085),
+                                        height: 1.15,
+                                      ),
+                                ),
+                              )
+                            else
+                              Flexible(
+                                child: ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: matches.length,
+                                  itemBuilder: (context, index) {
+                                    return MousePressable(
+                                      onTap: () async {
+                                        widget.controller.text = matches[index];
+                                        widget.controller.selection =
+                                            TextSelection.collapsed(
+                                              offset:
+                                                  widget.controller.text.length,
+                                            );
+                                        _removeOverlay();
+                                        await widget.onChanged();
+                                      },
+                                      borderRadius: BorderRadius.circular(0),
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: EdgeInsets.fromLTRB(
+                                          14,
+                                          10,
+                                          14,
+                                          10,
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minHeight: 44,
+                                        ),
+                                        alignment: Alignment.centerLeft,
+                                        decoration: BoxDecoration(
+                                          border: index == matches.length - 1
+                                              ? null
+                                              : const Border(
+                                                  bottom: BorderSide(
+                                                    color: Color(0xFFE4E7EC),
+                                                  ),
+                                                ),
+                                        ),
+                                        child: Text(
+                                          matches[index],
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge
+                                              ?.copyWith(
+                                                height: 1.15,
+                                                color: const Color(0xFF101828),
+                                              ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: KeyedSubtree(
+        key: _fieldKey,
+        child: MousePressable(
+          onTap: _menuOpen ? _removeOverlay : _showOverlay,
+          borderRadius: BorderRadius.circular(16),
+          child: InputDecorator(
+            decoration: const InputDecoration(),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.controller.text.trim().isEmpty
+                        ? 'Place'
+                        : widget.controller.text.trim(),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      height: 1.15,
+                      color: const Color(0xFF101828),
+                    ),
+                  ),
+                ),
+                Icon(
+                  _menuOpen
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopCartThreadsCard extends StatelessWidget {
+  const _DesktopCartThreadsCard({
+    required this.matchingOrders,
+    required this.selectedThreadId,
+    required this.customerDraft,
+    required this.currentCartCount,
+    required this.previousOrdersExpanded,
+    required this.onSelected,
+    required this.onPreviousOrdersExpandedChanged,
+  });
+
+  final List<OrderRequest> matchingOrders;
+  final String selectedThreadId;
+  final CustomerDraft customerDraft;
+  final int currentCartCount;
+  final bool previousOrdersExpanded;
+  final ValueChanged<String> onSelected;
+  final ValueChanged<bool> onPreviousOrdersExpandedChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (matchingOrders.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final selectedOrder = matchingOrders.cast<OrderRequest?>().firstWhere(
+      (order) => order?.id == selectedThreadId,
+      orElse: () => null,
+    );
+    final selectedLabel = selectedThreadId == 'current'
+        ? 'Current Cart'
+        : selectedOrder == null
+        ? 'Current Cart'
+        : formatOrderThreadDateTime(selectedOrder.createdAt);
+    final headerLabel = previousOrdersExpanded ? 'Orders' : selectedLabel;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE4E7EC)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              MousePressable(
+                onTap: () =>
+                    onPreviousOrdersExpandedChanged(!previousOrdersExpanded),
+                borderRadius: BorderRadius.circular(0),
+                hoverOverlayAlpha: previousOrdersExpanded
+                    ? 0
+                    : AppColors.neutralHoverOverlayAlpha,
+                pressedOverlayAlpha: previousOrdersExpanded
+                    ? 0
+                    : AppColors.neutralPressedOverlayAlpha,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          headerLabel,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF172033),
+                            height: 1.15,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        previousOrdersExpanded
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        color: const Color(0xFF344054),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (previousOrdersExpanded) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  child: Column(
+                    children: [
+                      _CartThreadTile(
+                        title: 'Current Cart',
+                        subtitle: null,
+                        selected: selectedThreadId == 'current',
+                        status: null,
+                        statusLabel: currentCartCount == 0
+                            ? 'Empty'
+                            : 'Ordering',
+                        statusLabelColor: AppColors.logoBlue,
+                        onTap: () => onSelected('current'),
+                      ),
+                      for (final order in matchingOrders) ...[
+                        const SizedBox(height: 10),
+                        _CartThreadTile(
+                          title:
+                              '${formatOrderDate(order.createdAt)} • ${formatOrderTime(order.createdAt)}',
+                          subtitle: null,
+                          selected: selectedThreadId == order.id,
+                          status: order.status,
+                          onTap: () => onSelected(order.id),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CartThreadTile extends StatelessWidget {
+  const _CartThreadTile({
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.status,
+    this.statusLabel,
+    this.statusLabelColor,
+    required this.onTap,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool selected;
+  final OrderStatus? status;
+  final String? statusLabel;
+  final Color? statusLabelColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const orderTextSize = 14.0;
+    return MousePressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      hoverOverlayAlpha: selected ? 0 : AppColors.neutralHoverOverlayAlpha,
+      pressedOverlayAlpha: selected ? 0 : AppColors.neutralPressedOverlayAlpha,
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? AppColors.logoBlue : const Color(0xFFE4E7EC),
+          ),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontSize: orderTextSize,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+                if (status != null)
+                  status == OrderStatus.newRequest
+                      ? _CustomStatusBadge(
+                          label: displayStatus(status!),
+                          fontSize: _kCartPanelStatusFontSize,
+                          color: const Color(0xFFFFA726),
+                        )
+                      : StatusBadge(
+                          status: status!,
+                          fontSize: _kCartPanelStatusFontSize,
+                        )
+                else if (statusLabel != null)
+                  _CustomStatusBadge(
+                    label: statusLabel!,
+                    fontSize: _kCartPanelStatusFontSize,
+                    color: statusLabelColor ?? AppColors.logoBlue,
+                  ),
+              ],
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                subtitle!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF667085),
+                  height: 1.15,
+                  fontSize: orderTextSize,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomStatusBadge extends StatelessWidget {
+  const _CustomStatusBadge({
+    required this.label,
+    required this.fontSize,
+    this.color = AppColors.logoBlue,
+  });
+
+  final String label;
+  final double fontSize;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: fontSize,
+            height: 1.15,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopCartThreadDetailCard extends StatelessWidget {
+  const _DesktopCartThreadDetailCard({
+    required this.selectedOrder,
+    required this.previousOrdersExpanded,
+    required this.currentCartCount,
+    required this.cart,
+    required this.totalCentavos,
+    required this.onContactUs,
+    required this.onBackToCart,
+    required this.onContinueShopping,
+  });
+
+  final OrderRequest? selectedOrder;
+  final bool previousOrdersExpanded;
+  final int currentCartCount;
+  final List<CartItem> cart;
+  final int totalCentavos;
+  final VoidCallback onContactUs;
+  final VoidCallback onBackToCart;
+  final VoidCallback onContinueShopping;
+
+  @override
+  Widget build(BuildContext context) {
+    final isCurrent = selectedOrder == null;
+    final topActionTextStyle = _cartPanelActionTextStyle();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!isCurrent && !previousOrdersExpanded) ...[
+          Row(
+            children: [
+              if (selectedOrder != null)
+                StatusBadge(
+                  status: selectedOrder!.status,
+                  fontSize: _kCartPanelStatusFontSize,
+                ),
+              const Spacer(),
+              MousePressable(
+                onTap: onContactUs,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: AppColors.logoBlue),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Need Help?',
+                    style: topActionTextStyle.copyWith(
+                      color: AppColors.logoBlue,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              MousePressable(
+                onTap: onBackToCart,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: AppColors.logoBlue),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Back to Cart',
+                        style: topActionTextStyle.copyWith(
+                          color: AppColors.logoBlue,
+                        ),
+                      ),
+                      if (currentCartCount > 0) ...[
+                        const SizedBox(width: 8),
+                        _InlineCartCountBadge(count: currentCartCount),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (isCurrent && cart.isEmpty)
+          EmptyStateCard(
+            title: 'Cart is empty',
+            message:
+                'Browse products, categories, and best sellers and add items for your order.',
+            actionLabel: 'Continue Ordering',
+            onAction: onContinueShopping,
+          )
+        else if (!isCurrent && selectedOrder!.items.isEmpty)
+          EmptyStateCard(
+            title: 'No items found',
+            message: 'This previous order does not have any saved items.',
+            actionLabel: 'Back to Cart',
+            onAction: onBackToCart,
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = constraints.maxWidth;
+              final items = isCurrent
+                  ? cart.length
+                  : selectedOrder!.items.length;
+              return Column(
+                children: [
+                  for (var index = 0; index < items; index++) ...[
+                    if (isCurrent)
+                      _CurrentCartItemCard(item: cart[index], width: itemWidth)
+                    else
+                      _PreviousOrderItemCard(
+                        item: selectedOrder!.items[index],
+                        width: itemWidth,
+                      ),
+                    if (index != items - 1) const SizedBox(height: 12),
+                  ],
+                ],
+              );
+            },
+          ),
+      ],
+    );
+  }
+}
+
+class _CurrentCartItemCard extends ConsumerWidget {
+  const _CurrentCartItemCard({required this.item, required this.width});
+
+  final CartItem item;
+  final double width;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final product = ref.watch(
+      appControllerProvider.select(
+        (state) => state.products
+            .where((product) => product.id == item.productId)
+            .cast<Product?>()
+            .firstWhere((product) => product != null, orElse: () => null),
+      ),
+    );
+    const titleFontSize = 14.0;
+    const unitFontSize = 12.0;
+    const priceFontSize = 14.0;
+    const contentHeight = 72.0;
+    return MousePressable(
+      onTap: product == null
+          ? null
+          : () => _showProductDetailsModal(context, product),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: width,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE4E7EC)),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 72,
+              height: 72,
+              child: Container(
+                padding: const EdgeInsets.all(1),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFE4E7EC)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ProductPlaceholder(
+                  label: 'Product',
+                  height: 72,
+                  fullRounded: true,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SizedBox(
+                height: contentHeight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.productName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: titleFontSize,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.unit,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF667085),
+                        height: 1.15,
+                        fontSize: unitFontSize,
+                      ),
+                    ),
+                    const Spacer(),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.end,
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [
+                              Text(
+                                formatPesos(item.referenceUnitPriceCentavos),
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(
+                                      fontSize: priceFontSize,
+                                      color: AppColors.logoBlue,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.15,
+                                    ),
+                              ),
+                              if (product != null)
+                                Text(
+                                  'as of ${formatAsOfDate(product.priceUpdatedAt)}',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: const Color(0xFF667085),
+                                        height: 1.15,
+                                        fontSize: unitFontSize,
+                                      ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'x${item.quantity}',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                fontSize: priceFontSize,
+                                color: AppColors.logoBlue,
+                                fontWeight: FontWeight.w800,
+                                height: 1.15,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviousOrderItemCard extends ConsumerWidget {
+  const _PreviousOrderItemCard({required this.item, required this.width});
+
+  final OrderItem item;
+  final double width;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final product = ref.watch(
+      appControllerProvider.select(
+        (state) => state.products
+            .where((product) => product.id == item.productId)
+            .cast<Product?>()
+            .firstWhere((product) => product != null, orElse: () => null),
+      ),
+    );
+    const titleFontSize = 14.0;
+    const unitFontSize = 12.0;
+    const priceFontSize = 14.0;
+    const contentHeight = 72.0;
+    return MousePressable(
+      onTap: product == null
+          ? null
+          : () => _showProductDetailsModal(context, product),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: width,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE4E7EC)),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 72,
+              height: 72,
+              child: Container(
+                padding: const EdgeInsets.all(1),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFE4E7EC)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ProductPlaceholder(
+                  label: 'Previous Product',
+                  height: 72,
+                  fullRounded: true,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: SizedBox(
+                height: contentHeight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.productName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: titleFontSize,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.unit,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF667085),
+                        height: 1.15,
+                        fontSize: unitFontSize,
+                      ),
+                    ),
+                    const Spacer(),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.end,
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [
+                              Text(
+                                formatPesos(item.referenceUnitPriceCentavos),
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(
+                                      fontSize: priceFontSize,
+                                      color: AppColors.logoBlue,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.15,
+                                    ),
+                              ),
+                              if (product != null)
+                                Text(
+                                  'as of ${formatAsOfDate(product.priceUpdatedAt)}',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: const Color(0xFF667085),
+                                        height: 1.15,
+                                        fontSize: unitFontSize,
+                                      ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'x${item.requestedQuantity}',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                fontSize: priceFontSize,
+                                color: AppColors.logoBlue,
+                                fontWeight: FontWeight.w800,
+                                height: 1.15,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BannerIndexIndicator extends StatelessWidget {
+  const _BannerIndexIndicator({required this.activeIndex, required this.count});
 
   final int activeIndex;
   final int count;
@@ -1382,11 +3124,10 @@ class ProductCard extends ConsumerStatefulWidget {
 }
 
 class _ProductCardState extends ConsumerState<ProductCard> {
+  bool _suspendCardMouseRegion = false;
+
   Future<void> _showProductModal(BuildContext context, int cartQuantity) async {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => _ProductModal(product: widget.product),
-    );
+    await _showProductDetailsModal(context, widget.product);
   }
 
   @override
@@ -1429,43 +3170,38 @@ class _ProductCardState extends ConsumerState<ProductCard> {
         )..layout(maxWidth: constraints.maxWidth - (cardPadding * 2));
         final titleBlockHeight = titlePainter.height;
 
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE4E7EC)),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (widget.showImage) ...[
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _showProductModal(context, cartQuantity),
-                  child: AspectRatio(
+        return MousePressable(
+          enabled: !_suspendCardMouseRegion,
+          onTap: () => _showProductModal(context, cartQuantity),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE4E7EC)),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.showImage) ...[
+                  AspectRatio(
                     aspectRatio: 1,
                     child: ProductPlaceholder(
                       label: widget.product.name,
                       posterMode: widget.posterMode,
                     ),
                   ),
-                ),
-                const Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: Color(0xFFE4E7EC),
-                ),
-              ],
-              Expanded(
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: widget.showImage
-                            ? null
-                            : () => _showProductModal(context, cartQuantity),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Color(0xFFE4E7EC),
+                  ),
+                ],
+                Expanded(
+                  child: Column(
+                    children: [
+                      Expanded(
                         child: Padding(
                           padding: EdgeInsets.all(cardPadding),
                           child: Column(
@@ -1486,13 +3222,12 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                               SizedBox(height: titleBottomGap),
                               Text(
                                 widget.product.displayUnit,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodyMedium?.copyWith(
-                                  color: const Color(0xFF667085),
-                                  height: 1.15,
-                                  fontSize: unitFontSize,
-                                ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: const Color(0xFF667085),
+                                      height: 1.15,
+                                      fontSize: unitFontSize,
+                                    ),
                               ),
                               SizedBox(height: unitPriceSpacing),
                               const Spacer(),
@@ -1532,79 +3267,132 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                           ),
                         ),
                       ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        cardPadding,
-                        0,
-                        cardPadding,
-                        cardPadding,
-                      ),
-                      child: Column(
-                        children: [
-                          SizedBox(height: priceButtonSpacing),
-                          if (cartQuantity == 0)
-                            SizedBox(
-                              width: double.infinity,
-                              height: buttonHeight,
-                              child: ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.logoBlue,
-                                  minimumSize: Size(0, buttonHeight),
-                                  maximumSize: Size(double.infinity, buttonHeight),
-                                  fixedSize: Size(double.infinity, buttonHeight),
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  padding: EdgeInsets.symmetric(
-                                    vertical: buttonVerticalPadding,
+                      MouseRegion(
+                        onEnter: (_) =>
+                            setState(() => _suspendCardMouseRegion = true),
+                        onExit: (_) =>
+                            setState(() => _suspendCardMouseRegion = false),
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            cardPadding,
+                            0,
+                            cardPadding,
+                            cardPadding,
+                          ),
+                          child: Column(
+                            children: [
+                              SizedBox(height: priceButtonSpacing),
+                              if (cartQuantity == 0)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: buttonHeight,
+                                  child: ElevatedButton.icon(
+                                    style:
+                                        ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.logoBlue,
+                                          elevation: 0,
+                                          shadowColor: Colors.transparent,
+                                          minimumSize: Size(0, buttonHeight),
+                                          maximumSize: Size(
+                                            double.infinity,
+                                            buttonHeight,
+                                          ),
+                                          fixedSize: Size(
+                                            double.infinity,
+                                            buttonHeight,
+                                          ),
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: buttonVerticalPadding,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                          ),
+                                        ).copyWith(
+                                          backgroundColor:
+                                              _strongBlueBackground(),
+                                          overlayColor: _strongBlueOverlay(),
+                                        ),
+                                    onPressed: () async {
+                                      await ref
+                                          .read(appControllerProvider.notifier)
+                                          .addToCart(
+                                            widget.product,
+                                            quantity: 1,
+                                          );
+                                    },
+                                    icon: const Icon(Icons.add_shopping_cart),
+                                    label: const Text('Add to Cart'),
                                   ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                ),
-                                onPressed: () async {
-                                  await ref
-                                      .read(appControllerProvider.notifier)
-                                      .addToCart(widget.product, quantity: 1);
-                                },
-                                icon: const Icon(Icons.add_shopping_cart),
-                                label: const Text('Add to Cart'),
-                              ),
-                            )
-                          else
-                            _CartQuantityControl(
-                              quantity: cartQuantity,
-                              height: buttonHeight,
-                              onDecrease: () async {
-                                final controller = ref.read(
-                                  appControllerProvider.notifier,
-                                );
-                                if (cartQuantity <= 1) {
-                                  await controller.removeFromCart(
-                                    widget.product.id,
-                                  );
-                                } else {
-                                  await controller.updateCartQuantity(
-                                    widget.product.id,
-                                    cartQuantity - 1,
-                                  );
-                                }
-                              },
-                              onIncrease: () async {
-                                await ref
-                                    .read(appControllerProvider.notifier)
-                                    .updateCartQuantity(
-                                      widget.product.id,
-                                      cartQuantity + 1,
+                                )
+                              else
+                                _CartQuantityControl(
+                                  quantity: cartQuantity,
+                                  height: buttonHeight,
+                                  onDecrease: () async {
+                                    final controller = ref.read(
+                                      appControllerProvider.notifier,
                                     );
-                              },
-                            ),
-                        ],
+                                    if (cartQuantity <= 1) {
+                                      final shouldRemove =
+                                          await _showRemoveProductDialog(
+                                            context,
+                                          );
+                                      if (shouldRemove != true) {
+                                        return;
+                                      }
+                                      await controller.removeFromCart(
+                                        widget.product.id,
+                                      );
+                                      if (!context.mounted) {
+                                        return;
+                                      }
+                                      _popAllRoutesUntilFirst(context);
+                                    } else {
+                                      await controller.updateCartQuantity(
+                                        widget.product.id,
+                                        cartQuantity - 1,
+                                      );
+                                    }
+                                  },
+                                  onIncrease: () async {
+                                    await ref
+                                        .read(appControllerProvider.notifier)
+                                        .updateCartQuantity(
+                                          widget.product.id,
+                                          cartQuantity + 1,
+                                        );
+                                  },
+                                  onEditQuantity: () async {
+                                    final nextQuantity =
+                                        await _showQuantityInputDialog(
+                                          context,
+                                          initialQuantity: cartQuantity,
+                                        );
+                                    if (nextQuantity == null ||
+                                        nextQuantity == cartQuantity) {
+                                      return;
+                                    }
+                                    await ref
+                                        .read(appControllerProvider.notifier)
+                                        .updateCartQuantity(
+                                          widget.product.id,
+                                          nextQuantity,
+                                        );
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -1612,28 +3400,36 @@ class _ProductCardState extends ConsumerState<ProductCard> {
   }
 }
 
-class _ProductModal extends ConsumerWidget {
+class _ProductModal extends ConsumerStatefulWidget {
   const _ProductModal({required this.product});
 
   final Product product;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ProductModal> createState() => _ProductModalState();
+}
+
+class _ProductModalState extends ConsumerState<_ProductModal> {
+  int? _draftQuantity;
+
+  @override
+  Widget build(BuildContext context) {
     final cartItem = ref.watch(
       appControllerProvider.select(
         (state) => state.cart
-            .where((item) => item.productId == product.id)
+            .where((item) => item.productId == widget.product.id)
             .cast<CartItem?>()
             .firstWhere((item) => item != null, orElse: () => null),
       ),
     );
     final cartQuantity = cartItem?.quantity ?? 0;
+    final draftQuantity = _draftQuantity ?? cartQuantity;
     final viewportWidth = MediaQuery.of(context).size.width;
     final viewportHeight = MediaQuery.of(context).size.height;
     const contentPadding = 16.0;
     const buttonHeight = 44.0;
     const minModalWidth = 280.0;
-    const maxModalWidth = 520.0;
+    const maxModalWidth = _kSharedModalMaxWidth;
     final dialogMaxWidth = math.min(maxModalWidth, viewportWidth - 96);
     final dialogMaxHeight = viewportHeight - 96;
     final innerMaxWidth = dialogMaxWidth - (contentPadding * 2);
@@ -1659,26 +3455,25 @@ class _ProductModal extends ConsumerWidget {
       height: 1.15,
       fontSize: 11.5,
     );
-    final actionLabelStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
-      fontWeight: FontWeight.w700,
-      height: 1.15,
-    );
+    final actionLabelStyle = Theme.of(
+      context,
+    ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.15);
     final addToCartLabelStyle = actionLabelStyle?.copyWith(color: Colors.white);
     final closeLabelStyle = actionLabelStyle?.copyWith(
       color: const Color(0xFFE31E24),
     );
     final unitPainter = TextPainter(
-      text: TextSpan(text: product.displayUnit, style: unitStyle),
+      text: TextSpan(text: widget.product.displayUnit, style: unitStyle),
       maxLines: 1,
       textDirection: Directionality.of(context),
     )..layout(maxWidth: innerMaxWidth);
     final titlePainter = TextPainter(
-      text: TextSpan(text: product.name, style: titleStyle),
+      text: TextSpan(text: widget.product.name, style: titleStyle),
       textDirection: Directionality.of(context),
     )..layout(maxWidth: innerMaxWidth);
     final pricePainter = TextPainter(
       text: TextSpan(
-        text: formatPesos(product.referencePriceCentavos),
+        text: formatPesos(widget.product.referencePriceCentavos),
         style: priceStyle,
       ),
       maxLines: 1,
@@ -1686,7 +3481,7 @@ class _ProductModal extends ConsumerWidget {
     )..layout(maxWidth: innerMaxWidth);
     final asOfPainter = TextPainter(
       text: TextSpan(
-        text: 'as of ${formatAsOfDate(product.priceUpdatedAt)}',
+        text: 'as of ${formatAsOfDate(widget.product.priceUpdatedAt)}',
         style: asOfStyle,
       ),
       maxLines: 1,
@@ -1704,7 +3499,7 @@ class _ProductModal extends ConsumerWidget {
     final responsiveImageSize = math.max(
       120.0,
       math.min(
-        350.0,
+        300.0,
         math.min(innerMaxWidth, innerMaxHeight - fixedContentHeight),
       ),
     );
@@ -1731,16 +3526,16 @@ class _ProductModal extends ConsumerWidget {
                     width: responsiveImageSize,
                     height: responsiveImageSize,
                     child: ProductPlaceholder(
-                      label: product.name,
+                      label: widget.product.name,
                       posterMode: true,
                       fullRounded: true,
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
-                Text(product.name, style: titleStyle),
+                Text(widget.product.name, style: titleStyle),
                 const SizedBox(height: 2),
-                Text(product.displayUnit, style: unitStyle),
+                Text(widget.product.displayUnit, style: unitStyle),
                 const SizedBox(height: 12),
                 Wrap(
                   crossAxisAlignment: WrapCrossAlignment.end,
@@ -1748,98 +3543,210 @@ class _ProductModal extends ConsumerWidget {
                   runSpacing: 4,
                   children: [
                     Text(
-                      formatPesos(product.referencePriceCentavos),
+                      formatPesos(widget.product.referencePriceCentavos),
                       style: priceStyle,
                     ),
                     Text(
-                      'as of ${formatAsOfDate(product.priceUpdatedAt)}',
+                      'as of ${formatAsOfDate(widget.product.priceUpdatedAt)}',
                       style: asOfStyle,
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
-                if (cartQuantity == 0)
+                if (draftQuantity == 0)
                   SizedBox(
                     width: double.infinity,
                     height: buttonHeight,
                     child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.logoBlue,
-                        textStyle: actionLabelStyle,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(0, buttonHeight),
-                        maximumSize: const Size(double.infinity, buttonHeight),
-                        fixedSize: const Size(double.infinity, buttonHeight),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                      onPressed: () async {
-                        await ref
-                            .read(appControllerProvider.notifier)
-                            .addToCart(product, quantity: 1);
-                      },
+                      style:
+                          ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.logoBlue,
+                            textStyle: actionLabelStyle,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shadowColor: Colors.transparent,
+                            minimumSize: const Size(0, buttonHeight),
+                            maximumSize: const Size(
+                              double.infinity,
+                              buttonHeight,
+                            ),
+                            fixedSize: const Size(
+                              double.infinity,
+                              buttonHeight,
+                            ),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ).copyWith(
+                            backgroundColor: _strongBlueBackground(),
+                            overlayColor: _strongBlueOverlay(),
+                          ),
+                      onPressed: () => setState(() => _draftQuantity = 1),
                       icon: const Icon(Icons.add_shopping_cart),
                       label: Text('Add to Cart', style: addToCartLabelStyle),
                     ),
                   )
                 else
                   _CartQuantityControl(
-                    quantity: cartQuantity,
+                    quantity: draftQuantity,
                     height: buttonHeight,
                     onDecrease: () async {
-                      final controller = ref.read(
-                        appControllerProvider.notifier,
-                      );
-                      if (cartQuantity <= 1) {
-                        await controller.removeFromCart(product.id);
-                      } else {
-                        await controller.updateCartQuantity(
-                          product.id,
-                          cartQuantity - 1,
+                      if (draftQuantity <= 1) {
+                        if (cartQuantity <= 0) {
+                          setState(() => _draftQuantity = 0);
+                          return;
+                        }
+                        final shouldRemove = await _showRemoveProductDialog(
+                          context,
                         );
+                        if (shouldRemove != true) {
+                          return;
+                        }
+                        if (cartQuantity > 0) {
+                          await ref
+                              .read(appControllerProvider.notifier)
+                              .removeFromCart(widget.product.id);
+                          if (!mounted) {
+                            return;
+                          }
+                          _popAllRoutesUntilFirst(this.context);
+                          return;
+                        }
+                        setState(() => _draftQuantity = 0);
+                        if (!mounted) {
+                          return;
+                        }
+                        _popAllRoutesUntilFirst(this.context);
+                        return;
                       }
+                      setState(() => _draftQuantity = draftQuantity - 1);
                     },
                     onIncrease: () async {
-                        await ref
-                            .read(appControllerProvider.notifier)
-                            .updateCartQuantity(product.id, cartQuantity + 1);
-                      },
-                    ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: buttonHeight,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFE31E24),
-                      textStyle: actionLabelStyle,
-                      minimumSize: const Size(0, buttonHeight),
-                      maximumSize: const Size(double.infinity, buttonHeight),
-                      fixedSize: const Size(double.infinity, buttonHeight),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      side: const BorderSide(color: Color(0xFFE4E7EC)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ).copyWith(
-                      overlayColor: WidgetStateProperty.resolveWith((states) {
-                        if (states.contains(WidgetState.pressed)) {
-                          return Colors.black.withValues(alpha: 0.12);
-                        }
-                        if (states.contains(WidgetState.hovered)) {
-                          return Colors.black.withValues(alpha: 0.06);
-                        }
-                        if (states.contains(WidgetState.focused)) {
-                          return Colors.black.withValues(alpha: 0.08);
-                        }
-                        return null;
-                      }),
-                    ),
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text('Close', style: closeLabelStyle),
+                      setState(() => _draftQuantity = draftQuantity + 1);
+                    },
+                    onEditQuantity: () async {
+                      final nextQuantity = await _showQuantityInputDialog(
+                        context,
+                        initialQuantity: draftQuantity,
+                      );
+                      if (nextQuantity == null ||
+                          nextQuantity == draftQuantity) {
+                        return;
+                      }
+                      setState(() => _draftQuantity = nextQuantity);
+                    },
                   ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: buttonHeight,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFE31E24),
+                            backgroundColor: const Color(0x1AE31E24),
+                            textStyle: actionLabelStyle,
+                            minimumSize: const Size(0, buttonHeight),
+                            maximumSize: const Size(
+                              double.infinity,
+                              buttonHeight,
+                            ),
+                            fixedSize: const Size(
+                              double.infinity,
+                              buttonHeight,
+                            ),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            side: BorderSide.none,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text('Close', style: closeLabelStyle),
+                        ),
+                      ),
+                    ),
+                    if (cartQuantity > 0 || draftQuantity >= 1) ...[
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: SizedBox(
+                          height: buttonHeight,
+                          child: OutlinedButton(
+                            style:
+                                OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.logoBlue,
+                                  backgroundColor: AppColors.logoBlue
+                                      .withValues(alpha: 0.10),
+                                  textStyle: actionLabelStyle,
+                                  minimumSize: const Size(0, buttonHeight),
+                                  maximumSize: const Size(
+                                    double.infinity,
+                                    buttonHeight,
+                                  ),
+                                  fixedSize: const Size(
+                                    double.infinity,
+                                    buttonHeight,
+                                  ),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  side: BorderSide.none,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                ).copyWith(
+                                  backgroundColor: _lightBlueBackground(
+                                    baseColor: AppColors.logoBlue.withValues(
+                                      alpha: 0.10,
+                                    ),
+                                  ),
+                                  overlayColor: _strongBlueOverlay(),
+                                ),
+                            onPressed: () async {
+                              final nextQuantity =
+                                  _draftQuantity ?? cartQuantity;
+                              final controller = ref.read(
+                                appControllerProvider.notifier,
+                              );
+                              if (nextQuantity != cartQuantity) {
+                                if (nextQuantity <= 0) {
+                                  await controller.removeFromCart(
+                                    widget.product.id,
+                                  );
+                                  if (!mounted) {
+                                    return;
+                                  }
+                                  _popAllRoutesUntilFirst(this.context);
+                                  return;
+                                } else if (cartQuantity <= 0) {
+                                  await controller.addToCart(
+                                    widget.product,
+                                    quantity: nextQuantity,
+                                  );
+                                } else {
+                                  await controller.updateCartQuantity(
+                                    widget.product.id,
+                                    nextQuantity,
+                                  );
+                                }
+                              }
+                              if (!mounted) {
+                                return;
+                              }
+                              Navigator.of(this.context).pop();
+                            },
+                            child: Text(
+                              'Save',
+                              style: actionLabelStyle?.copyWith(
+                                color: AppColors.logoBlue,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -1856,12 +3763,14 @@ class _CartQuantityControl extends StatelessWidget {
     required this.height,
     required this.onDecrease,
     required this.onIncrease,
+    required this.onEditQuantity,
   });
 
   final int quantity;
   final double height;
   final Future<void> Function() onDecrease;
   final Future<void> Function() onIncrease;
+  final Future<void> Function() onEditQuantity;
 
   @override
   Widget build(BuildContext context) {
@@ -1880,6 +3789,13 @@ class _CartQuantityControl extends StatelessWidget {
               height: height,
               child: IconButton(
                 onPressed: onDecrease,
+                style: ButtonStyle(
+                  backgroundColor: _strongBlueBackground(),
+                  foregroundColor: WidgetStateProperty.all(Colors.white),
+                  overlayColor: _transparentInteractionOverlay(),
+                  splashFactory: NoSplash.splashFactory,
+                  animationDuration: Duration.zero,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 visualDensity: VisualDensity.compact,
@@ -1890,13 +3806,17 @@ class _CartQuantityControl extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Center(
-                child: Text(
-                  '$quantity',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    height: 1.15,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onEditQuantity,
+                child: Center(
+                  child: Text(
+                    '$quantity',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      height: 1.15,
+                    ),
                   ),
                 ),
               ),
@@ -1906,6 +3826,13 @@ class _CartQuantityControl extends StatelessWidget {
               height: height,
               child: IconButton(
                 onPressed: onIncrease,
+                style: ButtonStyle(
+                  backgroundColor: _strongBlueBackground(),
+                  foregroundColor: WidgetStateProperty.all(Colors.white),
+                  overlayColor: _transparentInteractionOverlay(),
+                  splashFactory: NoSplash.splashFactory,
+                  animationDuration: Duration.zero,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 visualDensity: VisualDensity.compact,
@@ -1916,6 +3843,635 @@ class _CartQuantityControl extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<int?> _showQuantityInputDialog(
+  BuildContext context, {
+  required int initialQuantity,
+}) async {
+  return showDialog<int>(
+    context: context,
+    builder: (dialogContext) =>
+        _QuantityInputDialog(initialQuantity: initialQuantity),
+  );
+}
+
+Future<bool?> _showRemoveProductDialog(BuildContext context) async {
+  return showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => const _RemoveProductDialog(),
+  );
+}
+
+Future<void> _showOrderPlacedDialog(BuildContext context) async {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => const _OrderPlacedDialog(),
+  );
+}
+
+Future<bool?> _showOrderAgainDialog(BuildContext context) async {
+  return showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => const _OrderAgainDialog(),
+  );
+}
+
+Future<void> _showContactUsDialog(BuildContext context) async {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => const _ContactUsDialog(),
+  );
+}
+
+class _OrderPlacedDialog extends StatelessWidget {
+  const _OrderPlacedDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
+      fontSize: 16,
+      fontWeight: FontWeight.w800,
+      height: 1.15,
+    );
+    final bodyStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: const Color(0xFF667085),
+      height: 1.15,
+    );
+    final actionLabelStyle = Theme.of(
+      context,
+    ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.15);
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kSharedModalMaxWidth),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Order Placed', style: titleStyle),
+              const SizedBox(height: 10),
+              Text('Order has been placed successfully.', style: bodyStyle),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 36,
+                child: OutlinedButton(
+                  style:
+                      OutlinedButton.styleFrom(
+                        backgroundColor: AppColors.logoBlue.withValues(
+                          alpha: 0.10,
+                        ),
+                        foregroundColor: AppColors.logoBlue,
+                        textStyle: actionLabelStyle,
+                        minimumSize: const Size(0, 36),
+                        maximumSize: const Size(double.infinity, 36),
+                        fixedSize: const Size(double.infinity, 36),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        side: BorderSide.none,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ).copyWith(
+                        backgroundColor: _lightBlueBackground(
+                          baseColor: AppColors.logoBlue.withValues(alpha: 0.10),
+                        ),
+                        overlayColor: _strongBlueOverlay(),
+                      ),
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    'Close',
+                    style: actionLabelStyle?.copyWith(
+                      color: AppColors.logoBlue,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactUsDialog extends StatelessWidget {
+  const _ContactUsDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
+      fontSize: 16,
+      fontWeight: FontWeight.w800,
+      height: 1.15,
+    );
+
+    void handleAction(String message) {
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(successSnackBar(message));
+    }
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kSharedModalMaxWidth),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: Text('Need Help?', style: titleStyle)),
+                  MousePressable(
+                    onTap: () => Navigator.of(context).pop(),
+                    borderRadius: BorderRadius.circular(12),
+                    child: const SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: Icon(Icons.close_rounded),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _ContactUsActionButton(
+                icon: Icons.facebook,
+                label: 'Message us on Facebook',
+                onPressed: () =>
+                    handleAction('Facebook support option selected.'),
+              ),
+              const SizedBox(height: 10),
+              _ContactUsActionButton(
+                icon: Icons.mail_outline_rounded,
+                label: 'Send us a message',
+                onPressed: () =>
+                    handleAction('Message support option selected.'),
+              ),
+              const SizedBox(height: 10),
+              _ContactUsActionButton(
+                icon: Icons.call_outlined,
+                label: 'Contact us',
+                onPressed: () => handleAction('Call support option selected.'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactUsActionButton extends StatelessWidget {
+  const _ContactUsActionButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final actionLabelStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
+      fontWeight: FontWeight.w700,
+      height: 1.15,
+      color: AppColors.logoBlue,
+    );
+
+    return SizedBox(
+      width: double.infinity,
+      height: 36,
+      child: OutlinedButton(
+        style:
+            OutlinedButton.styleFrom(
+              backgroundColor: AppColors.logoBlue.withValues(alpha: 0.10),
+              foregroundColor: AppColors.logoBlue,
+              textStyle: actionLabelStyle,
+              alignment: Alignment.centerLeft,
+              minimumSize: const Size(0, 36),
+              maximumSize: const Size(double.infinity, 36),
+              fixedSize: const Size(double.infinity, 36),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              side: BorderSide.none,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ).copyWith(
+              backgroundColor: _lightBlueBackground(
+                baseColor: AppColors.logoBlue.withValues(alpha: 0.10),
+              ),
+              overlayColor: _strongBlueOverlay(),
+            ),
+        onPressed: onPressed,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: AppColors.logoBlue),
+            const SizedBox(width: 8),
+            Text(label, style: actionLabelStyle),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OrderAgainDialog extends StatelessWidget {
+  const _OrderAgainDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
+      fontSize: 16,
+      fontWeight: FontWeight.w800,
+      height: 1.15,
+    );
+    final bodyStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: const Color(0xFF667085),
+      height: 1.15,
+    );
+    final actionLabelStyle = Theme.of(
+      context,
+    ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.15);
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kSharedModalMaxWidth),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Order again?', style: titleStyle),
+              const SizedBox(height: 10),
+              Text('Current cart will be replaced.', style: bodyStyle),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 36,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFE31E24),
+                          backgroundColor: const Color(0x1AE31E24),
+                          textStyle: actionLabelStyle,
+                          minimumSize: const Size(0, 36),
+                          maximumSize: const Size(double.infinity, 36),
+                          fixedSize: const Size(double.infinity, 36),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: Text(
+                          'No',
+                          style: actionLabelStyle?.copyWith(
+                            color: const Color(0xFFE31E24),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: 36,
+                      child: OutlinedButton(
+                        style:
+                            OutlinedButton.styleFrom(
+                              backgroundColor: AppColors.logoBlue.withValues(
+                                alpha: 0.10,
+                              ),
+                              foregroundColor: AppColors.logoBlue,
+                              textStyle: actionLabelStyle,
+                              minimumSize: const Size(0, 36),
+                              maximumSize: const Size(double.infinity, 36),
+                              fixedSize: const Size(double.infinity, 36),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              side: BorderSide.none,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ).copyWith(
+                              backgroundColor: _lightBlueBackground(
+                                baseColor: AppColors.logoBlue.withValues(
+                                  alpha: 0.10,
+                                ),
+                              ),
+                              overlayColor: _strongBlueOverlay(),
+                            ),
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: Text(
+                          'Yes',
+                          style: actionLabelStyle?.copyWith(
+                            color: AppColors.logoBlue,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuantityInputDialog extends StatefulWidget {
+  const _QuantityInputDialog({required this.initialQuantity});
+
+  final int initialQuantity;
+
+  @override
+  State<_QuantityInputDialog> createState() => _QuantityInputDialogState();
+}
+
+class _QuantityInputDialogState extends State<_QuantityInputDialog> {
+  late final TextEditingController _controller;
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.initialQuantity}');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState?.validate() ?? false) {
+      Navigator.of(context).pop(int.parse(_controller.text));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
+      fontSize: 16,
+      fontWeight: FontWeight.w800,
+      height: 1.15,
+    );
+    final actionLabelStyle = Theme.of(
+      context,
+    ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.15);
+    const contentPadding = 16.0;
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kSharedModalMaxWidth),
+        child: Padding(
+          padding: const EdgeInsets.all(contentPadding),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Update Quantity', style: titleStyle),
+              const SizedBox(height: 16),
+              Form(
+                key: _formKey,
+                child: TextFormField(
+                  controller: _controller,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(hintText: 'Enter Quantity'),
+                  validator: (value) {
+                    final parsed = int.tryParse(value ?? '');
+                    if (parsed == null || parsed < 0) {
+                      return 'Enter 0 or more';
+                    }
+                    return null;
+                  },
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 36,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFE31E24),
+                          backgroundColor: const Color(0x1AE31E24),
+                          textStyle: actionLabelStyle,
+                          minimumSize: const Size(0, 36),
+                          maximumSize: const Size(double.infinity, 36),
+                          fixedSize: const Size(double.infinity, 36),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          'Close',
+                          style: actionLabelStyle?.copyWith(
+                            color: const Color(0xFFE31E24),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: 36,
+                      child: OutlinedButton(
+                        style:
+                            OutlinedButton.styleFrom(
+                              backgroundColor: AppColors.logoBlue.withValues(
+                                alpha: 0.10,
+                              ),
+                              foregroundColor: AppColors.logoBlue,
+                              textStyle: actionLabelStyle,
+                              minimumSize: const Size(0, 36),
+                              maximumSize: const Size(double.infinity, 36),
+                              fixedSize: const Size(double.infinity, 36),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              side: BorderSide.none,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ).copyWith(
+                              backgroundColor: _lightBlueBackground(
+                                baseColor: AppColors.logoBlue.withValues(
+                                  alpha: 0.10,
+                                ),
+                              ),
+                              overlayColor: _strongBlueOverlay(),
+                            ),
+                        onPressed: _submit,
+                        child: Text(
+                          'Save',
+                          style: actionLabelStyle?.copyWith(
+                            color: AppColors.logoBlue,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RemoveProductDialog extends StatelessWidget {
+  const _RemoveProductDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
+      fontSize: 16,
+      fontWeight: FontWeight.w800,
+      height: 1.15,
+    );
+    final bodyStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: const Color(0xFF667085),
+      height: 1.15,
+    );
+    final actionLabelStyle = Theme.of(
+      context,
+    ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.15);
+    const contentPadding = 16.0;
+    const buttonHeight = 36.0;
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kSharedModalMaxWidth),
+        child: Padding(
+          padding: const EdgeInsets.all(contentPadding),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Remove Item?', style: titleStyle),
+              const SizedBox(height: 8),
+              Text('Item will be removed from cart.', style: bodyStyle),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: buttonHeight,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFE31E24),
+                          backgroundColor: const Color(0x1AE31E24),
+                          textStyle: actionLabelStyle,
+                          minimumSize: const Size(0, buttonHeight),
+                          maximumSize: const Size(
+                            double.infinity,
+                            buttonHeight,
+                          ),
+                          fixedSize: const Size(double.infinity, buttonHeight),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: Text(
+                          'Close',
+                          style: actionLabelStyle?.copyWith(
+                            color: const Color(0xFFE31E24),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: buttonHeight,
+                      child: OutlinedButton(
+                        style:
+                            OutlinedButton.styleFrom(
+                              backgroundColor: AppColors.logoBlue.withValues(
+                                alpha: 0.10,
+                              ),
+                              foregroundColor: AppColors.logoBlue,
+                              textStyle: actionLabelStyle,
+                              minimumSize: const Size(0, buttonHeight),
+                              maximumSize: const Size(
+                                double.infinity,
+                                buttonHeight,
+                              ),
+                              fixedSize: const Size(
+                                double.infinity,
+                                buttonHeight,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              side: BorderSide.none,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ).copyWith(
+                              backgroundColor: _lightBlueBackground(
+                                baseColor: AppColors.logoBlue.withValues(
+                                  alpha: 0.10,
+                                ),
+                              ),
+                              overlayColor: _strongBlueOverlay(),
+                            ),
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: Text(
+                          'Remove',
+                          style: actionLabelStyle?.copyWith(
+                            color: AppColors.logoBlue,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

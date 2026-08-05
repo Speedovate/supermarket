@@ -24,7 +24,7 @@ class OrderSuccessPage extends ConsumerWidget {
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: EmptyStateCard(
-              title: 'Your order request has been received.',
+              title: 'Order has been received.',
               message: order == null
                   ? 'Andrew\'s Supermarket will check product availability and contact you through your mobile number with the final quotation.'
                   : 'Reference number: ${order.referenceNumber}\n\nAndrew\'s Supermarket will check product availability and contact you through your mobile number with the final quotation. This order is not yet confirmed.',

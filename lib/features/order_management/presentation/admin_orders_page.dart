@@ -103,16 +103,16 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
           const SizedBox(height: 20),
           if (orders.isEmpty)
             const EmptyStateCard(
-              title: 'No order requests',
+              title: 'No orders',
               message: 'Customer submissions will appear here.',
             )
           else
             ...orders.map(
               (order) => Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
+                child: MousePressable(
                   onTap: () => context.push('/admin/orders/${order.id}'),
+                  borderRadius: BorderRadius.circular(24),
                   child: SectionCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

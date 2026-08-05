@@ -1,10 +1,10 @@
 # Andrew's Supermarket MVP
 
-A responsive Flutter Web MVP for Andrew's Supermarket, designed for sari-sari store owners who submit product order requests and for admins who review, quote, and manage those requests.
+A responsive Flutter Web MVP for Andrew's Supermarket, designed for sari-sari store owners who place orders and for admins who review, quote, and manage those requests.
 
 ## What is included
 
-- Public customer catalog with search, category filtering, local cart persistence, order review, and order request submission
+- Public customer catalog with search, category filtering, local cart persistence, order review, and order placing
 - Secured admin area with login, dashboard, product management, category management, order management, and settings
 - MVVM-oriented Flutter structure using Riverpod
 - Material 3 UI based on the blue, red, white, and navy brand direction from the provided reference

@@ -200,9 +200,9 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
     );
     await ref.read(appControllerProvider.notifier).updateOrder(order);
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Order updated.')));
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(successSnackBar('Order updated.'));
     }
   }
 }

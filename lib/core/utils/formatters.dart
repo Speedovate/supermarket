@@ -13,6 +13,9 @@ final _currencyWhole = NumberFormat.currency(
   decimalDigits: 0,
 );
 final _shortDate = DateFormat('MMM d, yyyy');
+final _orderThreadDateTime = DateFormat('MMM d, yyyy - h:mm a');
+final _orderDate = DateFormat('MMM d, yyyy');
+final _orderTime = DateFormat('h:mm a');
 
 String formatPesos(int centavos) {
   final pesos = centavos / 100;
@@ -22,6 +25,34 @@ String formatPesos(int centavos) {
 }
 
 String formatAsOfDate(DateTime date) => _shortDate.format(date);
+
+String formatOrderThreadDateTime(DateTime date) => _orderThreadDateTime.format(date);
+
+String formatOrderDate(DateTime date) => _orderDate.format(date);
+
+String formatOrderTime(DateTime date) => _orderTime.format(date);
+
+String formatCompactCount(int value) {
+  if (value < 1000) {
+    return '$value';
+  }
+  if (value < 1000000) {
+    final compactTenths = ((value / 1000) * 10).floor() / 10;
+    final hasSuffix = value % 1000 != 0;
+    final hasDecimal = compactTenths % 1 != 0;
+    final formatted = hasDecimal
+        ? compactTenths.toStringAsFixed(1)
+        : compactTenths.toStringAsFixed(0);
+    return '${formatted.replaceAll(RegExp(r'\\.0$'), '')}K${hasSuffix ? '+' : ''}';
+  }
+  final compactTenths = ((value / 1000000) * 10).floor() / 10;
+  final hasSuffix = value % 1000000 != 0;
+  final hasDecimal = compactTenths % 1 != 0;
+  final formatted = hasDecimal
+      ? compactTenths.toStringAsFixed(1)
+      : compactTenths.toStringAsFixed(0);
+  return '${formatted.replaceAll(RegExp(r'\\.0$'), '')}M${hasSuffix ? '+' : ''}';
+}
 
 String normalizePhoneNumber(String input) {
   final digits = input.replaceAll(RegExp(r'[^0-9+]'), '');
@@ -53,7 +84,7 @@ String displayFulfillment(FulfillmentMethod method) {
 
 String displayStatus(OrderStatus status) {
   return switch (status) {
-    OrderStatus.newRequest => 'New Request',
+    OrderStatus.newRequest => 'Waiting',
     OrderStatus.underReview => 'Under Review',
     OrderStatus.awaitingCustomerConfirmation =>
       'Awaiting Customer Confirmation',

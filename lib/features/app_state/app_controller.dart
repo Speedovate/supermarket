@@ -255,7 +255,7 @@ class AppController extends Notifier<AppState> {
           if (item.productId != productId) {
             return item;
           }
-          return item.copyWith(quantity: quantity.clamp(1, 999));
+          return item.copyWith(quantity: quantity);
         })
         .where((item) => item.quantity > 0)
         .toList();
@@ -267,6 +267,29 @@ class AppController extends Notifier<AppState> {
   Future<void> removeFromCart(String productId) async {
     state = state.copyWith(
       cart: state.cart.where((item) => item.productId != productId).toList(),
+    );
+    await _persist();
+  }
+
+  Future<void> addOrderToCart(OrderRequest order) async {
+    final nextCart = order.items
+        .map(
+          (orderItem) => CartItem(
+            productId: orderItem.productId,
+            productName: orderItem.productName,
+            unit: orderItem.unit,
+            referenceUnitPriceCentavos: orderItem.referenceUnitPriceCentavos,
+            photoUrl: orderItem.photoUrlSnapshot,
+            quantity: orderItem.requestedQuantity,
+          ),
+        )
+        .toList();
+
+    state = state.copyWith(
+      cart: nextCart,
+      customerDraft: order.customer.copyWith(
+        normalizedMobileNumber: normalizePhoneNumber(order.customer.mobileNumber),
+      ),
     );
     await _persist();
   }
@@ -283,12 +306,9 @@ class AppController extends Notifier<AppState> {
     if (!isValidPhilippineMobile(draft.mobileNumber.trim())) {
       return 'Enter a valid Philippine mobile number.';
     }
-    if (draft.barangay.trim().isEmpty) {
-      return 'Barangay is required.';
-    }
     if (draft.fulfillmentMethod == FulfillmentMethod.delivery &&
-        draft.addressLandmark.trim().isEmpty) {
-      return 'Address or landmark is required for delivery.';
+        draft.barangay.trim().isEmpty) {
+      return 'Place is required.';
     }
     if (state.cart.isEmpty) {
       return 'Add at least one product before submitting.';

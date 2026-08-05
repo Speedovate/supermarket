@@ -20,7 +20,7 @@ class OrderReviewPage extends ConsumerWidget {
         body: Center(
           child: EmptyStateCard(
             title: 'No items to review',
-            message: 'Your cart is empty.',
+            message: 'Cart is empty.',
             actionLabel: 'Back to catalog',
             onAction: () => context.go('/'),
           ),
@@ -29,7 +29,7 @@ class OrderReviewPage extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Review Your Order Request')),
+      appBar: AppBar(title: const Text('Review Your Order')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -50,9 +50,6 @@ class OrderReviewPage extends ConsumerWidget {
                 Text(
                   'Fulfillment: ${displayFulfillment(draft.fulfillmentMethod)}',
                 ),
-                if (draft.addressLandmark.trim().isNotEmpty)
-                  Text('Address / landmark: ${draft.addressLandmark}'),
-                if (draft.note.trim().isNotEmpty) Text('Note: ${draft.note}'),
               ],
             ),
           ),
@@ -123,9 +120,7 @@ class OrderReviewPage extends ConsumerWidget {
                         context.go('/order-success/$orderId');
                       },
                 child: Text(
-                  state.submittingOrder
-                      ? 'Submitting...'
-                      : 'Submit Order Request',
+                  state.submittingOrder ? 'Submitting...' : 'Submit Order',
                 ),
               ),
             ),
