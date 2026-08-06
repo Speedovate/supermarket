@@ -8,7 +8,7 @@ import '../../app_state/app_controller.dart';
 class OrderSuccessPage extends ConsumerWidget {
   const OrderSuccessPage({super.key, required this.orderId});
 
-  final String orderId;
+  final int orderId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

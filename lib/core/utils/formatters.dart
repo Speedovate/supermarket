@@ -16,6 +16,7 @@ final _shortDate = DateFormat('MMM d, yyyy');
 final _orderThreadDateTime = DateFormat('MMM d, yyyy - h:mm a');
 final _orderDate = DateFormat('MMM d, yyyy');
 final _orderTime = DateFormat('h:mm a');
+final _orderTimeWithSeconds = DateFormat('hh:mm:ss a');
 
 String formatPesos(int centavos) {
   final pesos = centavos / 100;
@@ -31,6 +32,8 @@ String formatOrderThreadDateTime(DateTime date) => _orderThreadDateTime.format(d
 String formatOrderDate(DateTime date) => _orderDate.format(date);
 
 String formatOrderTime(DateTime date) => _orderTime.format(date);
+
+String formatOrderTimeWithSeconds(DateTime date) => _orderTimeWithSeconds.format(date);
 
 String formatCompactCount(int value) {
   if (value < 1000) {

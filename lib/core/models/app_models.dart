@@ -31,32 +31,32 @@ class Category {
     required this.name,
     required this.normalizedName,
     required this.isActive,
-    required this.isArchived,
-    required this.sortOrder,
+    required this.createdAt,
+    required this.updatedAt,
   });
 
-  final String id;
+  final int id;
   final String name;
   final String normalizedName;
   final bool isActive;
-  final bool isArchived;
-  final int sortOrder;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
   Category copyWith({
-    String? id,
+    int? id,
     String? name,
     String? normalizedName,
     bool? isActive,
-    bool? isArchived,
-    int? sortOrder,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return Category(
       id: id ?? this.id,
       name: name ?? this.name,
       normalizedName: normalizedName ?? this.normalizedName,
       isActive: isActive ?? this.isActive,
-      isArchived: isArchived ?? this.isArchived,
-      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -65,18 +65,25 @@ class Category {
     'name': name,
     'normalizedName': normalizedName,
     'isActive': isActive,
-    'isArchived': isArchived,
-    'sortOrder': sortOrder,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
   };
 
   factory Category.fromMap(Map<String, dynamic> map) {
+    final fallbackDate = DateTime(2026, 7, 31);
     return Category(
-      id: map['id'] as String,
+      id: map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 0,
       name: map['name'] as String,
       normalizedName: map['normalizedName'] as String,
       isActive: map['isActive'] as bool,
-      isArchived: map['isArchived'] as bool,
-      sortOrder: map['sortOrder'] as int,
+      createdAt: map['createdAt'] == null
+          ? fallbackDate
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] == null
+          ? fallbackDate
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 }
@@ -95,17 +102,18 @@ class Product {
     required this.referencePriceCentavos,
     required this.priceUpdatedAt,
     required this.isActive,
-    required this.isArchived,
     required this.validOrderedQuantity,
     required this.validOrderCount,
     this.lastValidOrderAt,
+    this.createdAt,
+    this.updatedAt,
   });
 
-  final String id;
+  final int id;
   final String name;
   final String? photoUrl;
   final String? photoStoragePath;
-  final String categoryId;
+  final int categoryId;
   final String categoryNameSnapshot;
   final String quantity;
   final String unit;
@@ -113,10 +121,11 @@ class Product {
   final int referencePriceCentavos;
   final DateTime priceUpdatedAt;
   final bool isActive;
-  final bool isArchived;
   final int validOrderedQuantity;
   final int validOrderCount;
   final DateTime? lastValidOrderAt;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   String get normalizedName => name.trim().toLowerCase();
 
@@ -127,11 +136,11 @@ class Product {
   }
 
   Product copyWith({
-    String? id,
+    int? id,
     String? name,
     Object? photoUrl = _sentinel,
     Object? photoStoragePath = _sentinel,
-    String? categoryId,
+    int? categoryId,
     String? categoryNameSnapshot,
     String? quantity,
     String? unit,
@@ -139,10 +148,11 @@ class Product {
     int? referencePriceCentavos,
     DateTime? priceUpdatedAt,
     bool? isActive,
-    bool? isArchived,
     int? validOrderedQuantity,
     int? validOrderCount,
     Object? lastValidOrderAt = _sentinel,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return Product(
       id: id ?? this.id,
@@ -160,12 +170,13 @@ class Product {
           referencePriceCentavos ?? this.referencePriceCentavos,
       priceUpdatedAt: priceUpdatedAt ?? this.priceUpdatedAt,
       isActive: isActive ?? this.isActive,
-      isArchived: isArchived ?? this.isArchived,
       validOrderedQuantity: validOrderedQuantity ?? this.validOrderedQuantity,
       validOrderCount: validOrderCount ?? this.validOrderCount,
       lastValidOrderAt: lastValidOrderAt == _sentinel
           ? this.lastValidOrderAt
           : lastValidOrderAt as DateTime?,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -184,45 +195,53 @@ class Product {
     'referencePriceCentavos': referencePriceCentavos,
     'priceUpdatedAt': priceUpdatedAt.toIso8601String(),
     'isActive': isActive,
-    'isArchived': isArchived,
     'validOrderedQuantity': validOrderedQuantity,
     'validOrderCount': validOrderCount,
     'lastValidOrderAt': lastValidOrderAt?.toIso8601String(),
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   factory Product.fromMap(Map<String, dynamic> map) {
     final parsedLegacyUnit = _parseLegacyMeasure(map['unit'] as String?);
     return Product(
-      id: map['id'] as String,
+      id: map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 0,
       name: map['name'] as String,
       photoUrl: map['photoUrl'] as String?,
       photoStoragePath: map['photoStoragePath'] as String?,
-      categoryId: map['categoryId'] as String,
+      categoryId: map['categoryId'] is int
+          ? map['categoryId'] as int
+          : int.tryParse('${map['categoryId']}') ?? 0,
       categoryNameSnapshot: map['categoryNameSnapshot'] as String,
-      quantity:
-          (map['quantity'] as String?)?.trim().isNotEmpty == true
-              ? (map['quantity'] as String).trim()
-              : parsedLegacyUnit.quantity,
+      quantity: (map['quantity'] as String?)?.trim().isNotEmpty == true
+          ? (map['quantity'] as String).trim()
+          : parsedLegacyUnit.quantity,
       unit:
           (map['unit'] as String?)?.trim().isNotEmpty == true &&
               (map['quantity'] != null || map['type'] != null)
           ? (map['unit'] as String).trim()
           : parsedLegacyUnit.unit,
-      type:
-          (map['type'] as String?)?.trim().isNotEmpty == true
-              ? (map['type'] as String).trim()
-              : parsedLegacyUnit.type,
+      type: (map['type'] as String?)?.trim().isNotEmpty == true
+          ? (map['type'] as String).trim()
+          : parsedLegacyUnit.type,
       referencePriceCentavos: map['referencePriceCentavos'] as int,
       priceUpdatedAt: map['priceUpdatedAt'] == null
           ? DateTime(2026, 7, 31)
           : DateTime.parse(map['priceUpdatedAt'] as String),
       isActive: map['isActive'] as bool,
-      isArchived: map['isArchived'] as bool,
       validOrderedQuantity: map['validOrderedQuantity'] as int,
       validOrderCount: map['validOrderCount'] as int,
       lastValidOrderAt: map['lastValidOrderAt'] == null
           ? null
           : DateTime.parse(map['lastValidOrderAt'] as String),
+      createdAt: map['createdAt'] == null
+          ? null
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] == null
+          ? null
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 }
@@ -241,9 +260,9 @@ class _ParsedMeasure {
 
 _ParsedMeasure _parseLegacyMeasure(String? raw) {
   final source = raw?.trim() ?? '';
-  final match = RegExp(r'^(\d+(?:\.\d+)?)\s*([A-Za-z]+)\s*(.*)$').firstMatch(
-    source,
-  );
+  final match = RegExp(
+    r'^(\d+(?:\.\d+)?)\s*([A-Za-z]+)\s*(.*)$',
+  ).firstMatch(source);
   if (match == null) {
     return _ParsedMeasure(quantity: '', unit: source, type: '');
   }
@@ -257,32 +276,42 @@ _ParsedMeasure _parseLegacyMeasure(String? raw) {
 
 class CartItem {
   const CartItem({
+    required this.id,
     required this.productId,
     required this.productName,
     required this.unit,
     required this.referenceUnitPriceCentavos,
     this.photoUrl,
     required this.quantity,
+    this.createdAt,
+    this.updatedAt,
   });
 
-  final String productId;
+  final int id;
+  final int productId;
   final String productName;
   final String unit;
   final int referenceUnitPriceCentavos;
   final String? photoUrl;
   final int quantity;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   int get estimatedSubtotalCentavos => referenceUnitPriceCentavos * quantity;
 
   CartItem copyWith({
-    String? productId,
+    int? id,
+    int? productId,
     String? productName,
     String? unit,
     int? referenceUnitPriceCentavos,
     Object? photoUrl = _sentinel,
     int? quantity,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return CartItem(
+      id: id ?? this.id,
       productId: productId ?? this.productId,
       productName: productName ?? this.productName,
       unit: unit ?? this.unit,
@@ -290,32 +319,49 @@ class CartItem {
           referenceUnitPriceCentavos ?? this.referenceUnitPriceCentavos,
       photoUrl: photoUrl == _sentinel ? this.photoUrl : photoUrl as String?,
       quantity: quantity ?? this.quantity,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
   Map<String, dynamic> toMap() => {
+    'id': id,
     'productId': productId,
     'productName': productName,
     'unit': unit,
     'referenceUnitPriceCentavos': referenceUnitPriceCentavos,
     'photoUrl': photoUrl,
     'quantity': quantity,
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   factory CartItem.fromMap(Map<String, dynamic> map) {
     return CartItem(
-      productId: map['productId'] as String,
+      id: map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 0,
+      productId: map['productId'] is int
+          ? map['productId'] as int
+          : int.tryParse('${map['productId']}') ?? 0,
       productName: map['productName'] as String,
       unit: map['unit'] as String,
       referenceUnitPriceCentavos: map['referenceUnitPriceCentavos'] as int,
       photoUrl: map['photoUrl'] as String?,
       quantity: map['quantity'] as int,
+      createdAt: map['createdAt'] == null
+          ? null
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] == null
+          ? null
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 }
 
 class CustomerDraft {
   const CustomerDraft({
+    this.id = 1,
     this.name = '',
     this.mobileNumber = '',
     this.normalizedMobileNumber = '',
@@ -323,8 +369,11 @@ class CustomerDraft {
     this.addressLandmark = '',
     this.note = '',
     this.fulfillmentMethod = FulfillmentMethod.pickup,
+    this.createdAt,
+    this.updatedAt,
   });
 
+  final int id;
   final String name;
   final String mobileNumber;
   final String normalizedMobileNumber;
@@ -332,8 +381,11 @@ class CustomerDraft {
   final String addressLandmark;
   final String note;
   final FulfillmentMethod fulfillmentMethod;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   CustomerDraft copyWith({
+    int? id,
     String? name,
     String? mobileNumber,
     String? normalizedMobileNumber,
@@ -341,8 +393,11 @@ class CustomerDraft {
     String? addressLandmark,
     String? note,
     FulfillmentMethod? fulfillmentMethod,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return CustomerDraft(
+      id: id ?? this.id,
       name: name ?? this.name,
       mobileNumber: mobileNumber ?? this.mobileNumber,
       normalizedMobileNumber:
@@ -351,10 +406,13 @@ class CustomerDraft {
       addressLandmark: addressLandmark ?? this.addressLandmark,
       note: note ?? this.note,
       fulfillmentMethod: fulfillmentMethod ?? this.fulfillmentMethod,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
   Map<String, dynamic> toMap() => {
+    'id': id,
     'name': name,
     'mobileNumber': mobileNumber,
     'normalizedMobileNumber': normalizedMobileNumber,
@@ -364,10 +422,15 @@ class CustomerDraft {
     'addressLandmark': addressLandmark,
     'note': note,
     'fulfillmentMethod': fulfillmentMethod.name,
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   factory CustomerDraft.fromMap(Map<String, dynamic> map) {
     return CustomerDraft(
+      id: map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 1,
       name: map['name'] as String? ?? '',
       mobileNumber: map['mobileNumber'] as String? ?? '',
       normalizedMobileNumber: map['normalizedMobileNumber'] as String? ?? '',
@@ -377,30 +440,46 @@ class CustomerDraft {
       fulfillmentMethod: FulfillmentMethod.values.byName(
         map['fulfillmentMethod'] as String? ?? FulfillmentMethod.pickup.name,
       ),
+      createdAt: map['createdAt'] == null
+          ? null
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] == null
+          ? null
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 }
 
 class OrderItemSubstitute {
   const OrderItemSubstitute({
+    this.id = 1,
     this.productName,
     this.unit,
     this.quantity,
     this.unitPriceCentavos,
+    this.createdAt,
+    this.updatedAt,
   });
 
+  final int id;
   final String? productName;
   final String? unit;
   final int? quantity;
   final int? unitPriceCentavos;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   OrderItemSubstitute copyWith({
+    int? id,
     Object? productName = _sentinel,
     Object? unit = _sentinel,
     Object? quantity = _sentinel,
     Object? unitPriceCentavos = _sentinel,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return OrderItemSubstitute(
+      id: id ?? this.id,
       productName: productName == _sentinel
           ? this.productName
           : productName as String?,
@@ -409,28 +488,43 @@ class OrderItemSubstitute {
       unitPriceCentavos: unitPriceCentavos == _sentinel
           ? this.unitPriceCentavos
           : unitPriceCentavos as int?,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
   Map<String, dynamic> toMap() => {
+    'id': id,
     'productName': productName,
     'unit': unit,
     'quantity': quantity,
     'unitPriceCentavos': unitPriceCentavos,
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   factory OrderItemSubstitute.fromMap(Map<String, dynamic> map) {
     return OrderItemSubstitute(
+      id: map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 1,
       productName: map['productName'] as String?,
       unit: map['unit'] as String?,
       quantity: map['quantity'] as int?,
       unitPriceCentavos: map['unitPriceCentavos'] as int?,
+      createdAt: map['createdAt'] == null
+          ? null
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] == null
+          ? null
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 }
 
 class OrderItem {
   const OrderItem({
+    required this.id,
     required this.productId,
     required this.productName,
     this.descriptionSnapshot,
@@ -445,9 +539,12 @@ class OrderItem {
     this.quotedSubtotalCentavos = 0,
     this.adminItemNote,
     this.substitute,
+    this.createdAt,
+    this.updatedAt,
   });
 
-  final String productId;
+  final int id;
+  final int productId;
   final String productName;
   final String? descriptionSnapshot;
   final String? photoUrlSnapshot;
@@ -461,9 +558,12 @@ class OrderItem {
   final int quotedSubtotalCentavos;
   final String? adminItemNote;
   final OrderItemSubstitute? substitute;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   OrderItem copyWith({
-    String? productId,
+    int? id,
+    int? productId,
     String? productName,
     Object? descriptionSnapshot = _sentinel,
     Object? photoUrlSnapshot = _sentinel,
@@ -477,8 +577,11 @@ class OrderItem {
     int? quotedSubtotalCentavos,
     Object? adminItemNote = _sentinel,
     Object? substitute = _sentinel,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return OrderItem(
+      id: id ?? this.id,
       productId: productId ?? this.productId,
       productName: productName ?? this.productName,
       descriptionSnapshot: descriptionSnapshot == _sentinel
@@ -505,10 +608,13 @@ class OrderItem {
       substitute: substitute == _sentinel
           ? this.substitute
           : substitute as OrderItemSubstitute?,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
   Map<String, dynamic> toMap() => {
+    'id': id,
     'productId': productId,
     'productName': productName,
     'descriptionSnapshot': descriptionSnapshot,
@@ -523,11 +629,18 @@ class OrderItem {
     'quotedSubtotalCentavos': quotedSubtotalCentavos,
     'adminItemNote': adminItemNote,
     'substitute': substitute?.toMap(),
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   factory OrderItem.fromMap(Map<String, dynamic> map) {
     return OrderItem(
-      productId: map['productId'] as String,
+      id: map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 0,
+      productId: map['productId'] is int
+          ? map['productId'] as int
+          : int.tryParse('${map['productId']}') ?? 0,
       productName: map['productName'] as String,
       descriptionSnapshot: map['descriptionSnapshot'] as String?,
       photoUrlSnapshot: map['photoUrlSnapshot'] as String?,
@@ -547,35 +660,53 @@ class OrderItem {
           : OrderItemSubstitute.fromMap(
               Map<String, dynamic>.from(map['substitute'] as Map),
             ),
+      createdAt: map['createdAt'] == null
+          ? null
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] == null
+          ? null
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 }
 
 class StatusHistoryEntry {
   const StatusHistoryEntry({
+    required this.id,
     required this.previousStatus,
     required this.newStatus,
     required this.timestamp,
     required this.adminUserId,
     this.note,
+    this.createdAt,
+    this.updatedAt,
   });
 
+  final int id;
   final OrderStatus previousStatus;
   final OrderStatus newStatus;
   final DateTime timestamp;
   final String adminUserId;
   final String? note;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   Map<String, dynamic> toMap() => {
+    'id': id,
     'previousStatus': previousStatus.name,
     'newStatus': newStatus.name,
     'timestamp': timestamp.toIso8601String(),
     'adminUserId': adminUserId,
     'note': note,
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   factory StatusHistoryEntry.fromMap(Map<String, dynamic> map) {
     return StatusHistoryEntry(
+      id: map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 0,
       previousStatus: OrderStatus.values.byName(
         map['previousStatus'] as String,
       ),
@@ -583,6 +714,12 @@ class StatusHistoryEntry {
       timestamp: DateTime.parse(map['timestamp'] as String),
       adminUserId: map['adminUserId'] as String,
       note: map['note'] as String?,
+      createdAt: map['createdAt'] == null
+          ? null
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] == null
+          ? null
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 }
@@ -613,7 +750,7 @@ class OrderRequest {
     required this.statusHistory,
   });
 
-  final String id;
+  final int id;
   final String referenceNumber;
   final CustomerDraft customer;
   final List<OrderItem> items;
@@ -637,7 +774,7 @@ class OrderRequest {
   final List<StatusHistoryEntry> statusHistory;
 
   OrderRequest copyWith({
-    String? id,
+    int? id,
     String? referenceNumber,
     CustomerDraft? customer,
     List<OrderItem>? items,
@@ -729,7 +866,9 @@ class OrderRequest {
 
   factory OrderRequest.fromMap(Map<String, dynamic> map) {
     return OrderRequest(
-      id: map['id'] as String,
+      id: map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 0,
       referenceNumber: map['referenceNumber'] as String,
       customer: CustomerDraft.fromMap(
         Map<String, dynamic>.from(map['customer'] as Map),
@@ -775,83 +914,140 @@ class OrderRequest {
 
 class AppSettings {
   const AppSettings({
+    this.id = 1,
     this.bestSellersEnabled = true,
     this.bestSellersLimit = 6,
+    this.createdAt,
+    this.updatedAt,
   });
 
+  final int id;
   final bool bestSellersEnabled;
   final int bestSellersLimit;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
-  AppSettings copyWith({bool? bestSellersEnabled, int? bestSellersLimit}) {
+  AppSettings copyWith({
+    int? id,
+    bool? bestSellersEnabled,
+    int? bestSellersLimit,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
     return AppSettings(
+      id: id ?? this.id,
       bestSellersEnabled: bestSellersEnabled ?? this.bestSellersEnabled,
       bestSellersLimit: bestSellersLimit ?? this.bestSellersLimit,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
   Map<String, dynamic> toMap() => {
+    'id': id,
     'bestSellersEnabled': bestSellersEnabled,
     'bestSellersLimit': bestSellersLimit,
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   factory AppSettings.fromMap(Map<String, dynamic> map) {
     return AppSettings(
+      id: map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 1,
       bestSellersEnabled: map['bestSellersEnabled'] as bool? ?? true,
       bestSellersLimit: map['bestSellersLimit'] as int? ?? 6,
+      createdAt: map['createdAt'] == null
+          ? null
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] == null
+          ? null
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 }
 
 class AdminSession {
   const AdminSession({
+    this.id = 1,
     required this.uid,
     required this.email,
     required this.displayName,
+    this.createdAt,
+    this.updatedAt,
   });
 
+  final int id;
   final String uid;
   final String email;
   final String displayName;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   Map<String, dynamic> toMap() => {
+    'id': id,
     'uid': uid,
     'email': email,
     'displayName': displayName,
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   factory AdminSession.fromMap(Map<String, dynamic> map) {
     return AdminSession(
+      id: map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 1,
       uid: map['uid'] as String,
       email: map['email'] as String,
       displayName: map['displayName'] as String,
+      createdAt: map['createdAt'] == null
+          ? null
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] == null
+          ? null
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 }
 
 class PersistedData {
   const PersistedData({
+    this.id = 1,
     required this.categories,
     required this.products,
     required this.orders,
     required this.settings,
     required this.cart,
     required this.customerDraft,
+    this.adminSession,
+    this.createdAt,
+    this.updatedAt,
   });
 
+  final int id;
   final List<Category> categories;
   final List<Product> products;
   final List<OrderRequest> orders;
   final AppSettings settings;
   final List<CartItem> cart;
   final CustomerDraft customerDraft;
+  final AdminSession? adminSession;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   Map<String, dynamic> toMap() => {
+    'id': id,
     'categories': categories.map((item) => item.toMap()).toList(),
     'products': products.map((item) => item.toMap()).toList(),
     'orders': orders.map((item) => item.toMap()).toList(),
     'settings': settings.toMap(),
     'cart': cart.map((item) => item.toMap()).toList(),
     'customerDraft': customerDraft.toMap(),
+    'adminSession': adminSession?.toMap(),
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   String toJson() => jsonEncode(toMap());
@@ -859,6 +1055,9 @@ class PersistedData {
   factory PersistedData.fromJson(String source) {
     final map = jsonDecode(source) as Map<String, dynamic>;
     return PersistedData(
+      id: map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 1,
       categories: (map['categories'] as List<dynamic>)
           .map(
             (item) => Category.fromMap(Map<String, dynamic>.from(item as Map)),
@@ -886,6 +1085,17 @@ class PersistedData {
       customerDraft: CustomerDraft.fromMap(
         Map<String, dynamic>.from(map['customerDraft'] as Map),
       ),
+      adminSession: map['adminSession'] == null
+          ? null
+          : AdminSession.fromMap(
+              Map<String, dynamic>.from(map['adminSession'] as Map),
+            ),
+      createdAt: map['createdAt'] == null
+          ? null
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] == null
+          ? null
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 }

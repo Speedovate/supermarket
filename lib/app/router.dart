@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/widgets/admin_scaffold.dart';
 import '../features/admin_auth/presentation/admin_login_page.dart';
 import '../features/admin_dashboard/presentation/admin_dashboard_page.dart';
 import '../features/app_state/app_controller.dart';
@@ -11,21 +12,26 @@ import '../features/checkout/presentation/order_success_page.dart';
 import '../features/order_management/presentation/admin_order_detail_page.dart';
 import '../features/order_management/presentation/admin_orders_page.dart';
 import '../features/product_management/presentation/admin_products_page.dart';
+import '../features/settings/presentation/admin_profile_page.dart';
 import '../features/settings/presentation/admin_settings_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authToken = ref.watch(
-    appControllerProvider.select((state) => state.adminSession?.uid),
-  );
   final refresh = ref.watch(routerRefreshProvider);
 
   return GoRouter(
     initialLocation: '/',
     refreshListenable: refresh,
     redirect: (context, state) {
+      final appState = ref.read(appControllerProvider);
+      final authToken = appState.adminSession?.uid;
+      final initialized = appState.initialized;
       final goingToAdmin = state.uri.path.startsWith('/admin');
       final goingToLogin = state.uri.path == '/admin/login';
       final isAuthed = authToken != null;
+
+      if (!initialized) {
+        return null;
+      }
 
       if (goingToAdmin && !goingToLogin && !isAuthed) {
         return '/admin/login';
@@ -46,7 +52,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/order-success/:orderId',
         builder: (context, state) {
-          final orderId = state.pathParameters['orderId'] ?? '';
+          final orderId =
+              int.tryParse(state.pathParameters['orderId'] ?? '') ?? 0;
           return OrderSuccessPage(orderId: orderId);
         },
       ),
@@ -54,32 +61,51 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/admin/login',
         builder: (context, state) => const AdminLoginPage(),
       ),
-      GoRoute(
-        path: '/admin/dashboard',
-        builder: (context, state) => const AdminDashboardPage(),
-      ),
-      GoRoute(
-        path: '/admin/products',
-        builder: (context, state) => const AdminProductsPage(),
-      ),
-      GoRoute(
-        path: '/admin/categories',
-        builder: (context, state) => const AdminCategoriesPage(),
-      ),
-      GoRoute(
-        path: '/admin/orders',
-        builder: (context, state) => const AdminOrdersPage(),
-      ),
-      GoRoute(
-        path: '/admin/orders/:orderId',
-        builder: (context, state) {
-          final orderId = state.pathParameters['orderId'] ?? '';
-          return AdminOrderDetailPage(orderId: orderId);
-        },
-      ),
-      GoRoute(
-        path: '/admin/settings',
-        builder: (context, state) => const AdminSettingsPage(),
+      ShellRoute(
+        builder: (context, state, child) =>
+            AdminShellFrame(currentPath: state.uri.path, child: child),
+        routes: [
+          GoRoute(
+            path: '/admin/dashboard',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AdminDashboardPage()),
+          ),
+          GoRoute(
+            path: '/admin/products',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AdminProductsPage()),
+          ),
+          GoRoute(
+            path: '/admin/categories',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AdminCategoriesPage()),
+          ),
+          GoRoute(
+            path: '/admin/orders',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AdminOrdersPage()),
+          ),
+          GoRoute(
+            path: '/admin/orders/:orderId',
+            pageBuilder: (context, state) {
+              final orderId =
+                  int.tryParse(state.pathParameters['orderId'] ?? '') ?? 0;
+              return NoTransitionPage(
+                child: AdminOrderDetailPage(orderId: orderId),
+              );
+            },
+          ),
+          GoRoute(
+            path: '/admin/settings',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AdminSettingsPage()),
+          ),
+          GoRoute(
+            path: '/admin/profile',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AdminProfilePage()),
+          ),
+        ],
       ),
     ],
   );

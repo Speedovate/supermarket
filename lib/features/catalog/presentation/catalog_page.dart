@@ -98,8 +98,10 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   CatalogSortOption _bestSellersSortOption = CatalogSortOption.defaultOrder;
   bool _isBestSellersInteracting = false;
   bool _desktopCartPanelOpen = false;
+  bool _cartBottomSheetOpen = false;
   bool _previousOrdersExpanded = false;
   String _selectedCartThreadId = 'current';
+  BuildContext? _cartBottomSheetContext;
 
   bool get _showBestSellersLeftControl =>
       _bestSellersScrollController.hasClients &&
@@ -155,6 +157,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   );
 
   CustomerDraft _buildCustomerDraft(FulfillmentMethod method) {
+    final existingDraft = ref.read(appControllerProvider).customerDraft;
+    final now = DateTime.now();
     return CustomerDraft(
       name: _customerNameController.text,
       mobileNumber: _customerMobileController.text,
@@ -166,6 +170,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
           : '',
       addressLandmark: '',
       fulfillmentMethod: method,
+      createdAt: existingDraft.createdAt ?? now,
+      updatedAt: now,
     );
   }
 
@@ -179,11 +185,182 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   }
 
   Future<void> _handleCartTap(double width) async {
-    if (width >= 1040) {
+    if (_canShowDesktopCartPanel(width)) {
+      if (_cartBottomSheetOpen && _cartBottomSheetContext?.mounted == true) {
+        Navigator.of(_cartBottomSheetContext!).pop();
+      }
       if (mounted) {
         setState(() => _desktopCartPanelOpen = !_desktopCartPanelOpen);
       }
+      return;
     }
+
+    await _showCartBottomSheet();
+  }
+
+  Future<void> _showCartBottomSheet() async {
+    if (mounted && _desktopCartPanelOpen) {
+      setState(() => _desktopCartPanelOpen = false);
+    }
+    _cartBottomSheetOpen = true;
+    var localSelectedThreadId = _selectedCartThreadId;
+    var localPreviousOrdersExpanded = _previousOrdersExpanded;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      constraints: BoxConstraints(
+        minWidth: MediaQuery.of(context).size.width,
+        maxWidth: MediaQuery.of(context).size.width,
+      ),
+      builder: (sheetContext) {
+        _cartBottomSheetContext = sheetContext;
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return Consumer(
+              builder: (sheetContext, ref, _) {
+                final appState = ref.watch(appControllerProvider);
+                final matchingOrders = _matchingCustomerOrders(appState);
+                final selectedThreadId =
+                    {
+                      'current',
+                      ...matchingOrders.map((order) => order.id),
+                    }.contains(localSelectedThreadId)
+                    ? localSelectedThreadId
+                    : 'current';
+
+                return SafeArea(
+                  top: false,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: FractionallySizedBox(
+                      heightFactor: 0.92,
+                      widthFactor: 1,
+                      child: DecoratedBox(
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(28),
+                          ),
+                        ),
+                        child: _DesktopCartPanel(
+                          width: MediaQuery.of(sheetContext).size.width,
+                          isBottomSheet: true,
+                          customerDraft: appState.customerDraft,
+                          customerControllers: _customerControllers,
+                          cart: appState.cart,
+                          matchingOrders: matchingOrders,
+                          selectedThreadId: selectedThreadId,
+                          previousOrdersExpanded: localPreviousOrdersExpanded,
+                          totalCentavos: appState.cartTotalCentavos,
+                          submitting: appState.submittingOrder,
+                          onClose: () => Navigator.of(sheetContext).pop(),
+                          onContactUs: () => _showContactUsDialog(sheetContext),
+                          onThreadSelected: (value) {
+                            setSheetState(() {
+                              localSelectedThreadId = value;
+                              localPreviousOrdersExpanded = false;
+                            });
+                            if (mounted) {
+                              setState(() {
+                                _selectedCartThreadId = value;
+                                _previousOrdersExpanded = false;
+                              });
+                            }
+                          },
+                          onPreviousOrdersExpandedChanged: (value) {
+                            setSheetState(() {
+                              localPreviousOrdersExpanded = value;
+                            });
+                            if (mounted) {
+                              setState(() => _previousOrdersExpanded = value);
+                            }
+                          },
+                          onDraftChanged: _persistCustomerDraft,
+                          onReviewOrder: () async {
+                            final messenger = ScaffoldMessenger.of(
+                              sheetContext,
+                            );
+                            await _persistCustomerDraft();
+                            if (!mounted) {
+                              return;
+                            }
+                            final nextDraft = ref
+                                .read(appControllerProvider)
+                                .customerDraft;
+                            final error = ref
+                                .read(appControllerProvider.notifier)
+                                .validateCheckoutDraft(nextDraft);
+                            if (error != null) {
+                              messenger.clearSnackBars();
+                              messenger.showSnackBar(errorSnackBar(error));
+                              return;
+                            }
+                            final orderId = await ref
+                                .read(appControllerProvider.notifier)
+                                .submitOrder();
+                            if (!mounted || orderId == null) {
+                              return;
+                            }
+                            _customerNameController.clear();
+                            _customerMobileController.clear();
+                            _customerBarangayController.clear();
+                            setSheetState(() {
+                              localPreviousOrdersExpanded = false;
+                              localSelectedThreadId = '$orderId';
+                            });
+                            setState(() {
+                              _previousOrdersExpanded = false;
+                              _selectedCartThreadId = '$orderId';
+                            });
+                            if (!sheetContext.mounted) {
+                              return;
+                            }
+                            await _showOrderPlacedDialog(sheetContext);
+                          },
+                          onOrderAgain: (order) async {
+                            final shouldOrderAgain =
+                                await _showOrderAgainDialog(sheetContext);
+                            if (!mounted || shouldOrderAgain != true) {
+                              return;
+                            }
+                            await ref
+                                .read(appControllerProvider.notifier)
+                                .addOrderToCart(order);
+                            if (!mounted) {
+                              return;
+                            }
+                            final nextDraft = ref
+                                .read(appControllerProvider)
+                                .customerDraft;
+                            _customerNameController.text = nextDraft.name;
+                            _customerMobileController.text =
+                                nextDraft.mobileNumber;
+                            _customerBarangayController.text =
+                                nextDraft.barangay;
+                            setSheetState(() {
+                              localSelectedThreadId = 'current';
+                              localPreviousOrdersExpanded = false;
+                            });
+                            setState(() {
+                              _selectedCartThreadId = 'current';
+                              _previousOrdersExpanded = false;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+    _cartBottomSheetOpen = false;
+    _cartBottomSheetContext = null;
   }
 
   List<OrderRequest> _matchingCustomerOrders(AppState state) {
@@ -283,7 +460,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       _bestSellersSortOption,
     );
     final selectedCategory = vm.categories.cast<Category?>().firstWhere(
-      (category) => category?.id == _categoryId,
+      (category) => category?.id.toString() == _categoryId,
       orElse: () => null,
     );
     final selectedCategoryTitle = _categoryId == 'all'
@@ -291,11 +468,43 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         : selectedCategory?.name ?? 'All Products';
     final media = MediaQuery.of(context);
     final width = media.size.width;
-    final isDesktopCartCapable = width >= 1040;
+    final isDesktopCartCapable = _canShowDesktopCartPanel(width);
+    if (!isDesktopCartCapable &&
+        _desktopCartPanelOpen &&
+        !_cartBottomSheetOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted || _cartBottomSheetOpen) {
+          return;
+        }
+        setState(() => _desktopCartPanelOpen = false);
+        await _showCartBottomSheet();
+      });
+    }
+    if (isDesktopCartCapable &&
+        !_desktopCartPanelOpen &&
+        _cartBottomSheetOpen &&
+        _cartBottomSheetContext?.mounted == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _cartBottomSheetContext?.mounted != true) {
+          return;
+        }
+        Navigator.of(_cartBottomSheetContext!).pop();
+        setState(() => _desktopCartPanelOpen = true);
+      });
+    }
     final showDesktopCartPanel = isDesktopCartCapable && _desktopCartPanelOpen;
+    if (showDesktopCartPanel &&
+        _cartBottomSheetOpen &&
+        _cartBottomSheetContext?.mounted == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_cartBottomSheetContext?.mounted == true) {
+          Navigator.of(_cartBottomSheetContext!).pop();
+        }
+      });
+    }
     final mainContentWidth =
         width - (showDesktopCartPanel ? _kDesktopCartPanelWidth : 0);
-    final isMobile = mainContentWidth < 700;
+    final isMobile = mainContentWidth < _kMobileBreakpoint;
     const maxContentWidth = 1440.0;
     final gridPadding = _outerHorizontalPaddingForWidth(mainContentWidth);
     const gridSpacing = 16.0;
@@ -355,214 +564,218 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
               ),
             ),
             Expanded(
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 18, 0, 0),
-                      child: _HeroBanner(
-                        isMobile: isMobile,
-                        horizontalPadding: gridPadding,
-                        columns: columns,
-                        cardWidth: resolvedCardWidth,
-                        gridSpacing: gridSpacing,
-                      ),
-                    ),
-                  ),
-                  if (vm.bestSellers.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          gridPadding,
-                          2,
-                          gridPadding,
-                          0,
-                        ),
-                        child: _SectionHeader(
-                          title: 'Best Sellers',
-                          icon: Icons.local_fire_department_rounded,
-                          iconColor: const Color(0xFFE31E24),
-                          titleFontSize: isMobile ? 14 : null,
-                          trailing: _SortButton(
-                            selected: _bestSellersSortOption,
-                            onSelected: (value) {
-                              setState(() => _bestSellersSortOption = value);
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (vm.bestSellers.isNotEmpty)
+              child: Container(
+                color: AppColors.homeScrollableBackground,
+                child: CustomScrollView(
+                  slivers: [
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(0, 18, 0, 0),
-                        child: SizedBox(
-                          height: resolvedCardHeight,
-                          child: Stack(
-                            children: [
-                              NotificationListener<ScrollNotification>(
-                                onNotification: (notification) =>
-                                    _handleBestSellerSnapNotification(
-                                      notification,
-                                      _currentBestSellerItemExtent!,
-                                    ),
-                                child: ListView.separated(
-                                  controller: _bestSellersScrollController,
-                                  scrollDirection: Axis.horizontal,
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: gridPadding,
-                                  ),
-                                  physics: const ClampingScrollPhysics(),
-                                  itemCount: sortedBestSellers.length,
-                                  separatorBuilder: (context, index) =>
-                                      const SizedBox(width: 16),
-                                  itemBuilder: (context, index) => SizedBox(
-                                    width: resolvedCardWidth,
-                                    height: resolvedCardHeight,
-                                    child: ProductCard(
-                                      product: sortedBestSellers[index],
-                                      adaptiveSizing: true,
-                                      showImage: columns != 1,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (!_isBestSellersInteracting)
-                                IgnorePointer(
-                                  child: _HorizontalEdgeMasks(
-                                    sideWidth: gridPadding,
-                                  ),
-                                ),
-                              if (_showBestSellersLeftControl)
-                                Positioned(
-                                  left:
-                                      gridPadding -
-                                      (_controlExtentForWidth(
-                                            mainContentWidth,
-                                          ) /
-                                          2) +
-                                      2,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: Center(
-                                    child: _ScrollChevronButton(
-                                      icon: Icons.chevron_left_rounded,
-                                      size: _controlExtentForWidth(
-                                        mainContentWidth,
-                                      ),
-                                      onTap: () => _scrollBestSellersBy(
-                                        -_currentBestSellerItemExtent!,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              if (_showBestSellersRightControl)
-                                Positioned(
-                                  right:
-                                      gridPadding -
-                                      (_controlExtentForWidth(
-                                            mainContentWidth,
-                                          ) /
-                                          2) +
-                                      2,
-                                  top: 0,
-                                  bottom: 0,
-                                  child: Center(
-                                    child: _ScrollChevronButton(
-                                      icon: Icons.chevron_right_rounded,
-                                      size: _controlExtentForWidth(
-                                        mainContentWidth,
-                                      ),
-                                      onTap: () => _scrollBestSellersBy(
-                                        _currentBestSellerItemExtent!,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
+                        child: _HeroBanner(
+                          isMobile: isMobile,
+                          horizontalPadding: gridPadding,
+                          columns: columns,
+                          cardWidth: resolvedCardWidth,
+                          gridSpacing: gridSpacing,
                         ),
                       ),
                     ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        gridPadding,
-                        18,
-                        gridPadding,
-                        0,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _SectionHeader(
-                              title: selectedCategoryTitle,
-                              icon: Icons.grid_view_outlined,
-                              iconColor: AppColors.logoBlue,
-                              titleFontSize: isMobile ? 14 : null,
+                    if (vm.bestSellers.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            gridPadding,
+                            2,
+                            gridPadding,
+                            0,
+                          ),
+                          child: _SectionHeader(
+                            title: 'Best Sellers',
+                            icon: Icons.local_fire_department_rounded,
+                            iconColor: const Color(0xFFE31E24),
+                            titleFontSize: isMobile ? 14 : null,
+                            trailing: _SortButton(
+                              selected: _bestSellersSortOption,
+                              onSelected: (value) {
+                                setState(() => _bestSellersSortOption = value);
+                              },
                             ),
                           ),
-                          _SortButton(
-                            selected: _sortOption,
-                            onSelected: (value) {
-                              setState(() => _sortOption = value);
-                            },
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                  if (sortedProducts.isEmpty)
+                    if (vm.bestSellers.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(0, 18, 0, 0),
+                          child: SizedBox(
+                            height: resolvedCardHeight,
+                            child: Stack(
+                              children: [
+                                NotificationListener<ScrollNotification>(
+                                  onNotification: (notification) =>
+                                      _handleBestSellerSnapNotification(
+                                        notification,
+                                        _currentBestSellerItemExtent!,
+                                      ),
+                                  child: ListView.separated(
+                                    controller: _bestSellersScrollController,
+                                    scrollDirection: Axis.horizontal,
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: gridPadding,
+                                    ),
+                                    physics: const ClampingScrollPhysics(),
+                                    itemCount: sortedBestSellers.length,
+                                    separatorBuilder: (context, index) =>
+                                        const SizedBox(width: 16),
+                                    itemBuilder: (context, index) => SizedBox(
+                                      width: resolvedCardWidth,
+                                      height: resolvedCardHeight,
+                                      child: ProductCard(
+                                        product: sortedBestSellers[index],
+                                        adaptiveSizing: true,
+                                        showImage: columns != 1,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (!_isBestSellersInteracting)
+                                  IgnorePointer(
+                                    child: _HorizontalEdgeMasks(
+                                      sideWidth: gridPadding,
+                                    ),
+                                  ),
+                                if (_showBestSellersLeftControl)
+                                  Positioned(
+                                    left:
+                                        gridPadding -
+                                        (_controlExtentForWidth(
+                                              mainContentWidth,
+                                            ) /
+                                            2) +
+                                        2,
+                                    top: 0,
+                                    bottom: 0,
+                                    child: Center(
+                                      child: _ScrollChevronButton(
+                                        icon: Icons.chevron_left_rounded,
+                                        size: _controlExtentForWidth(
+                                          mainContentWidth,
+                                        ),
+                                        onTap: () => _scrollBestSellersBy(
+                                          -_currentBestSellerItemExtent!,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                if (_showBestSellersRightControl)
+                                  Positioned(
+                                    right:
+                                        gridPadding -
+                                        (_controlExtentForWidth(
+                                              mainContentWidth,
+                                            ) /
+                                            2) +
+                                        2,
+                                    top: 0,
+                                    bottom: 0,
+                                    child: Center(
+                                      child: _ScrollChevronButton(
+                                        icon: Icons.chevron_right_rounded,
+                                        size: _controlExtentForWidth(
+                                          mainContentWidth,
+                                        ),
+                                        onTap: () => _scrollBestSellersBy(
+                                          _currentBestSellerItemExtent!,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: EdgeInsets.fromLTRB(
                           gridPadding,
-                          24,
+                          18,
                           gridPadding,
-                          bottomScrollPadding,
+                          0,
                         ),
-                        child: EmptyStateCard(
-                          title: 'No products found',
-                          message: _query.isNotEmpty
-                              ? 'Try a different search term or switch categories.'
-                              : 'There are no active products in this section yet.',
-                          actionLabel: 'Reset Filters',
-                          onAction: () {
-                            _searchController.clear();
-                            setState(() {
-                              _query = '';
-                              _categoryId = 'all';
-                            });
-                          },
-                        ),
-                      ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        gridPadding,
-                        18,
-                        gridPadding,
-                        bottomScrollPadding,
-                      ),
-                      sliver: SliverGrid(
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: columns,
-                          mainAxisSpacing: gridSpacing,
-                          crossAxisSpacing: gridSpacing,
-                          childAspectRatio: gridAspectRatio,
-                        ),
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) => ProductCard(
-                            product: sortedProducts[index],
-                            adaptiveSizing: true,
-                            showImage: columns != 1,
-                          ),
-                          childCount: sortedProducts.length,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _SectionHeader(
+                                title: selectedCategoryTitle,
+                                icon: Icons.grid_view_outlined,
+                                iconColor: AppColors.logoBlue,
+                                titleFontSize: isMobile ? 14 : null,
+                              ),
+                            ),
+                            _SortButton(
+                              selected: _sortOption,
+                              onSelected: (value) {
+                                setState(() => _sortOption = value);
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                ],
+                    if (sortedProducts.isEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            gridPadding,
+                            24,
+                            gridPadding,
+                            bottomScrollPadding,
+                          ),
+                          child: EmptyStateCard(
+                            title: 'No products found',
+                            message: _query.isNotEmpty
+                                ? 'Try a different search term or switch categories.'
+                                : 'There are no active products in this section yet.',
+                            actionLabel: 'Reset Filters',
+                            onAction: () {
+                              _searchController.clear();
+                              setState(() {
+                                _query = '';
+                                _categoryId = 'all';
+                              });
+                            },
+                          ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          gridPadding,
+                          18,
+                          gridPadding,
+                          bottomScrollPadding,
+                        ),
+                        sliver: SliverGrid(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: columns,
+                                mainAxisSpacing: gridSpacing,
+                                crossAxisSpacing: gridSpacing,
+                                childAspectRatio: gridAspectRatio,
+                              ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => ProductCard(
+                              product: sortedProducts[index],
+                              adaptiveSizing: true,
+                              showImage: columns != 1,
+                            ),
+                            childCount: sortedProducts.length,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -639,7 +852,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                     _customerBarangayController.clear();
                     setState(() {
                       _previousOrdersExpanded = false;
-                      _selectedCartThreadId = orderId;
+                      _selectedCartThreadId = '$orderId';
                     });
                     if (!context.mounted) {
                       return;
@@ -698,6 +911,11 @@ const _kDesktopCartPanelWidth = 420.0;
 const _kSharedModalMaxWidth = 332.0;
 const _kCartPanelStatusFontSize = 12.0;
 const _kCartPanelActionFontSize = 12.0;
+const _kMobileBreakpoint = 700.0;
+
+bool _canShowDesktopCartPanel(double width) {
+  return _catalogColumnsForWidth(width - _kDesktopCartPanelWidth) >= 2;
+}
 
 WidgetStateProperty<Color?> _transparentInteractionOverlay() {
   return WidgetStateProperty.all(Colors.transparent);
@@ -788,7 +1006,7 @@ WidgetStateProperty<Color?> _strongBlueOverlay() {
 }
 
 double _controlExtentForWidth(double width) {
-  return _catalogColumnsForWidth(width) == 1 ? 36.0 : _kHeaderControlHeight;
+  return _catalogColumnsForWidth(width) <= 2 ? 36.0 : _kHeaderControlHeight;
 }
 
 List<Product> _sortProducts(
@@ -883,7 +1101,14 @@ int _catalogColumnsForWidth(double width) {
 }
 
 double _outerHorizontalPaddingForWidth(double width) {
-  return _catalogColumnsForWidth(width) == 1 ? 24.0 : 40.0;
+  final columns = _catalogColumnsForWidth(width);
+  if (columns == 1) {
+    return 24.0;
+  }
+  if (columns == 2) {
+    return 32.0;
+  }
+  return 40.0;
 }
 
 double _cardDensityForWidth(double width) {
@@ -1149,8 +1374,8 @@ class _CategoryStrip extends StatelessWidget {
               const SizedBox(width: 10),
               _CategoryPill(
                 label: categories[i].name,
-                selected: selectedId == categories[i].id,
-                onTap: () => onSelected(categories[i].id),
+                selected: selectedId == categories[i].id.toString(),
+                onTap: () => onSelected(categories[i].id.toString()),
               ),
             ],
             SizedBox(width: edgeInset),
@@ -1644,24 +1869,33 @@ class _PromoBannerPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 3,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: Colors.white,
-          border: Border.all(color: const Color(0xFFE4E7EC)),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Image.asset(
-              'assets/branding/andrews_logo.png',
-              fit: BoxFit.contain,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return AspectRatio(
+          aspectRatio: 3,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: AppColors.logoBlue,
+              border: Border.all(color: const Color(0xFFE4E7EC)),
+            ),
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  24,
+                  constraints.maxWidth * 0.125,
+                  24,
+                ),
+                child: Image.asset(
+                  'assets/branding/as_logo_lite.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -1710,9 +1944,15 @@ class _HorizontalEdgeMasks extends StatelessWidget {
     return SizedBox.expand(
       child: Row(
         children: [
-          Container(width: sideWidth, color: Colors.white),
+          Container(
+            width: sideWidth,
+            color: AppColors.homeScrollableBackground,
+          ),
           const Spacer(),
-          Container(width: sideWidth, color: Colors.white),
+          Container(
+            width: sideWidth,
+            color: AppColors.homeScrollableBackground,
+          ),
         ],
       ),
     );
@@ -1737,6 +1977,7 @@ class _DesktopCartPanel extends ConsumerWidget {
     required this.onDraftChanged,
     required this.onReviewOrder,
     required this.onOrderAgain,
+    this.isBottomSheet = false,
   });
 
   final double width;
@@ -1755,13 +1996,14 @@ class _DesktopCartPanel extends ConsumerWidget {
   final Future<void> Function({FulfillmentMethod? method}) onDraftChanged;
   final Future<void> Function() onReviewOrder;
   final Future<void> Function(OrderRequest order) onOrderAgain;
+  final bool isBottomSheet;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedOrder = selectedThreadId == 'current'
         ? null
         : matchingOrders.cast<OrderRequest?>().firstWhere(
-            (order) => order?.id == selectedThreadId,
+            (order) => '${order?.id}' == selectedThreadId,
             orElse: () => null,
           );
     final finalCartCount = cart.fold<int>(
@@ -1784,15 +2026,34 @@ class _DesktopCartPanel extends ConsumerWidget {
       left: false,
       child: Container(
         width: width,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: Colors.white,
-          border: Border(left: BorderSide(color: Color(0xFFE4E7EC))),
+          border: isBottomSheet
+              ? null
+              : const Border(left: BorderSide(color: Color(0xFFE4E7EC))),
+          borderRadius: isBottomSheet
+              ? const BorderRadius.vertical(top: Radius.circular(28))
+              : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (isBottomSheet) ...[
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD0D5DD),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              padding: EdgeInsets.fromLTRB(24, isBottomSheet ? 16 : 24, 24, 0),
               child: Row(
                 children: [
                   MousePressable(
@@ -1859,85 +2120,115 @@ class _DesktopCartPanel extends ConsumerWidget {
             const SizedBox(height: 18),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                padding: EdgeInsets.fromLTRB(
+                  isBottomSheet ? 0 : 24,
+                  0,
+                  isBottomSheet ? 0 : 24,
+                  24,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (matchingOrders.isNotEmpty) ...[
-                      _DesktopCartThreadsCard(
-                        matchingOrders: matchingOrders,
-                        selectedThreadId: selectedThreadId,
-                        customerDraft: customerDraft,
-                        currentCartCount: finalCartCount,
-                        previousOrdersExpanded: previousOrdersExpanded,
-                        onSelected: onThreadSelected,
-                        onPreviousOrdersExpandedChanged:
-                            onPreviousOrdersExpandedChanged,
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isBottomSheet ? 24 : 0,
+                        ),
+                        child: _DesktopCartThreadsCard(
+                          matchingOrders: matchingOrders,
+                          selectedThreadId: selectedThreadId,
+                          customerDraft: customerDraft,
+                          currentCartCount: finalCartCount,
+                          previousOrdersExpanded: previousOrdersExpanded,
+                          onSelected: onThreadSelected,
+                          onPreviousOrdersExpandedChanged:
+                              onPreviousOrdersExpandedChanged,
+                        ),
                       ),
                       const SizedBox(height: 12),
                     ],
-                    _DesktopCartCustomerCard(
-                      draft: customerDraft,
-                      controllers: customerControllers,
-                      selectedOrder: selectedOrder,
-                      onContactUs: onContactUs,
-                      onDraftChanged: onDraftChanged,
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isBottomSheet ? 24 : 0,
+                      ),
+                      child: _DesktopCartCustomerCard(
+                        draft: customerDraft,
+                        controllers: customerControllers,
+                        selectedOrder: selectedOrder,
+                        onContactUs: onContactUs,
+                        onDraftChanged: onDraftChanged,
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    _DesktopCartThreadDetailCard(
-                      selectedOrder: selectedOrder,
-                      previousOrdersExpanded: previousOrdersExpanded,
-                      currentCartCount: finalCartCount,
-                      cart: cart,
-                      totalCentavos: totalCentavos,
-                      onContactUs: onContactUs,
-                      onBackToCart: () => onThreadSelected('current'),
-                      onContinueShopping: onClose,
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isBottomSheet ? 24 : 0,
+                      ),
+                      child: _DesktopCartThreadDetailCard(
+                        selectedOrder: selectedOrder,
+                        previousOrdersExpanded: previousOrdersExpanded,
+                        currentCartCount: finalCartCount,
+                        cart: cart,
+                        totalCentavos: totalCentavos,
+                        onContactUs: onContactUs,
+                        onBackToCart: () => onThreadSelected('current'),
+                        onContinueShopping: onClose,
+                      ),
                     ),
                     if (showPrimaryAction) ...[
                       const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '$selectedItemCount item${selectedItemCount == 1 ? '' : 's'}',
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isBottomSheet ? 24 : 0,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '$selectedItemCount item${selectedItemCount == 1 ? '' : 's'}',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.15,
+                                    ),
+                              ),
+                            ),
+                            Text(
+                              formatPesos(selectedTotalCentavos),
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(
-                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.logoBlue,
+                                    fontWeight: FontWeight.w800,
                                     height: 1.15,
                                   ),
                             ),
-                          ),
-                          Text(
-                            formatPesos(selectedTotalCentavos),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(
-                                  color: AppColors.logoBlue,
-                                  fontWeight: FontWeight.w800,
-                                  height: 1.15,
-                                ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 44,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            shape: const StadiumBorder(),
-                          ),
-                          onPressed: submitting
-                              ? null
-                              : isCurrentSelection
-                              ? onReviewOrder
-                              : () => onOrderAgain(selectedOrder),
-                          child: Text(
-                            submitting
-                                ? 'Preparing...'
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isBottomSheet ? 24 : 0,
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 44,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              shape: const StadiumBorder(),
+                            ),
+                            onPressed: submitting
+                                ? null
                                 : isCurrentSelection
-                                ? 'Place Order'
-                                : 'Order Again',
+                                ? onReviewOrder
+                                : () => onOrderAgain(selectedOrder),
+                            child: Text(
+                              submitting
+                                  ? 'Preparing...'
+                                  : isCurrentSelection
+                                  ? 'Place Order'
+                                  : 'Order Again',
+                            ),
                           ),
                         ),
                       ),
@@ -2444,7 +2735,7 @@ class _DesktopCartThreadsCard extends StatelessWidget {
     }
 
     final selectedOrder = matchingOrders.cast<OrderRequest?>().firstWhere(
-      (order) => order?.id == selectedThreadId,
+      (order) => '${order?.id}' == selectedThreadId,
       orElse: () => null,
     );
     final selectedLabel = selectedThreadId == 'current'
@@ -2523,9 +2814,9 @@ class _DesktopCartThreadsCard extends StatelessWidget {
                           title:
                               '${formatOrderDate(order.createdAt)} • ${formatOrderTime(order.createdAt)}',
                           subtitle: null,
-                          selected: selectedThreadId == order.id,
+                          selected: selectedThreadId == '${order.id}',
                           status: order.status,
-                          onTap: () => onSelected(order.id),
+                          onTap: () => onSelected('${order.id}'),
                         ),
                       ],
                     ],
@@ -2688,7 +2979,7 @@ class _DesktopCartThreadDetailCard extends StatelessWidget {
     final isCurrent = selectedOrder == null;
     final topActionTextStyle = _cartPanelActionTextStyle();
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (!isCurrent && !previousOrdersExpanded) ...[
           Row(
@@ -3286,7 +3577,7 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                                 SizedBox(
                                   width: double.infinity,
                                   height: buttonHeight,
-                                  child: ElevatedButton.icon(
+                                  child: ElevatedButton(
                                     style:
                                         ElevatedButton.styleFrom(
                                           backgroundColor: AppColors.logoBlue,
@@ -3324,8 +3615,16 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                                             quantity: 1,
                                           );
                                     },
-                                    icon: const Icon(Icons.add_shopping_cart),
-                                    label: const Text('Add to Cart'),
+                                    child: const Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.add_shopping_cart),
+                                        SizedBox(width: 4),
+                                        Text('Add to Cart'),
+                                      ],
+                                    ),
                                   ),
                                 )
                               else

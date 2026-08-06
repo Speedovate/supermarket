@@ -176,7 +176,9 @@ class BrandLogo extends StatelessWidget {
           decoration: BoxDecoration(color: Colors.white),
           clipBehavior: Clip.antiAlias,
           child: Image.asset(
-            'assets/branding/andrews_logo.png',
+            onDark
+                ? 'assets/branding/as_logo_lite.png'
+                : 'assets/branding/as_logo_dark.png',
             fit: BoxFit.cover,
           ),
         ),
@@ -233,7 +235,7 @@ class ProductPlaceholder extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Image.asset(
-            'assets/branding/andrews_logo.png',
+            'assets/branding/as_logo_dark.png',
             fit: BoxFit.contain,
           ),
         ),
@@ -276,6 +278,43 @@ class StatusBadge extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Text(
           displayStatus(status),
+          softWrap: false,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: fontSize,
+            height: 1.15,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AdminStateBadge extends StatelessWidget {
+  const AdminStateBadge({
+    super.key,
+    required this.label,
+    required this.color,
+    this.fontSize = 14,
+  });
+
+  final String label;
+  final Color color;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Text(
+          label,
+          softWrap: false,
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w700,
@@ -295,12 +334,14 @@ class EmptyStateCard extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
+    this.showBorder = true,
   });
 
   final String title;
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final bool showBorder;
 
   @override
   Widget build(BuildContext context) {
@@ -308,7 +349,9 @@ class EmptyStateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE4E7EC)),
+        border: showBorder
+            ? Border.all(color: const Color(0xFFE4E7EC))
+            : null,
       ),
       child: Padding(
         padding: const EdgeInsets.all(28),
@@ -372,23 +415,173 @@ class SectionCard extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(20),
+    this.showShadow = true,
+    this.borderColor = const Color(0xFFE4E7EC),
+    this.borderRadius = 24,
   });
 
   final Widget child;
   final EdgeInsets padding;
+  final bool showShadow;
+  final Color borderColor;
+  final double borderRadius;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(color: AppColors.logoBlueShadow, blurRadius: 18),
-        ],
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(color: borderColor),
+        boxShadow: showShadow
+            ? const [
+                BoxShadow(color: AppColors.logoBlueShadow, blurRadius: 18),
+              ]
+            : null,
       ),
       child: Padding(padding: padding, child: child),
     );
+  }
+}
+
+class AppModalFrame extends StatelessWidget {
+  const AppModalFrame({
+    super.key,
+    required this.title,
+    required this.child,
+    this.maxWidth = 332,
+    this.trailing,
+    this.actions,
+  });
+
+  final String title;
+  final Widget child;
+  final double maxWidth;
+  final Widget? trailing;
+  final List<Widget>? actions;
+
+  static const double borderRadius = 28;
+  static const double contentPadding = 16;
+  static const double actionHeight = 36;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(borderRadius),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Padding(
+          padding: const EdgeInsets.all(contentPadding),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            height: 1.15,
+                      ),
+                    ),
+                  ),
+                  ...switch (trailing) {
+                    final widget? => <Widget>[widget],
+                    null => const <Widget>[],
+                  },
+                ],
+              ),
+              const SizedBox(height: 12),
+              child,
+              if (actions != null && actions!.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Row(children: actions!),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AppModalBodyText extends StatelessWidget {
+  const AppModalBodyText(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        color: const Color(0xFF667085),
+        height: 1.15,
+      ),
+    );
+  }
+}
+
+class AppModalButton extends StatelessWidget {
+  const AppModalButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.isPrimary = false,
+    this.expanded = true,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool isPrimary;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = SizedBox(
+      height: AppModalFrame.actionHeight,
+      width: expanded ? double.infinity : null,
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          backgroundColor: isPrimary
+              ? AppColors.logoBlue.withValues(alpha: 0.10)
+              : const Color(0x1AE31E24),
+          foregroundColor: isPrimary
+              ? AppColors.logoBlue
+              : const Color(0xFFE31E24),
+          textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            height: 1.15,
+          ),
+          minimumSize: const Size(0, AppModalFrame.actionHeight),
+          maximumSize: const Size(
+            double.infinity,
+            AppModalFrame.actionHeight,
+          ),
+          fixedSize: expanded
+              ? const Size(double.infinity, AppModalFrame.actionHeight)
+              : null,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          side: BorderSide.none,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ).copyWith(overlayColor: WidgetStateProperty.all(Colors.transparent)),
+        onPressed: onPressed,
+        child: Text(label),
+      ),
+    );
+
+    return expanded ? Expanded(child: button) : button;
   }
 }
 

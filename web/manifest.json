@@ -1,6 +1,6 @@
 {
-    "name": "supermarket",
-    "short_name": "supermarket",
+    "name": "Andrew's Supermarket",
+    "short_name": "Andrew's",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",

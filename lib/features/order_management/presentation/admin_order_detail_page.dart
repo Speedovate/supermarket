@@ -3,14 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/app_models.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../core/widgets/admin_scaffold.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
 
 class AdminOrderDetailPage extends ConsumerStatefulWidget {
   const AdminOrderDetailPage({super.key, required this.orderId});
 
-  final String orderId;
+  final int orderId;
 
   @override
   ConsumerState<AdminOrderDetailPage> createState() =>
@@ -46,118 +45,114 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
       return const Scaffold(body: Center(child: Text('Order not found.')));
     }
 
-    return AdminScaffold(
-      title: order.referenceNumber,
-      selectedRoute: '/admin/orders',
-      actions: [
-        TextButton.icon(
-          onPressed: _saveOrder,
-          icon: const Icon(Icons.save_outlined),
-          label: const Text('Save Changes'),
+    return ListView(
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: _saveOrder,
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Save Changes'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                order.customer.name,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text('Mobile: ${order.customer.mobileNumber}'),
+              Text('Barangay: ${order.customer.barangay}'),
+              if (order.customer.addressLandmark.trim().isNotEmpty)
+                Text('Address / landmark: ${order.customer.addressLandmark}'),
+              Text(
+                'Fulfillment: ${displayFulfillment(order.fulfillmentMethod)}',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        SectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Order Items',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              for (var i = 0; i < editableOrder.items.length; i++) ...[
+                _OrderItemEditor(
+                  item: editableOrder.items[i],
+                  onChanged: (item) {
+                    setState(() {
+                      final items = [...editableOrder.items];
+                      items[i] = item;
+                      editableOrder = editableOrder.copyWith(items: items);
+                    });
+                  },
+                ),
+                const Divider(height: 28),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        SectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DropdownButtonFormField<OrderStatus>(
+                initialValue: editableOrder.status,
+                decoration: const InputDecoration(labelText: 'Order status'),
+                items: OrderStatus.values
+                    .map(
+                      (status) => DropdownMenuItem(
+                        value: status,
+                        child: Text(displayStatus(status)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() {
+                  if (value != null) {
+                    editableOrder = editableOrder.copyWith(status: value);
+                  }
+                }),
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                initialValue: editableOrder.quotationNote ?? '',
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Customer-facing quotation note',
+                ),
+                onChanged: (value) => editableOrder = editableOrder.copyWith(
+                  quotationNote: value.trim().isEmpty ? null : value.trim(),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                initialValue: editableOrder.internalAdminNote ?? '',
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Internal admin note',
+                ),
+                onChanged: (value) => editableOrder = editableOrder.copyWith(
+                  internalAdminNote: value.trim().isEmpty ? null : value.trim(),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
-      child: ListView(
-        children: [
-          SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  order.customer.name,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text('Mobile: ${order.customer.mobileNumber}'),
-                Text('Barangay: ${order.customer.barangay}'),
-                if (order.customer.addressLandmark.trim().isNotEmpty)
-                  Text('Address / landmark: ${order.customer.addressLandmark}'),
-                Text(
-                  'Fulfillment: ${displayFulfillment(order.fulfillmentMethod)}',
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Order Items',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                for (var i = 0; i < editableOrder.items.length; i++) ...[
-                  _OrderItemEditor(
-                    item: editableOrder.items[i],
-                    onChanged: (item) {
-                      setState(() {
-                        final items = [...editableOrder.items];
-                        items[i] = item;
-                        editableOrder = editableOrder.copyWith(items: items);
-                      });
-                    },
-                  ),
-                  const Divider(height: 28),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                DropdownButtonFormField<OrderStatus>(
-                  initialValue: editableOrder.status,
-                  decoration: const InputDecoration(labelText: 'Order status'),
-                  items: OrderStatus.values
-                      .map(
-                        (status) => DropdownMenuItem(
-                          value: status,
-                          child: Text(displayStatus(status)),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) => setState(() {
-                    if (value != null) {
-                      editableOrder = editableOrder.copyWith(status: value);
-                    }
-                  }),
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  initialValue: editableOrder.quotationNote ?? '',
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Customer-facing quotation note',
-                  ),
-                  onChanged: (value) => editableOrder = editableOrder.copyWith(
-                    quotationNote: value.trim().isEmpty ? null : value.trim(),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  initialValue: editableOrder.internalAdminNote ?? '',
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Internal admin note',
-                  ),
-                  onChanged: (value) => editableOrder = editableOrder.copyWith(
-                    internalAdminNote: value.trim().isEmpty
-                        ? null
-                        : value.trim(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -182,12 +177,22 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
         ? current.statusHistory
         : [
             StatusHistoryEntry(
+              id:
+                  ((current.statusHistory
+                      .map((entry) => entry.id)
+                      .fold<int>(
+                        0,
+                        (max, value) => value > max ? value : max,
+                      )) +
+                  1),
               previousStatus: current.status,
               newStatus: editableOrder.status,
               timestamp: DateTime.now(),
               adminUserId:
                   ref.read(appControllerProvider).adminSession?.uid ??
                   'demo-admin',
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
             ),
             ...current.statusHistory,
           ];

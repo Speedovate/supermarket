@@ -3,9 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
-import '../../../core/utils/formatters.dart';
-import '../../../core/widgets/admin_scaffold.dart';
-import '../../../core/widgets/common_widgets.dart';
 import 'admin_dashboard_view_model.dart';
 
 class AdminDashboardPage extends ConsumerWidget {
@@ -14,154 +11,83 @@ class AdminDashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final vm = ref.watch(adminDashboardViewModelProvider);
+    final width = MediaQuery.of(context).size.width;
     final metrics = <AdminDashboardMetric>[
-      AdminDashboardMetric('Total Products', vm.activeProducts),
-      AdminDashboardMetric('Total Categories', vm.categories),
-      ...vm.metrics,
+      AdminDashboardMetric('Orders', vm.totalOrders),
+      AdminDashboardMetric('Products', vm.activeProducts),
+      AdminDashboardMetric('Best Sellers', vm.bestSellers.length),
+      AdminDashboardMetric('Categories', vm.categories),
     ];
+    final visibleMetrics = metrics.take(4).toList();
+    final metricColumns = width >= 1320
+        ? 4
+        : width >= 760
+        ? 2
+        : 2;
 
-    return AdminScaffold(
-      title: 'Dashboard',
-      selectedRoute: '/admin/dashboard',
-      child: ListView(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: const [
-                BoxShadow(
-                  color: AppColors.logoBlueShadowStrong,
-                  blurRadius: 24,
-                  offset: Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Dashboard Overview',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Operational snapshot for products, categories, and incoming orders.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF667085),
-                  ),
-                ),
-              ],
-            ),
+    return ListView(
+      children: [
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: metricColumns,
+            mainAxisSpacing: 20,
+            crossAxisSpacing: 20,
+            mainAxisExtent: 154,
           ),
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: [
-              for (final metric in metrics.take(5))
-                SizedBox(
-                  width: 210,
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
+          itemCount: visibleMetrics.length,
+          itemBuilder: (context, index) {
+            final metric = visibleMetrics[index];
+            const accent = AppColors.logoBlue;
+            const tint = Color(0xFFF2F6FF);
+            return Container(
+              padding: const EdgeInsets.fromLTRB(28, 22, 28, 22),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: const Color(0xFFEFF2FA)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    metric.label,
+                    style: TextStyle(
+                      color: accent,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      height: 1.15,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: AppColors.logoBlueShadow,
-                          blurRadius: 18,
-                          offset: Offset(0, 10),
-                        ),
-                      ],
+                      color: tint,
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          metric.label,
-                          style: const TextStyle(color: Color(0xFF667085)),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          NumberFormat.decimalPattern().format(metric.value),
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: const [
-                BoxShadow(
-                  color: AppColors.logoBlueShadowStrong,
-                  blurRadius: 24,
-                  offset: Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Recent Orders',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 14),
-                if (vm.recentOrders.isEmpty)
-                  const EmptyStateCard(
-                    title: 'No orders',
-                    message: 'Customer submissions will appear here.',
-                  )
-                else
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      headingRowColor: WidgetStateProperty.all(
-                        AppColors.logoBlueSoft,
+                    child: Text(
+                      NumberFormat.decimalPattern().format(metric.value),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                        color: accent,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 32,
+                        height: 1.05,
                       ),
-                      columns: const [
-                        DataColumn(label: Text('Customer')),
-                        DataColumn(label: Text('Barangay')),
-                        DataColumn(label: Text('Method')),
-                        DataColumn(label: Text('Estimate')),
-                        DataColumn(label: Text('Status')),
-                      ],
-                      rows: vm.recentOrders.take(8).map((order) {
-                        return DataRow(
-                          cells: [
-                            DataCell(Text(order.customer.name)),
-                            DataCell(Text(order.customer.barangay)),
-                            DataCell(
-                              Text(displayFulfillment(order.fulfillmentMethod)),
-                            ),
-                            DataCell(
-                              Text(formatPesos(order.estimatedTotalCentavos)),
-                            ),
-                            DataCell(StatusBadge(status: order.status)),
-                          ],
-                        );
-                      }).toList(),
                     ),
                   ),
-              ],
-            ),
-          ),
-        ],
-      ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }

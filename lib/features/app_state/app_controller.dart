@@ -16,12 +16,14 @@ final appControllerProvider = NotifierProvider<AppController, AppState>(
 
 final routerRefreshProvider = Provider<ValueNotifier<int>>((ref) {
   final notifier = ValueNotifier<int>(0);
-  ref.listen(appControllerProvider.select((state) => state.adminSession?.uid), (
-    previousValue,
-    nextValue,
-  ) {
-    notifier.value++;
-  });
+  ref.listen(
+    appControllerProvider.select(
+      (state) => (state.initialized, state.adminSession?.uid),
+    ),
+    (previousValue, nextValue) {
+      notifier.value++;
+    },
+  );
   return notifier;
 });
 
@@ -47,7 +49,7 @@ class AppState {
   final bool submittingOrder;
   final bool adminLoading;
   final String? errorMessage;
-  final String? lastSubmittedOrderId;
+  final int? lastSubmittedOrderId;
   final List<Category> categories;
   final List<Product> products;
   final List<CartItem> cart;
@@ -85,7 +87,7 @@ class AppState {
           : errorMessage as String?,
       lastSubmittedOrderId: lastSubmittedOrderId == _sentinel
           ? this.lastSubmittedOrderId
-          : lastSubmittedOrderId as String?,
+          : lastSubmittedOrderId as int?,
       categories: categories ?? this.categories,
       products: products ?? this.products,
       cart: cart ?? this.cart,
@@ -131,6 +133,7 @@ class AppController extends Notifier<AppState> {
         settings: persisted.settings,
         cart: persisted.cart,
         customerDraft: persisted.customerDraft,
+        adminSession: persisted.adminSession,
       );
     } catch (_) {
       await _store.clear();
@@ -148,10 +151,7 @@ class AppController extends Notifier<AppState> {
   }
 
   List<Category> get publicCategories =>
-      state.categories
-          .where((item) => item.isActive && !item.isArchived)
-          .toList()
-        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+      state.categories.where((item) => item.isActive).toList();
 
   List<Product> publicProductsFor({
     required String categoryId,
@@ -162,11 +162,9 @@ class AppController extends Notifier<AppState> {
     return state.products.where((product) {
       final categoryMatch = categoryId == 'all'
           ? true
-          : product.categoryId == categoryId;
+          : product.categoryId.toString() == categoryId;
       final publiclyVisible =
-          product.isActive &&
-          !product.isArchived &&
-          activeCategoryIds.contains(product.categoryId);
+          product.isActive && activeCategoryIds.contains(product.categoryId);
       final searchMatch = normalizedQuery.isEmpty
           ? true
           : product.normalizedName.contains(normalizedQuery);
@@ -223,6 +221,7 @@ class AppController extends Notifier<AppState> {
   }
 
   Future<void> addToCart(Product product, {int quantity = 1}) async {
+    final now = DateTime.now();
     final existingIndex = state.cart.indexWhere(
       (item) => item.productId == product.id,
     );
@@ -231,17 +230,21 @@ class AppController extends Notifier<AppState> {
     if (existingIndex == -1) {
       nextCart.add(
         CartItem(
+          id: product.id,
           productId: product.id,
           productName: product.name,
           unit: product.displayUnit,
           referenceUnitPriceCentavos: product.referencePriceCentavos,
           photoUrl: product.photoUrl,
           quantity: quantity,
+          createdAt: now,
+          updatedAt: now,
         ),
       );
     } else {
       nextCart[existingIndex] = nextCart[existingIndex].copyWith(
         quantity: nextCart[existingIndex].quantity + quantity,
+        updatedAt: now,
       );
     }
 
@@ -249,13 +252,14 @@ class AppController extends Notifier<AppState> {
     await _persist();
   }
 
-  Future<void> updateCartQuantity(String productId, int quantity) async {
+  Future<void> updateCartQuantity(int productId, int quantity) async {
+    final now = DateTime.now();
     final next = state.cart
         .map((item) {
           if (item.productId != productId) {
             return item;
           }
-          return item.copyWith(quantity: quantity);
+          return item.copyWith(quantity: quantity, updatedAt: now);
         })
         .where((item) => item.quantity > 0)
         .toList();
@@ -264,7 +268,7 @@ class AppController extends Notifier<AppState> {
     await _persist();
   }
 
-  Future<void> removeFromCart(String productId) async {
+  Future<void> removeFromCart(int productId) async {
     state = state.copyWith(
       cart: state.cart.where((item) => item.productId != productId).toList(),
     );
@@ -272,15 +276,19 @@ class AppController extends Notifier<AppState> {
   }
 
   Future<void> addOrderToCart(OrderRequest order) async {
+    final now = DateTime.now();
     final nextCart = order.items
         .map(
           (orderItem) => CartItem(
+            id: orderItem.id,
             productId: orderItem.productId,
             productName: orderItem.productName,
             unit: orderItem.unit,
             referenceUnitPriceCentavos: orderItem.referenceUnitPriceCentavos,
             photoUrl: orderItem.photoUrlSnapshot,
             quantity: orderItem.requestedQuantity,
+            createdAt: orderItem.createdAt ?? order.createdAt,
+            updatedAt: now,
           ),
         )
         .toList();
@@ -288,14 +296,23 @@ class AppController extends Notifier<AppState> {
     state = state.copyWith(
       cart: nextCart,
       customerDraft: order.customer.copyWith(
-        normalizedMobileNumber: normalizePhoneNumber(order.customer.mobileNumber),
+        normalizedMobileNumber: normalizePhoneNumber(
+          order.customer.mobileNumber,
+        ),
+        updatedAt: now,
       ),
     );
     await _persist();
   }
 
   Future<void> updateCustomerDraft(CustomerDraft draft) async {
-    state = state.copyWith(customerDraft: draft);
+    final now = DateTime.now();
+    state = state.copyWith(
+      customerDraft: draft.copyWith(
+        createdAt: draft.createdAt ?? state.customerDraft.createdAt ?? now,
+        updatedAt: now,
+      ),
+    );
     await _persist();
   }
 
@@ -316,7 +333,7 @@ class AppController extends Notifier<AppState> {
     return null;
   }
 
-  Future<String?> submitOrder() async {
+  Future<int?> submitOrder() async {
     final error = validateCheckoutDraft(state.customerDraft);
     if (error != null) {
       state = state.copyWith(errorMessage: error);
@@ -328,7 +345,11 @@ class AppController extends Notifier<AppState> {
 
     state = state.copyWith(submittingOrder: true, errorMessage: null);
     final now = DateTime.now();
-    final orderId = 'order-${now.microsecondsSinceEpoch}';
+    final orderId =
+        (state.orders.map((item) => item.id).fold<int>(0, (max, value) {
+          return value > max ? value : max;
+        })) +
+        1;
     final nextSerial = state.orders.length + 1;
     final date =
         '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
@@ -342,6 +363,7 @@ class AppController extends Notifier<AppState> {
     final items = state.cart
         .map(
           (item) => OrderItem(
+            id: item.productId,
             productId: item.productId,
             productName: item.productName,
             unit: item.unit,
@@ -351,6 +373,8 @@ class AppController extends Notifier<AppState> {
             quotedUnitPriceCentavos: item.referenceUnitPriceCentavos,
             photoUrlSnapshot: item.photoUrl,
             descriptionSnapshot: null,
+            createdAt: item.createdAt ?? now,
+            updatedAt: now,
           ),
         )
         .toList();
@@ -404,20 +428,25 @@ class AppController extends Notifier<AppState> {
 
     state = state.copyWith(
       adminLoading: false,
-      adminSession: const AdminSession(
+      adminSession: AdminSession(
         uid: 'demo-admin',
         email: demoAdminEmail,
         displayName: 'Andrew Admin',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
       ),
     );
+    await _persist();
     return true;
   }
 
-  void logoutAdmin() {
+  Future<void> logoutAdmin() async {
     state = state.copyWith(adminSession: null);
+    await _persist();
   }
 
   Future<void> saveProduct(Product product) async {
+    final now = DateTime.now();
     final category = state.categories.firstWhere(
       (item) => item.id == product.categoryId,
     );
@@ -428,6 +457,8 @@ class AppController extends Notifier<AppState> {
       unit: product.unit.trim(),
       type: product.type.trim(),
       priceUpdatedAt: product.priceUpdatedAt,
+      createdAt: product.createdAt ?? now,
+      updatedAt: now,
     );
     final next = [...state.products];
     final index = next.indexWhere((item) => item.id == updated.id);
@@ -440,21 +471,92 @@ class AppController extends Notifier<AppState> {
     await _persist();
   }
 
+  Future<void> deleteProduct(int productId) async {
+    state = state.copyWith(
+      products: state.products.where((item) => item.id != productId).toList(),
+      cart: state.cart.where((item) => item.productId != productId).toList(),
+      errorMessage: null,
+    );
+    await _persist();
+  }
+
   Future<void> saveCategory(Category category) async {
     final next = [...state.categories];
     final index = next.indexWhere((item) => item.id == category.id);
     if (index == -1) {
-      next.add(category);
+      next.insert(0, category);
     } else {
       next[index] = category;
     }
-    next.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     state = state.copyWith(categories: next, errorMessage: null);
     await _persist();
   }
 
+  Future<void> deleteCategory(int categoryId) async {
+    final nextCategories = state.categories
+        .where((item) => item.id != categoryId)
+        .toList();
+    final nextProducts = state.products.map((product) {
+      if (product.categoryId != categoryId) {
+        return product;
+      }
+      return product.copyWith(categoryId: 8, categoryNameSnapshot: 'Others');
+    }).toList();
+
+    state = state.copyWith(
+      categories: nextCategories,
+      products: nextProducts,
+      errorMessage: null,
+    );
+    await _persist();
+  }
+
+  Future<void> reorderCategories(int oldIndex, int newIndex) async {
+    final next = [...state.categories];
+    if (oldIndex < 0 || oldIndex >= next.length) {
+      return;
+    }
+    if (newIndex < 0 || newIndex > next.length) {
+      return;
+    }
+
+    if (newIndex > oldIndex) {
+      newIndex -= 1;
+    }
+
+    final moved = next.removeAt(oldIndex);
+    next.insert(newIndex, moved);
+    state = state.copyWith(categories: next, errorMessage: null);
+    await _persist();
+  }
+
+  Future<void> reorderCategoriesByIds(List<int> orderedIds) async {
+    final categoryById = {
+      for (final category in state.categories) category.id: category,
+    };
+    final ordered = orderedIds
+        .map((id) => categoryById[id])
+        .whereType<Category>()
+        .toList();
+    final remaining = state.categories
+        .where((category) => !orderedIds.contains(category.id))
+        .toList();
+
+    state = state.copyWith(
+      categories: [...ordered, ...remaining],
+      errorMessage: null,
+    );
+    await _persist();
+  }
+
   Future<void> saveSettings(AppSettings settings) async {
-    state = state.copyWith(settings: settings);
+    final now = DateTime.now();
+    state = state.copyWith(
+      settings: settings.copyWith(
+        createdAt: settings.createdAt ?? state.settings.createdAt ?? now,
+        updatedAt: now,
+      ),
+    );
     await _persist();
   }
 
@@ -536,6 +638,11 @@ class AppController extends Notifier<AppState> {
         settings: state.settings,
         cart: state.cart,
         customerDraft: state.customerDraft,
+        adminSession: state.adminSession,
+        createdAt: state.initialized
+            ? state.settings.createdAt
+            : DateTime.now(),
+        updatedAt: DateTime.now(),
       ),
     );
   }
