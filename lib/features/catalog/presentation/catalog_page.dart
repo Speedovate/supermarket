@@ -1449,7 +1449,7 @@ class _CartButton extends StatelessWidget {
         width: buttonSize,
         height: 48,
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: showLabel ? 12 : 6),
+          padding: EdgeInsets.symmetric(horizontal: showLabel ? 12 : 9),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
