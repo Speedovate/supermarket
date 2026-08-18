@@ -216,11 +216,14 @@ Future<Product?> showAdminProductDialog(
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int?>(
                       initialValue: selectedCategory,
-                      decoration: const InputDecoration(labelText: 'Category'),
+                      decoration: const InputDecoration(
+                        labelText: 'Category',
+                        hintText: 'Category',
+                      ),
                       items: [
                         const DropdownMenuItem<int?>(
                           value: null,
-                          child: Text('No Category'),
+                          child: Text(''),
                         ),
                         ...categories.map(
                           (item) => DropdownMenuItem<int?>(
