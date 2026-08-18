@@ -38,6 +38,7 @@ class AppState {
   const AppState({
     this.initialized = false,
     this.loading = false,
+    this.catalogHydrated = false,
     this.submittingOrder = false,
     this.adminLoading = false,
     this.errorMessage,
@@ -55,6 +56,7 @@ class AppState {
 
   final bool initialized;
   final bool loading;
+  final bool catalogHydrated;
   final bool submittingOrder;
   final bool adminLoading;
   final String? errorMessage;
@@ -76,6 +78,7 @@ class AppState {
   AppState copyWith({
     bool? initialized,
     bool? loading,
+    bool? catalogHydrated,
     bool? submittingOrder,
     bool? adminLoading,
     Object? errorMessage = _sentinel,
@@ -93,6 +96,7 @@ class AppState {
     return AppState(
       initialized: initialized ?? this.initialized,
       loading: loading ?? this.loading,
+      catalogHydrated: catalogHydrated ?? this.catalogHydrated,
       submittingOrder: submittingOrder ?? this.submittingOrder,
       adminLoading: adminLoading ?? this.adminLoading,
       errorMessage: errorMessage == _sentinel
@@ -285,6 +289,7 @@ class AppController extends Notifier<AppState> {
       cart: const [],
       customerDraft: const CustomerDraft(),
       adminSession: null,
+      catalogHydrated: false,
     );
   }
 
@@ -306,6 +311,7 @@ class AppController extends Notifier<AppState> {
         orders: persisted.orders,
       ),
       adminSession: persisted.adminSession,
+      catalogHydrated: true,
     );
   }
 
@@ -344,6 +350,7 @@ class AppController extends Notifier<AppState> {
         settings: snapshot.settings == null
             ? state.settings
             : _normalizeSettings(snapshot.settings!),
+        catalogHydrated: true,
       );
       await _persist();
     } catch (_) {
@@ -467,9 +474,8 @@ class AppController extends Notifier<AppState> {
     final activeCategoryIds = publicCategories.map((item) => item.id).toSet();
     final normalizedQuery = query.trim().toLowerCase();
     return state.products.where((product) {
-      final isUnassignedCategory = !activeCategoryIds.contains(
-        product.category,
-      );
+      final isUnassignedCategory =
+          product.category <= 0 || !activeCategoryIds.contains(product.category);
       final categoryMatch = switch (categoryId) {
         'all' => true,
         'others' => isUnassignedCategory,
@@ -794,58 +800,58 @@ class AppController extends Notifier<AppState> {
       return null;
     }
 
-    state = state.copyWith(submittingOrder: true, errorMessage: null);
-    final now = DateTime.now();
-    final orderId = _nextOrderId();
-    final normalizedCustomer = state.customerDraft.copyWith(
-      normalizedMobileNumber: normalizePhoneNumber(
-        state.customerDraft.mobileNumber,
-      ),
-    );
-    final items = state.cart
-        .map(
-          (item) => OrderItem(
-            id: item.productId,
-            productId: item.productId,
-            productName: item.productName,
-            unit: item.unit,
-            requestedQuantity: item.quantity,
-            referenceUnitPriceCentavos: item.referenceUnitPriceCentavos,
-            estimatedSubtotalCentavos: item.estimatedSubtotalCentavos,
-            quotedUnitPriceCentavos: item.referenceUnitPriceCentavos,
-            photoUrlSnapshot: item.photoUrl,
-            descriptionSnapshot: null,
-            createdAt: item.createdAt ?? now,
-            updatedAt: now,
-          ),
-        )
-        .toList();
-
-    final order = OrderRequest(
-      id: orderId,
-      status: OrderStatus.waiting,
-      createdAt: now,
-      updatedAt: now,
-      total: state.cartTotalCentavos,
-      name: normalizedCustomer.name,
-      phone: normalizedCustomer.mobileNumber,
-      method: normalizedCustomer.fulfillmentMethod,
-      place: normalizedCustomer.barangay,
-      addressStreet: normalizedCustomer.addressStreet,
-      addressLandmark: normalizedCustomer.addressLandmark,
-      products: items,
-    );
-
-    state = state.copyWith(
-      orders: [order, ...state.orders],
-      cart: const [],
-      lastSubmittedOrderId: orderId,
-      customerDraft: normalizedCustomer.copyWith(
-        createdAt: normalizedCustomer.createdAt ?? now,
-        updatedAt: now,
-      ),
-    );
     try {
+      state = state.copyWith(submittingOrder: true, errorMessage: null);
+      final now = DateTime.now();
+      final orderId = await _firestoreCatalog.reserveNextOrderId();
+      final normalizedCustomer = state.customerDraft.copyWith(
+        normalizedMobileNumber: normalizePhoneNumber(
+          state.customerDraft.mobileNumber,
+        ),
+      );
+      final items = state.cart
+          .map(
+            (item) => OrderItem(
+              id: item.productId,
+              productId: item.productId,
+              productName: item.productName,
+              unit: item.unit,
+              requestedQuantity: item.quantity,
+              referenceUnitPriceCentavos: item.referenceUnitPriceCentavos,
+              estimatedSubtotalCentavos: item.estimatedSubtotalCentavos,
+              quotedUnitPriceCentavos: item.referenceUnitPriceCentavos,
+              photoUrlSnapshot: item.photoUrl,
+              descriptionSnapshot: null,
+              createdAt: item.createdAt ?? now,
+              updatedAt: now,
+            ),
+          )
+          .toList();
+
+      final order = OrderRequest(
+        id: orderId,
+        status: OrderStatus.waiting,
+        createdAt: now,
+        updatedAt: now,
+        total: state.cartTotalCentavos,
+        name: normalizedCustomer.name,
+        phone: normalizedCustomer.mobileNumber,
+        method: normalizedCustomer.fulfillmentMethod,
+        place: normalizedCustomer.barangay,
+        addressStreet: normalizedCustomer.addressStreet,
+        addressLandmark: normalizedCustomer.addressLandmark,
+        products: items,
+      );
+
+      state = state.copyWith(
+        orders: [order, ...state.orders],
+        cart: const [],
+        lastSubmittedOrderId: orderId,
+        customerDraft: normalizedCustomer.copyWith(
+          createdAt: normalizedCustomer.createdAt ?? now,
+          updatedAt: now,
+        ),
+      );
       await _firestoreCatalog.saveOrder(order);
       await _refreshOrdersFromFirebase();
       state = state.copyWith(submittingOrder: false);
@@ -1043,7 +1049,7 @@ class AppController extends Notifier<AppState> {
       if (product.category != categoryId) {
         return product;
       }
-      return product.copyWith(category: 8);
+      return product.copyWith(category: 0);
     }).toList();
 
     state = state.copyWith(
@@ -1052,7 +1058,7 @@ class AppController extends Notifier<AppState> {
       errorMessage: null,
     );
     await _firestoreCatalog.deleteCategory(categoryId);
-    for (final product in nextProducts.where((item) => item.category == 8)) {
+    for (final product in nextProducts.where((item) => item.category == 0)) {
       await _firestoreCatalog.saveProduct(product);
     }
     await _persist();
@@ -1260,14 +1266,6 @@ class AppController extends Notifier<AppState> {
       }
     }
     return phones;
-  }
-
-  int _nextOrderId() {
-    final existingIds = state.orders.map((item) => item.id);
-    if (existingIds.isEmpty) {
-      return 1;
-    }
-    return existingIds.reduce(math.max) + 1;
   }
 
   List<OrderRequest> _mergeOrdersPreservingLocal({

@@ -529,6 +529,15 @@ class AppModalFrame extends StatelessWidget {
   static const double contentPadding = 16;
   static const double actionHeight = 44;
 
+  static bool _isEditableTextFocused() {
+    final focusedContext = FocusManager.instance.primaryFocus?.context;
+    if (focusedContext == null) {
+      return false;
+    }
+    return focusedContext.widget is EditableText ||
+        focusedContext.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final dialog = Dialog(
@@ -583,8 +592,18 @@ class AppModalFrame extends StatelessWidget {
 
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.enter): onSubmit!,
-        const SingleActivator(LogicalKeyboardKey.numpadEnter): onSubmit!,
+        const SingleActivator(LogicalKeyboardKey.enter): () {
+          if (_isEditableTextFocused()) {
+            return;
+          }
+          onSubmit!();
+        },
+        const SingleActivator(LogicalKeyboardKey.numpadEnter): () {
+          if (_isEditableTextFocused()) {
+            return;
+          }
+          onSubmit!();
+        },
       },
       child: dialog,
     );

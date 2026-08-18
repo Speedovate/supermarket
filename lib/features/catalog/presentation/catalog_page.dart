@@ -525,6 +525,34 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final vm = ref.watch(catalogViewModelProvider);
     final appState = ref.watch(appControllerProvider);
     final controller = ref.watch(appControllerProvider.notifier);
+    final allPublicProducts = controller.publicProductsFor(
+      categoryId: 'all',
+      query: '',
+    );
+    final visibleCategoryIds = allPublicProducts
+        .map((product) => product.categoryId)
+        .where((categoryId) => categoryId > 0)
+        .toSet();
+    final visibleCategories = vm.categories
+        .where((category) => visibleCategoryIds.contains(category.id))
+        .toList();
+    final hasOtherProducts = allPublicProducts.any((product) {
+      final categoryId = product.categoryId;
+      return categoryId <= 0 ||
+          !vm.categories.any((category) => category.id == categoryId);
+    });
+    final hasSelectedVisibleCategory =
+        _categoryId == 'all' ||
+        (_categoryId == 'others' && hasOtherProducts) ||
+        visibleCategories.any((category) => category.id.toString() == _categoryId);
+    if (!hasSelectedVisibleCategory) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _categoryId == 'all') {
+          return;
+        }
+        setState(() => _categoryId = 'all');
+      });
+    }
     final products = controller.publicProductsFor(
       categoryId: _categoryId,
       query: _query,
@@ -542,7 +570,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         }
         return b.id.compareTo(a.id);
       });
-    final selectedCategory = vm.categories.cast<Category?>().firstWhere(
+    final selectedCategory = visibleCategories.cast<Category?>().firstWhere(
       (category) => category?.id.toString() == _categoryId,
       orElse: () => null,
     );
@@ -622,6 +650,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         : 'current';
     final showCatalogLoading =
         appState.loading &&
+        !appState.catalogHydrated &&
         vm.categories.isEmpty &&
         appState.products.isEmpty &&
         activeBanners.isEmpty;
@@ -646,7 +675,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                   },
                   cartCount: vm.cartCount,
                   loading: showCatalogLoading,
-                  categories: vm.categories,
+                  hasOtherProducts: hasOtherProducts,
+                  categories: visibleCategories,
                   selectedId: _categoryId,
                   onSelected: (value) => setState(() => _categoryId = value),
                   showCartPanelOpenState: showDesktopCartPanel,
@@ -735,6 +765,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                       width: resolvedCardWidth,
                                       height: resolvedCardHeight,
                                       child: ProductCard(
+                                        key: ValueKey(
+                                          'best-seller-${sortedBestSellers[index].id}',
+                                        ),
                                         product: sortedBestSellers[index],
                                         adaptiveSizing: true,
                                         showImage: columns != 1,
@@ -832,7 +865,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                         child: Padding(
                           padding: EdgeInsets.fromLTRB(
                             gridPadding,
-                            24,
+                            18,
                             gridPadding,
                             bottomScrollPadding,
                           ),
@@ -870,6 +903,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                               ),
                           delegate: SliverChildBuilderDelegate(
                             (context, index) => ProductCard(
+                              key: ValueKey(
+                                'catalog-${sortedProducts[index].id}',
+                              ),
                               product: sortedProducts[index],
                               adaptiveSizing: true,
                               showImage: columns != 1,
@@ -1300,6 +1336,7 @@ class _TopBar extends StatelessWidget {
     required this.onSearchChanged,
     required this.cartCount,
     required this.loading,
+    required this.hasOtherProducts,
     required this.categories,
     required this.selectedId,
     required this.onSelected,
@@ -1312,6 +1349,7 @@ class _TopBar extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final int cartCount;
   final bool loading;
+  final bool hasOtherProducts;
   final List<Category> categories;
   final String selectedId;
   final ValueChanged<String> onSelected;
@@ -1343,6 +1381,7 @@ class _TopBar extends StatelessWidget {
               _CategoryStrip(
                 categories: categories,
                 selectedId: selectedId,
+                showOthers: hasOtherProducts,
                 onSelected: onSelected,
               ),
             const Divider(height: 1, thickness: 1, color: Color(0xFFE4E7EC)),
@@ -1442,11 +1481,13 @@ class _CategoryStrip extends StatelessWidget {
   const _CategoryStrip({
     required this.categories,
     required this.selectedId,
+    required this.showOthers,
     required this.onSelected,
   });
 
   final List<Category> categories;
   final String selectedId;
+  final bool showOthers;
   final ValueChanged<String> onSelected;
 
   @override
@@ -1475,12 +1516,14 @@ class _CategoryStrip extends StatelessWidget {
                 onTap: () => onSelected(categories[i].id.toString()),
               ),
             ],
-            const SizedBox(width: 10),
-            _CategoryPill(
-              label: 'Others',
-              selected: selectedId == 'others',
-              onTap: () => onSelected('others'),
-            ),
+            if (showOthers) ...[
+              const SizedBox(width: 10),
+              _CategoryPill(
+                label: 'Others',
+                selected: selectedId == 'others',
+                onTap: () => onSelected('others'),
+              ),
+            ],
             SizedBox(width: edgeInset),
           ],
         ),
@@ -1564,7 +1607,7 @@ class _CatalogLoadingSections extends StatelessWidget {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: 4,
+              itemCount: 6,
               separatorBuilder: (context, index) => const SizedBox(width: 16),
               itemBuilder: (context, index) => SizedBox(
                 width: cardHeight * cardAspectRatio,
@@ -1821,7 +1864,7 @@ class _SortButton extends StatelessWidget {
       children: [
         if (!isMobile) ...[
           const Text(
-            'Sort by:',
+            'Sort by',
             style: TextStyle(fontWeight: FontWeight.w700, height: 1.15),
           ),
           const SizedBox(width: 8),
@@ -2216,6 +2259,7 @@ class _HeroBannerState extends State<_HeroBanner> {
                       separatorBuilder: (context, index) =>
                           SizedBox(width: bannerGap),
                       itemBuilder: (context, index) => SizedBox(
+                        key: ValueKey('banner-${widget.banners[index].id}'),
                         width: bannerWidth,
                         child: MousePressable(
                           onTap: () {
@@ -2726,13 +2770,22 @@ class _DesktopCartPanel extends ConsumerWidget {
                                 : isCurrentSelection
                                 ? onReviewOrder
                                 : () => onOrderAgain(selectedOrder),
-                            child: Text(
-                              submitting
-                                  ? 'Preparing...'
-                                  : isCurrentSelection
-                                  ? 'Place Order'
-                                  : 'Order Again',
-                            ),
+                            child: submitting
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : Text(
+                                    isCurrentSelection
+                                        ? 'Place Order'
+                                        : 'Order Again',
+                                  ),
                           ),
                         ),
                       ),
@@ -2777,15 +2830,22 @@ class _DesktopCartCustomerCard extends ConsumerWidget {
       if (controllers.barangay.text.trim().isNotEmpty)
         controllers.barangay.text.trim(),
     }.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final cutoffReference = isReadOnly ? selectedOrder?.createdAt : null;
     final cutoffMessage =
         effectiveDraft.fulfillmentMethod == FulfillmentMethod.delivery &&
             effectiveDraft.barangay.trim().isNotEmpty
-        ? appController.barangayCutoffMessage(effectiveDraft.barangay)
+        ? appController.barangayCutoffMessage(
+            effectiveDraft.barangay,
+            now: cutoffReference,
+          )
         : null;
     final isCutoffReached =
         effectiveDraft.fulfillmentMethod == FulfillmentMethod.delivery &&
             effectiveDraft.barangay.trim().isNotEmpty
-        ? appController.isBarangayCutoffReached(effectiveDraft.barangay)
+        ? appController.isBarangayCutoffReached(
+            effectiveDraft.barangay,
+            now: cutoffReference,
+          )
         : false;
 
     return Container(

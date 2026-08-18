@@ -126,9 +126,18 @@ class OrderReviewPage extends ConsumerWidget {
                         }
                         context.go('/order-success/$orderId');
                       },
-                child: Text(
-                  state.submittingOrder ? 'Submitting...' : 'Submit Order',
-                ),
+                child: state.submittingOrder
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
+                    : const Text('Submit Order'),
               ),
             ),
           ],

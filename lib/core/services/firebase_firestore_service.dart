@@ -435,6 +435,45 @@ class FirestoreCatalogService {
     );
   }
 
+  Future<int> reserveNextOrderId() async {
+    final latestOrderSnapshot = await _firestore
+        .collection(FirebasePaths.orders)
+        .orderBy('id', descending: true)
+        .limit(1)
+        .get();
+    final initialOrderId = latestOrderSnapshot.docs.isEmpty
+        ? 1
+        : (_coerceInt(latestOrderSnapshot.docs.first.data()['id']) + 1);
+    final counterRef = _firestore
+        .collection(FirebasePaths.system)
+        .doc(FirebasePaths.ordersCounterDocumentId);
+
+    return _firestore.runTransaction<int>((transaction) async {
+      final snapshot = await transaction.get(counterRef);
+      final data = snapshot.data();
+      final currentNextOrderId = data == null
+          ? 0
+          : _coerceInt(data['nextOrderId']);
+      final reservedOrderId = currentNextOrderId > 0
+          ? currentNextOrderId
+          : initialOrderId;
+
+      transaction.set(counterRef, {
+        'nextOrderId': reservedOrderId + 1,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+
+      return reservedOrderId;
+    });
+  }
+
+  int _coerceInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    return int.tryParse('$value') ?? 0;
+  }
+
   Future<AdminSession?> loadAdminSession(String uid) async {
     final doc = await _firestore.collection(FirebasePaths.admins).doc(uid).get();
     if (!doc.exists || doc.data() == null) {

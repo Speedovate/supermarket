@@ -216,22 +216,24 @@ Future<Product?> showAdminProductDialog(
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int?>(
                       initialValue: selectedCategory,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Category',
                         hintText: 'Category',
+                        suffixIcon: selectedCategory == null
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear category',
+                                onPressed: () =>
+                                    setState(() => selectedCategory = null),
+                                icon: const Icon(Icons.close),
+                              ),
                       ),
-                      items: [
-                        const DropdownMenuItem<int?>(
-                          value: null,
-                          child: Text(''),
+                      items: categories.map(
+                        (item) => DropdownMenuItem<int?>(
+                          value: item.id,
+                          child: Text(item.name),
                         ),
-                        ...categories.map(
-                          (item) => DropdownMenuItem<int?>(
-                            value: item.id,
-                            child: Text(item.name),
-                          ),
-                        ),
-                      ],
+                      ).toList(),
                       onChanged: (value) =>
                           setState(() => selectedCategory = value),
                     ),

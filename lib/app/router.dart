@@ -35,6 +35,12 @@ bool _isKnownAdminPath(String path) {
       path.startsWith('/admin/orders/');
 }
 
+bool _isKnownClientPath(String path) {
+  return path == '/' ||
+      path == '/order-review' ||
+      path.startsWith('/order-success/');
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refresh = ref.watch(routerRefreshProvider);
 
@@ -66,6 +72,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (path == '/admin' || path == '/admin/' || !_isKnownAdminPath(path)) {
           return '/admin/dashboard';
         }
+      }
+
+      if (!goingToAdmin && !_isKnownClientPath(state.uri.path)) {
+        return '/';
       }
 
       return null;
