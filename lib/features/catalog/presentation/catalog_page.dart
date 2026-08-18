@@ -4269,7 +4269,7 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                             textDirection: Directionality.of(context),
                           )..layout(
                             maxWidth:
-                                constraints.maxWidth -
+                                contentConstraints.maxWidth -
                                 (resolvedCardPadding * 2),
                           );
                       final titleBlockHeight = titlePainter.height;
