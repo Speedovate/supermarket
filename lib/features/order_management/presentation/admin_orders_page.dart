@@ -978,6 +978,9 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
               Text('Status', style: labelStyle),
               Text(displayStatus(order.status), style: bodyStyle),
               const SizedBox(height: 10),
+              Text('Items', style: labelStyle),
+              Text('$itemCount', style: bodyStyle),
+              const SizedBox(height: 10),
               Text('Total', style: labelStyle),
               Text(formatPesos(order.total), style: bodyStyle),
               const SizedBox(height: 10),
@@ -993,7 +996,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                 style: bodyStyle,
               ),
               const SizedBox(height: 10),
-              Text('Products', style: labelStyle),
+              Text('Items', style: labelStyle),
               const SizedBox(height: 4),
               MousePressable(
                 onTap: () {
@@ -1007,7 +1010,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'View $itemCount items',
+                        'View $itemCount products',
                         style: const TextStyle(
                           color: AppColors.logoBlue,
                           fontWeight: FontWeight.w700,

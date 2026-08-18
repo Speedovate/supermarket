@@ -78,7 +78,7 @@ class _AndrewsSupermarketAppState
           );
         }
 
-        return child ?? const SizedBox.shrink();
+        return SelectionArea(child: child ?? const SizedBox.shrink());
       },
     );
   }

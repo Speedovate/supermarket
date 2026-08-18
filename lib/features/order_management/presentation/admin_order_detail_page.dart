@@ -1294,6 +1294,7 @@ class _OrderSummaryWidths {
     required this.status,
     required this.method,
     required this.place,
+    required this.items,
     required this.total,
     required this.createdAt,
     required this.updatedAt,
@@ -1305,6 +1306,7 @@ class _OrderSummaryWidths {
   final double status;
   final double method;
   final double place;
+  final double items;
   final double total;
   final double createdAt;
   final double updatedAt;
@@ -1315,11 +1317,13 @@ class _OrderSummaryWidths {
       gap +
       status +
       gap +
+      items +
+      gap +
+      total +
+      gap +
       method +
       gap +
       place +
-      gap +
-      total +
       gap +
       createdAt +
       gap +
@@ -1372,6 +1376,10 @@ _OrderSummaryWidths _computeOrderSummaryWidths({
           order.place.trim().isNotEmpty
       ? order.place.trim()
       : '-';
+  final itemCount = order.items.fold<int>(
+    0,
+    (sum, item) => sum + item.requestedQuantity,
+  );
 
   return _OrderSummaryWidths(
     gap: gap,
@@ -1385,6 +1393,7 @@ _OrderSummaryWidths _computeOrderSummaryWidths({
         _orderSummaryStatusBadgeHorizontalPadding,
     method: maxWidth('Method', displayFulfillment(order.method)),
     place: maxWidth('Barangay', placeValue, max: screenWidth < 700 ? 160 : 220),
+    items: maxWidth('Items', '$itemCount'),
     total: maxWidth('Total', formatPesos(order.total)),
     createdAt: maxWidth(
       'Created at',
@@ -1429,6 +1438,16 @@ class _OrderSummaryHeaderRow extends StatelessWidget {
         ),
         SizedBox(width: widths.gap),
         SizedBox(
+          width: widths.items,
+          child: Text('Items', style: labelStyle, maxLines: 1),
+        ),
+        SizedBox(width: widths.gap),
+        SizedBox(
+          width: widths.total,
+          child: Text('Total', style: labelStyle, maxLines: 1),
+        ),
+        SizedBox(width: widths.gap),
+        SizedBox(
           width: widths.method,
           child: Text('Method', style: labelStyle, maxLines: 1),
         ),
@@ -1436,11 +1455,6 @@ class _OrderSummaryHeaderRow extends StatelessWidget {
         SizedBox(
           width: widths.place,
           child: Text('Barangay', style: labelStyle, maxLines: 1),
-        ),
-        SizedBox(width: widths.gap),
-        SizedBox(
-          width: widths.total,
-          child: Text('Total', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
@@ -1508,6 +1522,10 @@ class _OrderSummaryRow extends StatelessWidget {
             order.place.trim().isNotEmpty
         ? order.place.trim()
         : '-';
+    final itemCount = order.items.fold<int>(
+      0,
+      (sum, item) => sum + item.requestedQuantity,
+    );
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -1541,6 +1559,26 @@ class _OrderSummaryRow extends StatelessWidget {
             ),
             SizedBox(width: widths.gap),
             SizedBox(
+              width: widths.items,
+              child: Text(
+                '$itemCount',
+                style: bodyStyle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            SizedBox(width: widths.gap),
+            SizedBox(
+              width: widths.total,
+              child: Text(
+                formatPesos(order.total),
+                style: bodyStyle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            SizedBox(width: widths.gap),
+            SizedBox(
               width: widths.method,
               child: Text(
                 displayFulfillment(order.method),
@@ -1553,16 +1591,6 @@ class _OrderSummaryRow extends StatelessWidget {
             SizedBox(
               width: widths.place,
               child: Text(placeValue, style: bodyStyle, softWrap: true),
-            ),
-            SizedBox(width: widths.gap),
-            SizedBox(
-              width: widths.total,
-              child: Text(
-                formatPesos(order.total),
-                style: bodyStyle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
             ),
             SizedBox(width: widths.gap),
             SizedBox(
