@@ -1,0 +1,34 @@
+{
+  "categories": [
+    "Beverages",
+    "Snacks",
+    "Canned Goods",
+    "Noodles",
+    "Condiments",
+    "Personal Care",
+    "Household",
+    "Others"
+  ],
+  "products": [
+    {
+      "name": "Purified Water",
+      "category": "Beverages",
+      "unit": "500mL bottle",
+      "referencePriceCentavos": 1200,
+      "description": "Reliable bottled water for sari-sari restocking."
+    },
+    {
+      "name": "Corn\nChips",
+      "category": "Snacks",
+      "unit": "100g pack",
+      "referencePriceCentavos": 1400
+    },
+    {
+      "name": "Instant Coffee",
+      "category": "Others",
+      "unit": "50g pack",
+      "referencePriceCentavos": 2800,
+      "description": "Convenient coffee sachets for daily shop demand."
+    }
+  ]
+}
