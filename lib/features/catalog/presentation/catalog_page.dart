@@ -1448,19 +1448,22 @@ class _CartButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Badge(
-                isLabelVisible: cartCount > 0,
-                alignment: AlignmentDirectional.topEnd,
-                label: Text(
-                  formatCompactCount(cartCount),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    height: 1,
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: Badge(
+                  isLabelVisible: cartCount > 0,
+                  alignment: AlignmentDirectional.topEnd,
+                  label: Text(
+                    formatCompactCount(cartCount),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
                   ),
+                  child: const Icon(Icons.shopping_cart_outlined, size: 28),
                 ),
-                child: const Icon(Icons.shopping_cart_outlined, size: 28),
               ),
               if (showLabel) ...[
                 const SizedBox(width: 8),
@@ -2692,21 +2695,24 @@ class _DesktopCartPanel extends ConsumerWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Badge(
-                                isLabelVisible: finalCartCount > 0,
-                                alignment: AlignmentDirectional.topEnd,
-                                label: Text(
-                                  formatCompactCount(finalCartCount),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1,
+                              Padding(
+                                padding: const EdgeInsets.only(right: 10),
+                                child: Badge(
+                                  isLabelVisible: finalCartCount > 0,
+                                  alignment: AlignmentDirectional.topEnd,
+                                  label: Text(
+                                    formatCompactCount(finalCartCount),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1,
+                                    ),
                                   ),
-                                ),
-                                child: const Icon(
-                                  Icons.shopping_cart_outlined,
-                                  size: 28,
+                                  child: const Icon(
+                                    Icons.shopping_cart_outlined,
+                                    size: 28,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 10),
