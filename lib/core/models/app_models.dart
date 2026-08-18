@@ -459,7 +459,7 @@ class CustomerDraft {
     'normalizedMobileNumber': normalizedMobileNumber,
     'barangay': fulfillmentMethod == FulfillmentMethod.delivery
         ? barangay
-        : null,
+        : '',
     'addressStreet': fulfillmentMethod == FulfillmentMethod.delivery
         ? addressStreet
         : '',

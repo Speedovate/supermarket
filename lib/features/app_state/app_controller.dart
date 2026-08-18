@@ -408,11 +408,13 @@ class AppController extends Notifier<AppState> {
       }
     }
     return settings.serviceableBarangays
-        .where((item) => item.trim().isNotEmpty)
+        .asMap()
+        .entries
+        .where((entry) => entry.value.trim().isNotEmpty)
         .map(
-          (item) => Barangay(
-            id: item.hashCode,
-            name: formatBarangayName(item),
+          (entry) => Barangay(
+            id: entry.key + 1,
+            name: formatBarangayName(entry.value),
             isActive: true,
             cutoffWeekday: DateTime.monday,
             cutoffMinutes: 5 * 60,
@@ -785,7 +787,7 @@ class AppController extends Notifier<AppState> {
 
     state = state.copyWith(submittingOrder: true, errorMessage: null);
     final now = DateTime.now();
-    final orderId = DateTime.now().microsecondsSinceEpoch;
+    final orderId = _nextOrderId();
     final normalizedCustomer = state.customerDraft.copyWith(
       normalizedMobileNumber: normalizePhoneNumber(
         state.customerDraft.mobileNumber,
@@ -1242,6 +1244,14 @@ class AppController extends Notifier<AppState> {
     return phones;
   }
 
+  int _nextOrderId() {
+    final existingIds = state.orders.map((item) => item.id);
+    if (existingIds.isEmpty) {
+      return 1;
+    }
+    return existingIds.reduce(math.max) + 1;
+  }
+
   String _mapAdminLoginError(FirebaseAuthException error) {
     return switch (error.code) {
       'invalid-email' => 'Enter a valid email address.',
@@ -1335,11 +1345,8 @@ class AppController extends Notifier<AppState> {
         photoUrl: upload.downloadUrl,
         photoStoragePath: upload.storagePath,
       );
-    } catch (_) {
-      return (
-        photoUrl: trimmedPhotoUrl,
-        photoStoragePath: trimmedStoragePath.isEmpty ? null : trimmedStoragePath,
-      );
+    } catch (error) {
+      throw StateError('Unable to upload product image to Firebase Storage: $error');
     }
   }
 }

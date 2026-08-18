@@ -21,7 +21,7 @@ service cloud.firestore {
     }
 
     match /barangays/{barangayId} {
-      allow read: if isAdmin() || resource.data.isActive == true;
+      allow read: if isAdmin() || resource.data.isActive == true || resource.data.active == true;
       allow write: if isAdmin();
     }
 

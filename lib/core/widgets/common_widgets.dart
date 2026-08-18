@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -221,6 +222,11 @@ class ProductPlaceholder extends StatelessWidget {
   final String? imageUrl;
   final BoxFit imageFit;
 
+  static const _webProductImageProxyPrefix = String.fromEnvironment(
+    'PRODUCT_IMAGE_PROXY_PREFIX',
+    defaultValue: '',
+  );
+
   @override
   Widget build(BuildContext context) {
     final borderRadius = fullRounded
@@ -266,11 +272,21 @@ class ProductPlaceholder extends StatelessWidget {
       }
       if (resolvedImageUrl.startsWith('http://') ||
           resolvedImageUrl.startsWith('https://')) {
+        final networkUrl =
+            !kIsWeb ||
+                _webProductImageProxyPrefix.isEmpty ||
+                !(resolvedImageUrl.startsWith('http://') ||
+                    resolvedImageUrl.startsWith('https://'))
+            ? resolvedImageUrl
+            : '$_webProductImageProxyPrefix${Uri.encodeComponent(resolvedImageUrl)}';
         return Image.network(
-          resolvedImageUrl,
+          networkUrl,
           fit: imageFit,
           width: double.infinity,
           height: double.infinity,
+          webHtmlElementStrategy: kIsWeb
+              ? WebHtmlElementStrategy.prefer
+              : WebHtmlElementStrategy.never,
           errorBuilder: (context, error, stackTrace) => _buildFallback(),
         );
       }

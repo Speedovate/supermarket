@@ -79,6 +79,18 @@ Future<Product?> showAdminProductDialog(
       if (dialogContext.mounted) {
         Navigator.of(dialogContext).pop(product);
       }
+    } catch (error) {
+      if (dialogContext.mounted) {
+        final messenger = ScaffoldMessenger.of(dialogContext);
+        messenger.clearSnackBars();
+        messenger.showSnackBar(
+          errorSnackBar(
+            '$error'
+                .replaceFirst('Bad state: ', '')
+                .replaceFirst('Exception: ', ''),
+          ),
+        );
+      }
     } finally {
       isSubmitting = false;
     }
@@ -191,16 +203,6 @@ Future<Product?> showAdminProductDialog(
                         ),
                       ),
                     ),
-                    if (photoUrl != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Tap the field to replace the image.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF667085),
-                          height: 1.15,
-                        ),
-                      ),
-                    ],
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: nameController,
