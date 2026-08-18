@@ -834,6 +834,9 @@ class AppController extends Notifier<AppState> {
 
     try {
       state = state.copyWith(submittingOrder: true, errorMessage: null);
+      final currentCart = [...state.cart];
+      final currentOrders = [...state.orders];
+      final currentCartTotalCentavos = state.cartTotalCentavos;
       final now = DateTime.now();
       final orderId = await _firestoreCatalog.reserveNextOrderId();
       final normalizedCustomer = state.customerDraft.copyWith(
@@ -841,7 +844,7 @@ class AppController extends Notifier<AppState> {
           state.customerDraft.mobileNumber,
         ),
       );
-      final items = state.cart
+      final items = currentCart
           .map(
             (item) => OrderItem(
               id: item.productId,
@@ -865,7 +868,7 @@ class AppController extends Notifier<AppState> {
         status: OrderStatus.waiting,
         createdAt: now,
         updatedAt: now,
-        total: state.cartTotalCentavos,
+        total: currentCartTotalCentavos,
         name: normalizedCustomer.name,
         phone: normalizedCustomer.mobileNumber,
         method: normalizedCustomer.fulfillmentMethod,
@@ -875,8 +878,9 @@ class AppController extends Notifier<AppState> {
         products: items,
       );
 
+      await _firestoreCatalog.saveOrder(order);
       state = state.copyWith(
-        orders: [order, ...state.orders],
+        orders: [order, ...currentOrders],
         cart: const [],
         lastSubmittedOrderId: orderId,
         customerDraft: normalizedCustomer.copyWith(
@@ -884,11 +888,17 @@ class AppController extends Notifier<AppState> {
           updatedAt: now,
         ),
       );
-      await _firestoreCatalog.saveOrder(order);
       await _refreshOrdersFromFirebase();
       state = state.copyWith(submittingOrder: false);
       await _persist();
       return orderId;
+    } on FirebaseException catch (error) {
+      state = state.copyWith(
+        submittingOrder: false,
+        errorMessage: _mapFirebaseOperationError(error),
+      );
+      await _persist();
+      return null;
     } catch (_) {
       state = state.copyWith(
         submittingOrder: false,
