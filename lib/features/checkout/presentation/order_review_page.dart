@@ -76,7 +76,14 @@ class OrderReviewPage extends ConsumerWidget {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(item.productName),
-                    subtitle: Text('${item.quantity} × ${item.unit}'),
+                    subtitle: Text(
+                      '${item.quantity} × ${item.unit}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF667085),
+                        fontWeight: FontWeight.w400,
+                        height: 1.15,
+                      ),
+                    ),
                     trailing: Text(
                       formatPesos(item.estimatedSubtotalCentavos),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(

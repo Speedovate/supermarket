@@ -5383,9 +5383,9 @@ class _CartQuantityControl extends StatelessWidget {
                 child: Center(
                   child: Text(
                     '$quantity',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.white,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w400,
                       height: 1.15,
                     ),
                   ),
