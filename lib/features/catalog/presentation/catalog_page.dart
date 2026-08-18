@@ -2540,6 +2540,17 @@ class _DesktopCartPanel extends ConsumerWidget {
   final Future<void> Function(OrderRequest order) onOrderAgain;
   final bool isBottomSheet;
 
+  Future<void> _scrollToTopIfNeeded() async {
+    if (!isBottomSheet || !scrollController.hasClients) {
+      return;
+    }
+    await scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final keyboardInset = isBottomSheet
@@ -2710,12 +2721,13 @@ class _DesktopCartPanel extends ConsumerWidget {
                           settings: settings,
                           serviceableBarangays: serviceableBarangays,
                           draft: customerDraft,
-                          controllers: customerControllers,
-                          selectedOrder: selectedOrder,
-                          onContactUs: onContactUs,
-                          onDraftChanged: onDraftChanged,
-                        ),
+                        controllers: customerControllers,
+                        selectedOrder: selectedOrder,
+                        onContactUs: onContactUs,
+                        onDraftChanged: onDraftChanged,
+                        onBarangayActivated: _scrollToTopIfNeeded,
                       ),
+                    ),
                       const SizedBox(height: 12),
                       Padding(
                         padding: EdgeInsets.symmetric(
@@ -2821,6 +2833,7 @@ class _DesktopCartCustomerCard extends ConsumerWidget {
     required this.selectedOrder,
     required this.onContactUs,
     required this.onDraftChanged,
+    required this.onBarangayActivated,
   });
 
   final AppSettings settings;
@@ -2830,6 +2843,7 @@ class _DesktopCartCustomerCard extends ConsumerWidget {
   final OrderRequest? selectedOrder;
   final VoidCallback onContactUs;
   final Future<void> Function({FulfillmentMethod? method}) onDraftChanged;
+  final Future<void> Function() onBarangayActivated;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2939,6 +2953,7 @@ class _DesktopCartCustomerCard extends ConsumerWidget {
               _BarangayField(
                 controller: controllers.barangay,
                 items: barangays,
+                onActivated: onBarangayActivated,
                 onChanged: () async {
                   await onDraftChanged();
                 },
@@ -3050,11 +3065,13 @@ class _BarangayField extends StatefulWidget {
   const _BarangayField({
     required this.controller,
     required this.items,
+    required this.onActivated,
     required this.onChanged,
   });
 
   final TextEditingController controller;
   final List<String> items;
+  final Future<void> Function() onActivated;
   final Future<void> Function() onChanged;
 
   @override
@@ -3125,6 +3142,7 @@ class _BarangayFieldState extends State<_BarangayField> {
       if (!mounted) {
         return;
       }
+      unawaited(widget.onActivated());
       _overlayEntry ??= _buildOverlayEntry();
       final overlay = Overlay.of(context);
       if (_overlayEntry!.mounted) {
