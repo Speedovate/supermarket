@@ -1459,16 +1459,29 @@ class _CartButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const badgeTextStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+      height: 1,
+    );
+    final badgeLabel = formatCompactCount(cartCount);
+    final badgeTextPainter = TextPainter(
+      text: TextSpan(text: badgeLabel, style: badgeTextStyle),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+    final badgeWidth = math.max(16.0, badgeTextPainter.width + 8);
     final badgePadding = showLabel
         ? const EdgeInsets.only(right: 10)
         : const EdgeInsets.only(top: 4, right: 12);
-    final buttonSize = showLabel ? null : 48.0;
+    final buttonSize = showLabel ? null : math.max(48.0, badgeWidth + 30);
     return MousePressable(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: SizedBox(
         width: buttonSize,
-        height: 48,
+        height: buttonSize ?? 48,
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: showLabel ? 12 : 6),
           child: Row(
@@ -1480,13 +1493,8 @@ class _CartButton extends StatelessWidget {
                   isLabelVisible: cartCount > 0,
                   alignment: AlignmentDirectional.topEnd,
                   label: Text(
-                    formatCompactCount(cartCount),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      height: 1,
-                    ),
+                    badgeLabel,
+                    style: badgeTextStyle,
                   ),
                   child: const Icon(Icons.shopping_cart_outlined, size: 28),
                 ),
