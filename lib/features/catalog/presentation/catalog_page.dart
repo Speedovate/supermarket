@@ -3077,6 +3077,16 @@ class _BarangayFieldState extends State<_BarangayField> {
     }
   }
 
+  Future<void> _clearBarangaySelection() async {
+    widget.controller.clear();
+    _searchController.clear();
+    _overlayEntry?.markNeedsBuild();
+    if (mounted) {
+      setState(() {});
+    }
+    await widget.onChanged();
+  }
+
   OverlayEntry _buildOverlayEntry() {
     return OverlayEntry(
       builder: (context) {
@@ -3144,8 +3154,19 @@ class _BarangayFieldState extends State<_BarangayField> {
                                       setState(() {});
                                     }
                                   },
-                                  decoration: const InputDecoration(
+                                  decoration: InputDecoration(
                                     hintText: 'Search barangay...',
+                                    suffixIcon:
+                                        widget.controller.text.trim().isNotEmpty ||
+                                            _searchController.text.trim().isNotEmpty
+                                        ? IconButton(
+                                            tooltip: 'Clear barangay',
+                                            onPressed: () async {
+                                              await _clearBarangaySelection();
+                                            },
+                                            icon: const Icon(Icons.close),
+                                          )
+                                        : null,
                                   ),
                                 ),
                               ),
