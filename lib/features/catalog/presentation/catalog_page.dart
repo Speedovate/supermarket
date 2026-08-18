@@ -1451,7 +1451,6 @@ class _CartButton extends StatelessWidget {
               Badge(
                 isLabelVisible: cartCount > 0,
                 alignment: AlignmentDirectional.topEnd,
-                offset: const Offset(-8, 0),
                 label: Text(
                   formatCompactCount(cartCount),
                   style: const TextStyle(
@@ -2696,7 +2695,6 @@ class _DesktopCartPanel extends ConsumerWidget {
                               Badge(
                                 isLabelVisible: finalCartCount > 0,
                                 alignment: AlignmentDirectional.topEnd,
-                                offset: const Offset(-8, 0),
                                 label: Text(
                                   formatCompactCount(finalCartCount),
                                   style: const TextStyle(
