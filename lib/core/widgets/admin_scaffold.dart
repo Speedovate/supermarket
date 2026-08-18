@@ -25,20 +25,21 @@ const _adminNavItems = <({String label, IconData icon, String route})>[
     route: '/admin/categories',
   ),
   (
+    label: 'Barangays',
+    icon: Icons.location_city_outlined,
+    route: '/admin/barangays',
+  ),
+  (
     label: 'Products',
     icon: Icons.inventory_2_outlined,
     route: '/admin/products',
   ),
   (
-    label: 'Settings',
-    icon: Icons.settings_outlined,
-    route: '/admin/settings',
+    label: 'Banners',
+    icon: Icons.view_carousel_outlined,
+    route: '/admin/banners',
   ),
-  (
-    label: 'Orders',
-    icon: Icons.receipt_long_outlined,
-    route: '/admin/orders',
-  ),
+  (label: 'Orders', icon: Icons.receipt_long_outlined, route: '/admin/orders'),
   (label: 'Profile', icon: Icons.person_outline, route: '/admin/profile'),
 ];
 
@@ -127,14 +128,17 @@ class _AdminShellFrameState extends ConsumerState<AdminShellFrame> {
     if (widget.currentPath.startsWith('/admin/products')) {
       return '/admin/products';
     }
+    if (widget.currentPath.startsWith('/admin/banners')) {
+      return '/admin/banners';
+    }
+    if (widget.currentPath.startsWith('/admin/barangays')) {
+      return '/admin/barangays';
+    }
     if (widget.currentPath.startsWith('/admin/categories')) {
       return '/admin/categories';
     }
     if (widget.currentPath.startsWith('/admin/orders')) {
       return '/admin/orders';
-    }
-    if (widget.currentPath.startsWith('/admin/settings')) {
-      return '/admin/settings';
     }
     if (widget.currentPath.startsWith('/admin/profile')) {
       return '/admin/profile';
@@ -142,21 +146,63 @@ class _AdminShellFrameState extends ConsumerState<AdminShellFrame> {
     return '/admin/dashboard';
   }
 
+  bool get _isOrderDetailRoute =>
+      widget.currentPath.startsWith('/admin/orders/');
+
+  bool get _isProductDetailRoute =>
+      widget.currentPath.startsWith('/admin/products/');
+
+  bool get _isCategoryDetailRoute =>
+      widget.currentPath.startsWith('/admin/categories/');
+
+  int? get _orderDetailId {
+    if (!_isOrderDetailRoute) {
+      return null;
+    }
+    final idSegment = widget.currentPath.split('/').last;
+    return int.tryParse(idSegment);
+  }
+
+  int? get _productDetailId {
+    if (!_isProductDetailRoute) {
+      return null;
+    }
+    final idSegment = widget.currentPath.split('/').last;
+    return int.tryParse(idSegment);
+  }
+
+  int? get _categoryDetailId {
+    if (!_isCategoryDetailRoute) {
+      return null;
+    }
+    final idSegment = widget.currentPath.split('/').last;
+    return int.tryParse(idSegment);
+  }
+
   String get _title {
+    if (widget.currentPath.startsWith('/admin/products/')) {
+      return 'Product #${_productDetailId ?? ''}';
+    }
+    if (widget.currentPath.startsWith('/admin/categories/')) {
+      return 'Category #${_categoryDetailId ?? ''}';
+    }
     if (widget.currentPath.startsWith('/admin/products')) {
       return 'Products';
+    }
+    if (widget.currentPath.startsWith('/admin/banners')) {
+      return 'Banners';
+    }
+    if (widget.currentPath.startsWith('/admin/barangays')) {
+      return 'Barangays';
     }
     if (widget.currentPath.startsWith('/admin/categories')) {
       return 'Categories';
     }
     if (widget.currentPath.startsWith('/admin/orders/')) {
-      return 'Order Details';
+      return 'Order #${_orderDetailId ?? ''}';
     }
     if (widget.currentPath.startsWith('/admin/orders')) {
       return 'Orders';
-    }
-    if (widget.currentPath.startsWith('/admin/settings')) {
-      return 'Settings';
     }
     if (widget.currentPath.startsWith('/admin/profile')) {
       return 'Profile';
@@ -239,21 +285,44 @@ class _AdminShellFrameState extends ConsumerState<AdminShellFrame> {
                           padding: const EdgeInsets.only(top: 16, bottom: 16),
                           child: Row(
                             children: [
-                              Builder(
-                                builder: (headerContext) => SizedBox.square(
-                                  dimension: _adminMobileHeaderActionSize,
-                                  child: MousePressable(
-                                    onTap: () =>
-                                        Scaffold.of(headerContext).openDrawer(),
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: const Center(
-                                      child: Icon(
-                                        Icons.menu_rounded,
-                                        color: Color(0xFF172033),
+                              SizedBox.square(
+                                dimension: _adminMobileHeaderActionSize,
+                                child:
+                                    (_isOrderDetailRoute ||
+                                        _isProductDetailRoute ||
+                                        _isCategoryDetailRoute)
+                                    ? MousePressable(
+                                        onTap: () => context.go(
+                                          _isOrderDetailRoute
+                                              ? '/admin/orders'
+                                              : _isProductDetailRoute
+                                              ? '/admin/products'
+                                              : '/admin/categories',
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.arrow_back_rounded,
+                                            color: Color(0xFF172033),
+                                          ),
+                                        ),
+                                      )
+                                    : Builder(
+                                        builder: (headerContext) =>
+                                            MousePressable(
+                                              onTap: () => Scaffold.of(
+                                                headerContext,
+                                              ).openDrawer(),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              child: const Center(
+                                                child: Icon(
+                                                  Icons.menu_rounded,
+                                                  color: Color(0xFF172033),
+                                                ),
+                                              ),
+                                            ),
                                       ),
-                                    ),
-                                  ),
-                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -297,25 +366,45 @@ class _AdminShellFrameState extends ConsumerState<AdminShellFrame> {
                         children: [
                           SizedBox.square(
                             dimension: _adminMobileHeaderActionSize,
-                            child: MousePressable(
-                              onTap: () {
-                                setState(() {
-                                  _isDesktopSidePanelVisible =
-                                      !_isDesktopSidePanelVisible;
-                                  _allowMobileAutoOpen =
-                                      _isDesktopSidePanelVisible;
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(12),
-                              child: Center(
-                                child: Icon(
-                                  _isDesktopSidePanelVisible
-                                      ? Icons.menu_open_rounded
-                                      : Icons.menu_rounded,
-                                  color: const Color(0xFF172033),
-                                ),
-                              ),
-                            ),
+                            child:
+                                (_isOrderDetailRoute ||
+                                    _isProductDetailRoute ||
+                                    _isCategoryDetailRoute)
+                                ? MousePressable(
+                                    onTap: () => context.go(
+                                      _isOrderDetailRoute
+                                          ? '/admin/orders'
+                                          : _isProductDetailRoute
+                                          ? '/admin/products'
+                                          : '/admin/categories',
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.arrow_back_rounded,
+                                        color: Color(0xFF172033),
+                                      ),
+                                    ),
+                                  )
+                                : MousePressable(
+                                    onTap: () {
+                                      setState(() {
+                                        _isDesktopSidePanelVisible =
+                                            !_isDesktopSidePanelVisible;
+                                        _allowMobileAutoOpen =
+                                            _isDesktopSidePanelVisible;
+                                      });
+                                    },
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Center(
+                                      child: Icon(
+                                        _isDesktopSidePanelVisible
+                                            ? Icons.menu_open_rounded
+                                            : Icons.menu_rounded,
+                                        color: const Color(0xFF172033),
+                                      ),
+                                    ),
+                                  ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(child: Text(_title, style: titleStyle)),
@@ -721,7 +810,9 @@ class _NavList extends StatelessWidget {
                     ),
                     child: Center(
                       child: Image(
-                        image: const AssetImage('assets/branding/as_logo_lite.png'),
+                        image: const AssetImage(
+                          'assets/branding/as_logo_lite.png',
+                        ),
                         width: logoSize,
                         height: logoSize,
                         fit: BoxFit.contain,
@@ -776,7 +867,11 @@ class _NavList extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        Icon(item.icon, color: Colors.white, size: itemIconSize),
+                        Icon(
+                          item.icon,
+                          color: Colors.white,
+                          size: itemIconSize,
+                        ),
                         SizedBox(width: itemGap),
                         Expanded(
                           child: Text(
@@ -820,10 +915,10 @@ class _AdminAccountActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayName = adminSession?.displayName.trim().isNotEmpty == true
         ? adminSession!.displayName.trim()
-        : 'Admin User';
+        : 'Arjie Lim';
     final email = adminSession?.email.trim().isNotEmpty == true
         ? adminSession!.email.trim()
-        : 'admin@andrewssupermarket.com';
+        : 'admin@andrews.com';
     final initial = displayName.characters.first.toUpperCase();
 
     return Row(

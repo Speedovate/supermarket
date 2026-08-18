@@ -2,15 +2,16 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/barangays.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/open_external_url.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
 import 'catalog_view_model.dart';
@@ -19,15 +20,36 @@ typedef _CustomerControllers = ({
   TextEditingController name,
   TextEditingController mobile,
   TextEditingController barangay,
+  TextEditingController street,
 });
 
 Future<void> _showProductDetailsModal(
   BuildContext context,
-  Product product,
-) async {
+  Product product, {
+  String? displayUnit,
+  int? displayPriceCentavos,
+  DateTime? displayPriceUpdatedAt,
+  String? displayName,
+  Future<Product?> Function(BuildContext context)? onEditProduct,
+  bool showEditAction = false,
+  bool adminReadOnly = false,
+  int? initialAdminQuantity,
+  Future<void> Function(int quantity)? onAdminQuantitySaved,
+}) async {
   await showDialog<void>(
     context: context,
-    builder: (dialogContext) => _ProductModal(product: product),
+    builder: (dialogContext) => _ProductModal(
+      product: product,
+      displayUnit: displayUnit,
+      displayPriceCentavos: displayPriceCentavos,
+      displayPriceUpdatedAt: displayPriceUpdatedAt,
+      displayName: displayName,
+      onEditProduct: onEditProduct,
+      showEditAction: showEditAction,
+      adminReadOnly: adminReadOnly,
+      initialAdminQuantity: initialAdminQuantity,
+      onAdminQuantitySaved: onAdminQuantitySaved,
+    ),
   );
 }
 
@@ -88,9 +110,11 @@ class CatalogPage extends ConsumerStatefulWidget {
 class _CatalogPageState extends ConsumerState<CatalogPage> {
   final _searchController = TextEditingController();
   final _bestSellersScrollController = ScrollController();
+  final _desktopCartScrollController = ScrollController();
   late final TextEditingController _customerNameController;
   late final TextEditingController _customerMobileController;
   late final TextEditingController _customerBarangayController;
+  late final TextEditingController _customerStreetController;
   Timer? _debounce;
   String _query = '';
   String _categoryId = 'all';
@@ -134,6 +158,11 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     _customerNameController = TextEditingController(text: draft.name);
     _customerMobileController = TextEditingController(text: draft.mobileNumber);
     _customerBarangayController = TextEditingController(text: draft.barangay);
+    _customerStreetController = TextEditingController(
+      text: draft.addressStreet.trim().isNotEmpty
+          ? draft.addressStreet
+          : draft.addressLandmark,
+    );
     _bestSellersScrollController.addListener(_handleBestSellersScroll);
     _scheduleBestSellersVisibilityRefresh();
   }
@@ -145,28 +174,46 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     _customerNameController.dispose();
     _customerMobileController.dispose();
     _customerBarangayController.dispose();
+    _customerStreetController.dispose();
     _bestSellersScrollController.removeListener(_handleBestSellersScroll);
     _bestSellersScrollController.dispose();
+    _desktopCartScrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _scrollClientCartPanelToTop() async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!_desktopCartScrollController.hasClients) {
+      return;
+    }
+    await _desktopCartScrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
   }
 
   _CustomerControllers get _customerControllers => (
     name: _customerNameController,
     mobile: _customerMobileController,
     barangay: _customerBarangayController,
+    street: _customerStreetController,
   );
 
   CustomerDraft _buildCustomerDraft(FulfillmentMethod method) {
     final existingDraft = ref.read(appControllerProvider).customerDraft;
     final now = DateTime.now();
+    final isDelivery = method == FulfillmentMethod.delivery;
+    final hasBarangay = _customerBarangayController.text.trim().isNotEmpty;
     return CustomerDraft(
       name: _customerNameController.text,
       mobileNumber: _customerMobileController.text,
       normalizedMobileNumber: normalizePhoneNumber(
         _customerMobileController.text,
       ),
-      barangay: method == FulfillmentMethod.delivery
-          ? _customerBarangayController.text
+      barangay: isDelivery ? _customerBarangayController.text : '',
+      addressStreet: isDelivery && hasBarangay
+          ? _customerStreetController.text
           : '',
       addressLandmark: '',
       fulfillmentMethod: method,
@@ -225,7 +272,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                 final selectedThreadId =
                     {
                       'current',
-                      ...matchingOrders.map((order) => order.id),
+                      ...matchingOrders.map((order) => '${order.id}'),
                     }.contains(localSelectedThreadId)
                     ? localSelectedThreadId
                     : 'current';
@@ -247,6 +294,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                         child: _DesktopCartPanel(
                           width: MediaQuery.of(sheetContext).size.width,
                           isBottomSheet: true,
+                          scrollController: _desktopCartScrollController,
                           customerDraft: appState.customerDraft,
                           customerControllers: _customerControllers,
                           cart: appState.cart,
@@ -256,7 +304,14 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                           totalCentavos: appState.cartTotalCentavos,
                           submitting: appState.submittingOrder,
                           onClose: () => Navigator.of(sheetContext).pop(),
-                          onContactUs: () => _showContactUsDialog(sheetContext),
+                          onContactUs: () => _showContactUsDialog(
+                            sheetContext,
+                            appState.settings,
+                          ),
+                          settings: appState.settings,
+                          serviceableBarangays: ref
+                              .read(appControllerProvider.notifier)
+                              .serviceableBarangays,
                           onThreadSelected: (value) {
                             setSheetState(() {
                               localSelectedThreadId = value;
@@ -297,6 +352,24 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                               messenger.showSnackBar(errorSnackBar(error));
                               return;
                             }
+                            final itemCount = ref
+                                .read(appControllerProvider)
+                                .cart
+                                .fold<int>(
+                                  0,
+                                  (sum, item) => sum + item.quantity,
+                                );
+                            if (!sheetContext.mounted) {
+                              return;
+                            }
+                            final shouldPlaceOrder =
+                                await _showPlaceOrderConfirmationDialog(
+                                  sheetContext,
+                                  itemCount: itemCount,
+                                );
+                            if (!mounted || shouldPlaceOrder != true) {
+                              return;
+                            }
                             final orderId = await ref
                                 .read(appControllerProvider.notifier)
                                 .submitOrder();
@@ -314,6 +387,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                               _previousOrdersExpanded = false;
                               _selectedCartThreadId = '$orderId';
                             });
+                            await _scrollClientCartPanelToTop();
                             if (!sheetContext.mounted) {
                               return;
                             }
@@ -347,6 +421,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                               _selectedCartThreadId = 'current';
                               _previousOrdersExpanded = false;
                             });
+                            await _scrollClientCartPanelToTop();
                           },
                         ),
                       ),
@@ -459,12 +534,22 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       vm.bestSellers,
       _bestSellersSortOption,
     );
+    final activeBanners = [...appState.banners.where((item) => item.isActive)]
+      ..sort((a, b) {
+        final createdAtCompare = b.createdAt.compareTo(a.createdAt);
+        if (createdAtCompare != 0) {
+          return createdAtCompare;
+        }
+        return b.id.compareTo(a.id);
+      });
     final selectedCategory = vm.categories.cast<Category?>().firstWhere(
       (category) => category?.id.toString() == _categoryId,
       orElse: () => null,
     );
     final selectedCategoryTitle = _categoryId == 'all'
         ? 'All Products'
+        : _categoryId == 'others'
+        ? 'Others'
         : selectedCategory?.name ?? 'All Products';
     final media = MediaQuery.of(context);
     final width = media.size.width;
@@ -517,11 +602,11 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     _scheduleBestSellersVisibilityRefresh();
     final gridCardDensity = _cardDensityForWidth(resolvedCardWidth);
     final resolvedCardHeight = switch (columns) {
-      1 => lerpDouble(194.0, 186.0, gridCardDensity)!,
-      2 => resolvedCardWidth + lerpDouble(185.0, 172.0, gridCardDensity)!,
-      3 => resolvedCardWidth + lerpDouble(190.0, 174.0, gridCardDensity)!,
-      4 => resolvedCardWidth + lerpDouble(181.0, 168.0, gridCardDensity)!,
-      _ => resolvedCardWidth + lerpDouble(173.0, 160.0, gridCardDensity)!,
+      1 => lerpDouble(210.0, 202.0, gridCardDensity)!,
+      2 => resolvedCardWidth + lerpDouble(201.0, 188.0, gridCardDensity)!,
+      3 => resolvedCardWidth + lerpDouble(206.0, 190.0, gridCardDensity)!,
+      4 => resolvedCardWidth + lerpDouble(197.0, 184.0, gridCardDensity)!,
+      _ => resolvedCardWidth + lerpDouble(189.0, 176.0, gridCardDensity)!,
     };
     final gridAspectRatio = resolvedCardWidth / resolvedCardHeight;
     final bottomScrollPadding = vm.cartCount > 0 && !showDesktopCartPanel
@@ -531,7 +616,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final selectedThreadId =
         {
           'current',
-          ...matchingOrders.map((order) => order.id),
+          ...matchingOrders.map((order) => '${order.id}'),
         }.contains(_selectedCartThreadId)
         ? _selectedCartThreadId
         : 'current';
@@ -568,24 +653,26 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                 color: AppColors.homeScrollableBackground,
                 child: CustomScrollView(
                   slivers: [
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 18, 0, 0),
-                        child: _HeroBanner(
-                          isMobile: isMobile,
-                          horizontalPadding: gridPadding,
-                          columns: columns,
-                          cardWidth: resolvedCardWidth,
-                          gridSpacing: gridSpacing,
+                    if (activeBanners.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(0, 18, 0, 0),
+                          child: _HeroBanner(
+                            banners: activeBanners,
+                            isMobile: isMobile,
+                            horizontalPadding: gridPadding,
+                            columns: columns,
+                            cardWidth: resolvedCardWidth,
+                            gridSpacing: gridSpacing,
+                          ),
                         ),
                       ),
-                    ),
                     if (vm.bestSellers.isNotEmpty)
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.fromLTRB(
                             gridPadding,
-                            2,
+                            activeBanners.isNotEmpty ? 2 : 18,
                             gridPadding,
                             0,
                           ),
@@ -804,6 +891,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                 Expanded(child: mainPane),
                 _DesktopCartPanel(
                   width: _kDesktopCartPanelWidth,
+                  scrollController: _desktopCartScrollController,
                   customerDraft: appState.customerDraft,
                   customerControllers: _customerControllers,
                   cart: appState.cart,
@@ -813,7 +901,12 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                   totalCentavos: appState.cartTotalCentavos,
                   submitting: appState.submittingOrder,
                   onClose: () => setState(() => _desktopCartPanelOpen = false),
-                  onContactUs: () => _showContactUsDialog(context),
+                  onContactUs: () =>
+                      _showContactUsDialog(context, appState.settings),
+                  settings: appState.settings,
+                  serviceableBarangays: ref
+                      .read(appControllerProvider.notifier)
+                      .serviceableBarangays,
                   onThreadSelected: (value) {
                     setState(() {
                       _selectedCartThreadId = value;
@@ -841,6 +934,21 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                       messenger.showSnackBar(errorSnackBar(error));
                       return;
                     }
+                    final itemCount = ref
+                        .read(appControllerProvider)
+                        .cart
+                        .fold<int>(0, (sum, item) => sum + item.quantity);
+                    if (!context.mounted) {
+                      return;
+                    }
+                    final shouldPlaceOrder =
+                        await _showPlaceOrderConfirmationDialog(
+                          context,
+                          itemCount: itemCount,
+                        );
+                    if (!mounted || shouldPlaceOrder != true) {
+                      return;
+                    }
                     final orderId = await ref
                         .read(appControllerProvider.notifier)
                         .submitOrder();
@@ -850,10 +958,12 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                     _customerNameController.clear();
                     _customerMobileController.clear();
                     _customerBarangayController.clear();
+                    _customerStreetController.clear();
                     setState(() {
                       _previousOrdersExpanded = false;
                       _selectedCartThreadId = '$orderId';
                     });
+                    await _scrollClientCartPanelToTop();
                     if (!context.mounted) {
                       return;
                     }
@@ -878,10 +988,15 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                     _customerNameController.text = nextDraft.name;
                     _customerMobileController.text = nextDraft.mobileNumber;
                     _customerBarangayController.text = nextDraft.barangay;
+                    _customerStreetController.text =
+                        nextDraft.addressStreet.trim().isNotEmpty
+                        ? nextDraft.addressStreet
+                        : nextDraft.addressLandmark;
                     setState(() {
                       _selectedCartThreadId = 'current';
                       _previousOrdersExpanded = false;
                     });
+                    await _scrollClientCartPanelToTop();
                   },
                 ),
               ],
@@ -894,10 +1009,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
 enum CatalogSortOption {
   defaultOrder('Default'),
   nameAscending('Name A-Z'),
+  nameDescending('Name Z-A'),
   priceLowToHigh('Price Low-High'),
-  priceHighToLow('Price High-Low'),
-  sizeSmallToLarge('Size Small-Large'),
-  sizeLargeToSmall('Size Large-Small');
+  priceHighToLow('Price High-Low');
 
   const CatalogSortOption(this.label);
 
@@ -909,6 +1023,7 @@ const _kFloatingCartButtonHeight = 56.0;
 const _kFloatingCartButtonBottomOffset = 16.0;
 const _kDesktopCartPanelWidth = 420.0;
 const _kSharedModalMaxWidth = 332.0;
+const _kSharedModalButtonHeight = 44.0;
 const _kCartPanelStatusFontSize = 12.0;
 const _kCartPanelActionFontSize = 12.0;
 const _kMobileBreakpoint = 700.0;
@@ -1021,10 +1136,10 @@ List<Product> _sortProducts(
       sorted.sort(
         (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
       );
-    case CatalogSortOption.sizeSmallToLarge:
-      sorted.sort((a, b) => _compareProductMeasures(a, b));
-    case CatalogSortOption.sizeLargeToSmall:
-      sorted.sort((a, b) => _compareProductMeasures(b, a));
+    case CatalogSortOption.nameDescending:
+      sorted.sort(
+        (a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()),
+      );
     case CatalogSortOption.priceLowToHigh:
       sorted.sort(
         (a, b) => a.referencePriceCentavos.compareTo(b.referencePriceCentavos),
@@ -1035,47 +1150,6 @@ List<Product> _sortProducts(
       );
   }
   return sorted;
-}
-
-int _compareProductMeasures(Product a, Product b) {
-  final left = _normalizedMeasureFor(a);
-  final right = _normalizedMeasureFor(b);
-
-  if (left.familyRank != right.familyRank) {
-    return left.familyRank.compareTo(right.familyRank);
-  }
-  final valueComparison = left.value.compareTo(right.value);
-  if (valueComparison != 0) {
-    return valueComparison;
-  }
-  return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-}
-
-_NormalizedMeasure _normalizedMeasureFor(Product product) {
-  final numericValue = double.tryParse(product.quantity.trim()) ?? 0;
-  final normalizedUnit = product.unit.trim().toLowerCase();
-
-  switch (normalizedUnit) {
-    case 'mg':
-      return _NormalizedMeasure(familyRank: 0, value: numericValue / 1000);
-    case 'g':
-      return _NormalizedMeasure(familyRank: 0, value: numericValue);
-    case 'kg':
-      return _NormalizedMeasure(familyRank: 0, value: numericValue * 1000);
-    case 'ml':
-      return _NormalizedMeasure(familyRank: 1, value: numericValue);
-    case 'l':
-      return _NormalizedMeasure(familyRank: 1, value: numericValue * 1000);
-    default:
-      return _NormalizedMeasure(familyRank: 2, value: numericValue);
-  }
-}
-
-class _NormalizedMeasure {
-  const _NormalizedMeasure({required this.familyRank, required this.value});
-
-  final int familyRank;
-  final double value;
 }
 
 int _catalogColumnsForWidth(double width) {
@@ -1378,6 +1452,12 @@ class _CategoryStrip extends StatelessWidget {
                 onTap: () => onSelected(categories[i].id.toString()),
               ),
             ],
+            const SizedBox(width: 10),
+            _CategoryPill(
+              label: 'Others',
+              selected: selectedId == 'others',
+              onTap: () => onSelected('others'),
+            ),
             SizedBox(width: edgeInset),
           ],
         ),
@@ -1560,6 +1640,9 @@ class _CategoryPill extends StatelessWidget {
                   child: Text(
                     label,
                     textAlign: TextAlign.center,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
@@ -1586,6 +1669,9 @@ class _CategoryPill extends StatelessWidget {
           child: Text(
             label,
             textAlign: TextAlign.center,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontWeight: FontWeight.w700,
               color: selected ? Colors.white : const Color(0xFF172033),
@@ -1600,6 +1686,7 @@ class _CategoryPill extends StatelessWidget {
 
 class _HeroBanner extends StatefulWidget {
   const _HeroBanner({
+    required this.banners,
     required this.isMobile,
     required this.horizontalPadding,
     required this.columns,
@@ -1607,6 +1694,7 @@ class _HeroBanner extends StatefulWidget {
     required this.gridSpacing,
   });
 
+  final List<AppBanner> banners;
   final bool isMobile;
   final double horizontalPadding;
   final int columns;
@@ -1620,20 +1708,22 @@ class _HeroBanner extends StatefulWidget {
 class _HeroBannerState extends State<_HeroBanner> {
   final _bannerScrollController = ScrollController();
   bool _isBannerInteracting = false;
+  double _currentBannerItemExtent = 0;
 
   int get _activeBannerIndex {
-    if (!_bannerScrollController.hasClients) {
+    if (!_bannerScrollController.hasClients || widget.banners.length <= 1) {
       return 0;
     }
-    final position = _bannerScrollController.position;
-    final min = position.minScrollExtent;
-    final max = position.maxScrollExtent;
-    if ((max - min).abs() < 0.5) {
+    if (_currentBannerItemExtent <= 0) {
       return 0;
     }
-    final progress = ((_bannerScrollController.offset - min) / (max - min))
-        .clamp(0.0, 1.0);
-    return progress >= 0.5 ? 1 : 0;
+    final min = _bannerScrollController.position.minScrollExtent;
+    final relativeOffset = (_bannerScrollController.offset - min).clamp(
+      0.0,
+      double.infinity,
+    );
+    final index = (relativeOffset / _currentBannerItemExtent).round();
+    return index.clamp(0, widget.banners.length - 1);
   }
 
   bool get _showLeftControl =>
@@ -1674,19 +1764,50 @@ class _HeroBannerState extends State<_HeroBanner> {
     _scheduleBannerVisibilityRefresh();
   }
 
-  Future<void> _snapBannerToNearest() async {
-    if (!_bannerScrollController.hasClients) {
+  @override
+  void didUpdateWidget(covariant _HeroBanner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.banners.length != widget.banners.length ||
+        oldWidget.columns != widget.columns ||
+        oldWidget.cardWidth != widget.cardWidth ||
+        oldWidget.gridSpacing != widget.gridSpacing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_bannerScrollController.hasClients) {
+          return;
+        }
+        unawaited(_snapBannerToNearest(jumpOnly: true));
+      });
+    }
+  }
+
+  Future<void> _snapBannerToNearest({bool jumpOnly = false}) async {
+    if (!_bannerScrollController.hasClients || widget.banners.length <= 1) {
+      return;
+    }
+    if (_currentBannerItemExtent <= 0) {
       return;
     }
 
     final position = _bannerScrollController.position;
     final current = position.pixels;
     final min = position.minScrollExtent;
-    final max = position.maxScrollExtent;
-    final midpoint = (min + max) / 2;
-    final target = current <= midpoint ? min : max;
+    final max = position.maxScrollExtent.clamp(
+      position.minScrollExtent,
+      double.infinity,
+    );
+    final relativeOffset = (current - min).clamp(0.0, double.infinity);
+    final nearestIndex = (relativeOffset / _currentBannerItemExtent).round();
+    final target = (min + (nearestIndex * _currentBannerItemExtent)).clamp(
+      min,
+      max,
+    );
 
     if ((target - current).abs() < 0.5) {
+      return;
+    }
+
+    if (jumpOnly) {
+      _bannerScrollController.jumpTo(target);
       return;
     }
 
@@ -1772,6 +1893,7 @@ class _HeroBannerState extends State<_HeroBanner> {
         };
         final bannerWidth =
             (widget.cardWidth * units) + (widget.gridSpacing * internalGaps);
+        _currentBannerItemExtent = bannerWidth + bannerGap;
         _scheduleBannerVisibilityRefresh();
 
         final bannerHeight = bannerWidth / 3;
@@ -1792,14 +1914,24 @@ class _HeroBannerState extends State<_HeroBanner> {
                         horizontal: widget.horizontalPadding,
                       ),
                       physics: const ClampingScrollPhysics(),
-                      itemCount: 2,
+                      itemCount: widget.banners.length,
                       separatorBuilder: (context, index) =>
                           SizedBox(width: bannerGap),
                       itemBuilder: (context, index) => SizedBox(
                         width: bannerWidth,
-                        child: const MousePressable(
+                        child: MousePressable(
+                          onTap: () {
+                            final externalUrl =
+                                widget.banners[index].externalUrl?.trim() ?? '';
+                            if (externalUrl.isEmpty) {
+                              return;
+                            }
+                            unawaited(openExternalUrl(externalUrl));
+                          },
                           borderRadius: BorderRadius.all(Radius.circular(16)),
-                          child: _PromoBannerPlaceholder(),
+                          child: _PromoBannerPlaceholder(
+                            banner: widget.banners[index],
+                          ),
                         ),
                       ),
                     ),
@@ -1850,7 +1982,7 @@ class _HeroBannerState extends State<_HeroBanner> {
                         offset: const Offset(0, 2),
                         child: _BannerIndexIndicator(
                           activeIndex: _activeBannerIndex,
-                          count: 2,
+                          count: widget.banners.length,
                         ),
                       ),
                     )
@@ -1865,33 +1997,96 @@ class _HeroBannerState extends State<_HeroBanner> {
 }
 
 class _PromoBannerPlaceholder extends StatelessWidget {
-  const _PromoBannerPlaceholder();
+  const _PromoBannerPlaceholder({required this.banner});
+
+  final AppBanner banner;
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 3,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: const BoxDecoration(color: Colors.white),
+          foregroundDecoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE4E7EC), width: 1),
+          ),
+          child: _BannerImage(imageUrl: banner.imageUrl),
+        ),
+      ),
+    );
+  }
+}
+
+class _BannerImage extends StatelessWidget {
+  const _BannerImage({required this.imageUrl});
+
+  static const _webBannerImageProxyPrefix = String.fromEnvironment(
+    'BANNER_IMAGE_PROXY_PREFIX',
+    defaultValue: '',
+  );
+
+  final String imageUrl;
+
+  String get _resolvedImageUrl {
+    if (!kIsWeb ||
+        _webBannerImageProxyPrefix.isEmpty ||
+        imageUrl.startsWith('assets/') ||
+        !(imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
+      return imageUrl;
+    }
+    return '$_webBannerImageProxyPrefix${Uri.encodeComponent(imageUrl)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl.startsWith('assets/')) {
+      return _BannerFallbackPlaceholder(imageAssetPath: imageUrl);
+    }
+
+    return Image.network(
+      _resolvedImageUrl,
+      fit: BoxFit.cover,
+      webHtmlElementStrategy: kIsWeb
+          ? WebHtmlElementStrategy.prefer
+          : WebHtmlElementStrategy.never,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          return child;
+        }
+        return const _BannerFallbackPlaceholder();
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return const _BannerFallbackPlaceholder();
+      },
+    );
+  }
+}
+
+class _BannerFallbackPlaceholder extends StatelessWidget {
+  const _BannerFallbackPlaceholder({
+    this.imageAssetPath = 'assets/branding/as_logo_lite.png',
+  });
+
+  final String imageAssetPath;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return AspectRatio(
-          aspectRatio: 3,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: AppColors.logoBlue,
-              border: Border.all(color: const Color(0xFFE4E7EC)),
-            ),
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  24,
-                  24,
-                  constraints.maxWidth * 0.125,
-                  24,
-                ),
-                child: Image.asset(
-                  'assets/branding/as_logo_lite.png',
-                  fit: BoxFit.contain,
-                ),
+        return Container(
+          color: AppColors.logoBlue,
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                24,
+                constraints.maxWidth * 0.125,
+                24,
               ),
+              child: Image.asset(imageAssetPath, fit: BoxFit.contain),
             ),
           ),
         );
@@ -1962,6 +2157,9 @@ class _HorizontalEdgeMasks extends StatelessWidget {
 class _DesktopCartPanel extends ConsumerWidget {
   const _DesktopCartPanel({
     required this.width,
+    required this.scrollController,
+    required this.settings,
+    required this.serviceableBarangays,
     required this.customerDraft,
     required this.customerControllers,
     required this.cart,
@@ -1981,6 +2179,9 @@ class _DesktopCartPanel extends ConsumerWidget {
   });
 
   final double width;
+  final ScrollController scrollController;
+  final AppSettings settings;
+  final List<String> serviceableBarangays;
   final CustomerDraft customerDraft;
   final _CustomerControllers customerControllers;
   final List<CartItem> cart;
@@ -2120,6 +2321,7 @@ class _DesktopCartPanel extends ConsumerWidget {
             const SizedBox(height: 18),
             Expanded(
               child: SingleChildScrollView(
+                controller: scrollController,
                 padding: EdgeInsets.fromLTRB(
                   isBottomSheet ? 0 : 24,
                   0,
@@ -2152,6 +2354,8 @@ class _DesktopCartPanel extends ConsumerWidget {
                         horizontal: isBottomSheet ? 24 : 0,
                       ),
                       child: _DesktopCartCustomerCard(
+                        settings: settings,
+                        serviceableBarangays: serviceableBarangays,
                         draft: customerDraft,
                         controllers: customerControllers,
                         selectedOrder: selectedOrder,
@@ -2244,8 +2448,10 @@ class _DesktopCartPanel extends ConsumerWidget {
   }
 }
 
-class _DesktopCartCustomerCard extends StatelessWidget {
+class _DesktopCartCustomerCard extends ConsumerWidget {
   const _DesktopCartCustomerCard({
+    required this.settings,
+    required this.serviceableBarangays,
     required this.draft,
     required this.controllers,
     required this.selectedOrder,
@@ -2253,6 +2459,8 @@ class _DesktopCartCustomerCard extends StatelessWidget {
     required this.onDraftChanged,
   });
 
+  final AppSettings settings;
+  final List<String> serviceableBarangays;
   final CustomerDraft draft;
   final _CustomerControllers controllers;
   final OrderRequest? selectedOrder;
@@ -2260,14 +2468,25 @@ class _DesktopCartCustomerCard extends StatelessWidget {
   final Future<void> Function({FulfillmentMethod? method}) onDraftChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isReadOnly = selectedOrder != null;
     final effectiveDraft = selectedOrder?.customer ?? draft;
+    final appController = ref.read(appControllerProvider.notifier);
     final barangays = {
-      ...puertoPrincesaBarangays,
+      ...serviceableBarangays,
       if (controllers.barangay.text.trim().isNotEmpty)
         controllers.barangay.text.trim(),
     }.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final cutoffMessage =
+        effectiveDraft.fulfillmentMethod == FulfillmentMethod.delivery &&
+            effectiveDraft.barangay.trim().isNotEmpty
+        ? appController.barangayCutoffMessage(effectiveDraft.barangay)
+        : null;
+    final isCutoffReached =
+        effectiveDraft.fulfillmentMethod == FulfillmentMethod.delivery &&
+            effectiveDraft.barangay.trim().isNotEmpty
+        ? appController.isBarangayCutoffReached(effectiveDraft.barangay)
+        : false;
 
     return Container(
       decoration: BoxDecoration(
@@ -2335,12 +2554,14 @@ class _DesktopCartCustomerCard extends StatelessWidget {
               decoration: const InputDecoration(labelText: 'Phone'),
             ),
           ],
-          if (effectiveDraft.fulfillmentMethod ==
-              FulfillmentMethod.delivery) ...[
+          if ((settings.requirePlaceForDeliveryOnly &&
+                  effectiveDraft.fulfillmentMethod ==
+                      FulfillmentMethod.delivery) ||
+              (!settings.requirePlaceForDeliveryOnly)) ...[
             const SizedBox(height: 12),
             if (isReadOnly)
               _ReadOnlyDetailsField(
-                label: 'Place',
+                label: 'Barangay',
                 value: effectiveDraft.barangay,
               )
             else
@@ -2351,6 +2572,38 @@ class _DesktopCartCustomerCard extends StatelessWidget {
                   await onDraftChanged();
                 },
               ),
+            if (effectiveDraft.fulfillmentMethod ==
+                    FulfillmentMethod.delivery &&
+                effectiveDraft.barangay.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              if (isReadOnly)
+                _ReadOnlyDetailsField(
+                  label: 'Street/Landmark',
+                  value: effectiveDraft.addressStreet.trim().isNotEmpty
+                      ? effectiveDraft.addressStreet
+                      : effectiveDraft.addressLandmark,
+                )
+              else
+                TextField(
+                  controller: controllers.street,
+                  onChanged: (_) => onDraftChanged(),
+                  decoration: const InputDecoration(
+                    labelText: 'Street/Landmark',
+                  ),
+                ),
+              if (cutoffMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  cutoffMessage,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: isCutoffReached
+                        ? const Color(0xFFE31E24)
+                        : const Color(0xFF667085),
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ],
           ],
           const SizedBox(height: 12),
           IgnorePointer(
@@ -2578,7 +2831,7 @@ class _BarangayFieldState extends State<_BarangayField> {
                                   }
                                 },
                                 decoration: const InputDecoration(
-                                  hintText: 'Search place...',
+                                  hintText: 'Search barangay...',
                                 ),
                               ),
                             ),
@@ -2594,7 +2847,7 @@ class _BarangayFieldState extends State<_BarangayField> {
                                   vertical: 12,
                                 ),
                                 child: Text(
-                                  'No matching places',
+                                  'No matching barangays',
                                   style: Theme.of(context).textTheme.bodyMedium
                                       ?.copyWith(
                                         color: const Color(0xFF667085),
@@ -2687,7 +2940,7 @@ class _BarangayFieldState extends State<_BarangayField> {
                 Expanded(
                   child: Text(
                     widget.controller.text.trim().isEmpty
-                        ? 'Place'
+                        ? 'Barangay'
                         : widget.controller.text.trim(),
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       height: 1.15,
@@ -2812,7 +3065,7 @@ class _DesktopCartThreadsCard extends StatelessWidget {
                         const SizedBox(height: 10),
                         _CartThreadTile(
                           title:
-                              '${formatOrderDate(order.createdAt)} • ${formatOrderTime(order.createdAt)}',
+                              '${formatOrderDate(order.createdAt)} • ${formatOrderTimeWithSeconds(order.createdAt)}',
                           subtitle: null,
                           selected: selectedThreadId == '${order.id}',
                           status: order.status,
@@ -2883,7 +3136,7 @@ class _CartThreadTile extends StatelessWidget {
                   ),
                 ),
                 if (status != null)
-                  status == OrderStatus.newRequest
+                  status == OrderStatus.waiting
                       ? _CustomStatusBadge(
                           label: displayStatus(status!),
                           fontSize: _kCartPanelStatusFontSize,
@@ -2999,9 +3252,8 @@ class _DesktopCartThreadDetailCard extends StatelessWidget {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.logoBlue.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: AppColors.logoBlue),
                   ),
                   alignment: Alignment.center,
                   child: Text(
@@ -3022,9 +3274,8 @@ class _DesktopCartThreadDetailCard extends StatelessWidget {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.logoBlue.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: AppColors.logoBlue),
                   ),
                   alignment: Alignment.center,
                   child: Row(
@@ -3142,6 +3393,7 @@ class _CurrentCartItemCard extends ConsumerWidget {
                   label: 'Product',
                   height: 72,
                   fullRounded: true,
+                  imageUrl: item.photoUrl ?? product?.photoUrl,
                 ),
               ),
             ),
@@ -3278,6 +3530,7 @@ class _PreviousOrderItemCard extends ConsumerWidget {
                   label: 'Previous Product',
                   height: 72,
                   fullRounded: true,
+                  imageUrl: item.photoUrlSnapshot ?? product?.photoUrl,
                 ),
               ),
             ),
@@ -3402,6 +3655,15 @@ class ProductCard extends ConsumerStatefulWidget {
     this.adaptiveSizing = false,
     this.posterMode = false,
     this.showImage = true,
+    this.modalDisplayUnit,
+    this.modalDisplayPriceCentavos,
+    this.modalDisplayPriceUpdatedAt,
+    this.modalDisplayName,
+    this.onModalEditProduct,
+    this.showModalEditAction = false,
+    this.adminReadOnly = false,
+    this.initialAdminQuantity,
+    this.onAdminQuantitySaved,
   });
 
   final Product product;
@@ -3409,6 +3671,15 @@ class ProductCard extends ConsumerStatefulWidget {
   final bool adaptiveSizing;
   final bool posterMode;
   final bool showImage;
+  final String? modalDisplayUnit;
+  final int? modalDisplayPriceCentavos;
+  final DateTime? modalDisplayPriceUpdatedAt;
+  final String? modalDisplayName;
+  final Future<Product?> Function(BuildContext context)? onModalEditProduct;
+  final bool showModalEditAction;
+  final bool adminReadOnly;
+  final int? initialAdminQuantity;
+  final Future<void> Function(int quantity)? onAdminQuantitySaved;
 
   @override
   ConsumerState<ProductCard> createState() => _ProductCardState();
@@ -3418,11 +3689,43 @@ class _ProductCardState extends ConsumerState<ProductCard> {
   bool _suspendCardMouseRegion = false;
 
   Future<void> _showProductModal(BuildContext context, int cartQuantity) async {
-    await _showProductDetailsModal(context, widget.product);
+    final latestProduct =
+        ref.read(appControllerProvider).products.where((item) => item.id == widget.product.id).firstOrNull ??
+        widget.product;
+    await _showProductDetailsModal(
+      context,
+      latestProduct,
+      displayUnit: widget.modalDisplayUnit,
+      displayPriceCentavos: widget.modalDisplayPriceCentavos,
+      displayPriceUpdatedAt: widget.modalDisplayPriceUpdatedAt,
+      displayName: widget.modalDisplayName,
+      onEditProduct: widget.onModalEditProduct,
+      showEditAction: widget.showModalEditAction,
+      adminReadOnly: widget.adminReadOnly,
+      initialAdminQuantity: widget.initialAdminQuantity,
+      onAdminQuantitySaved: widget.onAdminQuantitySaved,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final liveProduct =
+        ref.watch(
+          appControllerProvider.select(
+            (state) =>
+                state.products
+                    .where((item) => item.id == widget.product.id)
+                    .cast<Product?>()
+                    .firstWhere((item) => item != null, orElse: () => null),
+          ),
+        ) ??
+        widget.product;
+    final displayName = widget.modalDisplayName ?? liveProduct.name;
+    final displayUnit = widget.modalDisplayUnit ?? liveProduct.displayUnit;
+    final displayPriceCentavos =
+        widget.modalDisplayPriceCentavos ?? liveProduct.referencePriceCentavos;
+    final displayPriceUpdatedAt =
+        widget.modalDisplayPriceUpdatedAt ?? liveProduct.priceUpdatedAt;
     final cartItem = ref.watch(
       appControllerProvider.select(
         (state) => state.cart
@@ -3432,6 +3735,9 @@ class _ProductCardState extends ConsumerState<ProductCard> {
       ),
     );
     final cartQuantity = cartItem?.quantity ?? 0;
+    final effectiveCardQuantity = widget.adminReadOnly
+        ? (widget.initialAdminQuantity ?? 0)
+        : cartQuantity;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -3447,20 +3753,8 @@ class _ProductCardState extends ConsumerState<ProductCard> {
         final unitPriceSpacing = widget.showImage
             ? 0.0
             : lerpDouble(10.0, 8.0, cardDensity)!;
-        const buttonHeight = 36.0;
+        const buttonHeight = _kSharedModalButtonHeight;
         const buttonVerticalPadding = 14.0;
-        final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w800,
-          height: 1.15,
-          fontSize: titleFontSize,
-        );
-        final titlePainter = TextPainter(
-          text: TextSpan(text: widget.product.name, style: titleStyle),
-          maxLines: 2,
-          textDirection: Directionality.of(context),
-        )..layout(maxWidth: constraints.maxWidth - (cardPadding * 2));
-        final titleBlockHeight = titlePainter.height;
-
         return MousePressable(
           enabled: !_suspendCardMouseRegion,
           onTap: () => _showProductModal(context, cartQuantity),
@@ -3479,8 +3773,9 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                   AspectRatio(
                     aspectRatio: 1,
                     child: ProductPlaceholder(
-                      label: widget.product.name,
+                      label: displayName,
                       posterMode: widget.posterMode,
+                      imageUrl: liveProduct.photoUrl,
                     ),
                   ),
                   const Divider(
@@ -3490,204 +3785,357 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                   ),
                 ],
                 Expanded(
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.all(cardPadding),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                height: titleBlockHeight,
-                                child: Align(
-                                  alignment: Alignment.topLeft,
-                                  child: Text(
-                                    widget.product.name,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: titleStyle,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(height: titleBottomGap),
-                              Text(
-                                widget.product.displayUnit,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: const Color(0xFF667085),
-                                      height: 1.15,
-                                      fontSize: unitFontSize,
-                                    ),
-                              ),
-                              SizedBox(height: unitPriceSpacing),
-                              const Spacer(),
-                              Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.end,
-                                spacing: 4,
-                                runSpacing: 4,
+                  child: LayoutBuilder(
+                    builder: (context, contentConstraints) {
+                      final tightHeightFactor =
+                          ((92.0 - contentConstraints.maxHeight) / 28.0).clamp(
+                            0.0,
+                            1.0,
+                          );
+                      final resolvedCardPadding = lerpDouble(
+                        cardPadding,
+                        6.0,
+                        tightHeightFactor,
+                      )!;
+                      final resolvedTitleFontSize = lerpDouble(
+                        titleFontSize,
+                        11.5,
+                        tightHeightFactor,
+                      )!;
+                      final resolvedTitleBottomGap = lerpDouble(
+                        titleBottomGap,
+                        2.0,
+                        tightHeightFactor,
+                      )!;
+                      final resolvedUnitFontSize = lerpDouble(
+                        unitFontSize,
+                        10.0,
+                        tightHeightFactor,
+                      )!;
+                      final resolvedPriceFontSize = lerpDouble(
+                        priceFontSize,
+                        12.0,
+                        tightHeightFactor,
+                      )!;
+                      final resolvedPriceButtonSpacing = lerpDouble(
+                        priceButtonSpacing,
+                        6.0,
+                        tightHeightFactor,
+                      )!;
+                      final resolvedUnitPriceSpacing =
+                          widget.showImage && tightHeightFactor > 0
+                          ? 0.0
+                          : unitPriceSpacing;
+                      final resolvedTitleStyle = Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            height: 1.15,
+                            fontSize: resolvedTitleFontSize,
+                          );
+                      final titlePainter =
+                          TextPainter(
+                            text: TextSpan(
+                              text: displayName,
+                              style: resolvedTitleStyle,
+                            ),
+                            maxLines: 2,
+                            textDirection: Directionality.of(context),
+                          )..layout(
+                            maxWidth:
+                                constraints.maxWidth -
+                                (resolvedCardPadding * 2),
+                          );
+                      final titleBlockHeight = titlePainter.height;
+
+                      return Column(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.all(resolvedCardPadding),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    formatPesos(
-                                      widget.product.referencePriceCentavos,
+                                  SizedBox(
+                                    height: titleBlockHeight,
+                                    child: Align(
+                                      alignment: Alignment.topLeft,
+                                      child: Text(
+                                        displayName,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: resolvedTitleStyle,
+                                      ),
                                     ),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge
-                                        ?.copyWith(
-                                          color: AppColors.logoBlue,
-                                          fontWeight: FontWeight.w800,
-                                          height: 1.15,
-                                          fontSize: priceFontSize,
-                                        ),
                                   ),
+                                  SizedBox(height: resolvedTitleBottomGap),
                                   Text(
-                                    'as of ${formatAsOfDate(widget.product.priceUpdatedAt)}',
+                                    displayUnit,
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium
                                         ?.copyWith(
                                           color: const Color(0xFF667085),
                                           height: 1.15,
-                                          fontSize: unitFontSize,
+                                          fontSize: resolvedUnitFontSize,
                                         ),
                                   ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      MouseRegion(
-                        onEnter: (_) =>
-                            setState(() => _suspendCardMouseRegion = true),
-                        onExit: (_) =>
-                            setState(() => _suspendCardMouseRegion = false),
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            cardPadding,
-                            0,
-                            cardPadding,
-                            cardPadding,
-                          ),
-                          child: Column(
-                            children: [
-                              SizedBox(height: priceButtonSpacing),
-                              if (cartQuantity == 0)
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: buttonHeight,
-                                  child: ElevatedButton(
-                                    style:
-                                        ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.logoBlue,
-                                          elevation: 0,
-                                          shadowColor: Colors.transparent,
-                                          minimumSize: Size(0, buttonHeight),
-                                          maximumSize: Size(
-                                            double.infinity,
-                                            buttonHeight,
+                                  SizedBox(height: resolvedUnitPriceSpacing),
+                                  if (tightHeightFactor >= 0.55) ...[
+                                    Text(
+                                      formatPesos(displayPriceCentavos),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge
+                                          ?.copyWith(
+                                            color: AppColors.logoBlue,
+                                            fontWeight: FontWeight.w800,
+                                            height: 1.15,
+                                            fontSize: resolvedPriceFontSize,
                                           ),
-                                          fixedSize: Size(
-                                            double.infinity,
-                                            buttonHeight,
+                                    ),
+                                    Text(
+                                      'as of ${formatAsOfDate(displayPriceUpdatedAt)}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: const Color(0xFF667085),
+                                            height: 1.15,
+                                            fontSize: resolvedUnitFontSize,
                                           ),
-                                          tapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                          padding: EdgeInsets.symmetric(
-                                            vertical: buttonVerticalPadding,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                          ),
-                                        ).copyWith(
-                                          backgroundColor:
-                                              _strongBlueBackground(),
-                                          overlayColor: _strongBlueOverlay(),
-                                        ),
-                                    onPressed: () async {
-                                      await ref
-                                          .read(appControllerProvider.notifier)
-                                          .addToCart(
-                                            widget.product,
-                                            quantity: 1,
-                                          );
-                                    },
-                                    child: const Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      mainAxisSize: MainAxisSize.min,
+                                    ),
+                                  ] else ...[
+                                    const Spacer(),
+                                    Wrap(
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.end,
+                                      spacing: 4,
+                                      runSpacing: 4,
                                       children: [
-                                        Icon(Icons.add_shopping_cart),
-                                        SizedBox(width: 4),
-                                        Text('Add to Cart'),
+                                        Text(
+                                          formatPesos(displayPriceCentavos),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge
+                                              ?.copyWith(
+                                                color: AppColors.logoBlue,
+                                                fontWeight: FontWeight.w800,
+                                                height: 1.15,
+                                                fontSize: resolvedPriceFontSize,
+                                              ),
+                                        ),
+                                        Text(
+                                          'as of ${formatAsOfDate(displayPriceUpdatedAt)}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: const Color(0xFF667085),
+                                                height: 1.15,
+                                                fontSize: resolvedUnitFontSize,
+                                              ),
+                                        ),
                                       ],
                                     ),
-                                  ),
-                                )
-                              else
-                                _CartQuantityControl(
-                                  quantity: cartQuantity,
-                                  height: buttonHeight,
-                                  onDecrease: () async {
-                                    final controller = ref.read(
-                                      appControllerProvider.notifier,
-                                    );
-                                    if (cartQuantity <= 1) {
-                                      final shouldRemove =
-                                          await _showRemoveProductDialog(
-                                            context,
-                                          );
-                                      if (shouldRemove != true) {
-                                        return;
-                                      }
-                                      await controller.removeFromCart(
-                                        widget.product.id,
-                                      );
-                                      if (!context.mounted) {
-                                        return;
-                                      }
-                                      _popAllRoutesUntilFirst(context);
-                                    } else {
-                                      await controller.updateCartQuantity(
-                                        widget.product.id,
-                                        cartQuantity - 1,
-                                      );
-                                    }
-                                  },
-                                  onIncrease: () async {
-                                    await ref
-                                        .read(appControllerProvider.notifier)
-                                        .updateCartQuantity(
-                                          widget.product.id,
-                                          cartQuantity + 1,
-                                        );
-                                  },
-                                  onEditQuantity: () async {
-                                    final nextQuantity =
-                                        await _showQuantityInputDialog(
-                                          context,
-                                          initialQuantity: cartQuantity,
-                                        );
-                                    if (nextQuantity == null ||
-                                        nextQuantity == cartQuantity) {
-                                      return;
-                                    }
-                                    await ref
-                                        .read(appControllerProvider.notifier)
-                                        .updateCartQuantity(
-                                          widget.product.id,
-                                          nextQuantity,
-                                        );
-                                  },
-                                ),
-                            ],
+                                  ],
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ],
+                          MouseRegion(
+                            onEnter: (_) =>
+                                setState(() => _suspendCardMouseRegion = true),
+                            onExit: (_) =>
+                                setState(() => _suspendCardMouseRegion = false),
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                resolvedCardPadding,
+                                0,
+                                resolvedCardPadding,
+                                resolvedCardPadding,
+                              ),
+                              child: Column(
+                                children: [
+                                  SizedBox(height: resolvedPriceButtonSpacing),
+                                  if (effectiveCardQuantity == 0)
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: buttonHeight,
+                                      child: ElevatedButton(
+                                        style:
+                                            ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  AppColors.logoBlue,
+                                              elevation: 0,
+                                              shadowColor: Colors.transparent,
+                                              minimumSize: Size(
+                                                0,
+                                                buttonHeight,
+                                              ),
+                                              maximumSize: Size(
+                                                double.infinity,
+                                                buttonHeight,
+                                              ),
+                                              fixedSize: Size(
+                                                double.infinity,
+                                                buttonHeight,
+                                              ),
+                                              tapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                              padding: EdgeInsets.symmetric(
+                                                vertical: buttonVerticalPadding,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                              ),
+                                            ).copyWith(
+                                              backgroundColor:
+                                                  _strongBlueBackground(),
+                                              overlayColor:
+                                                  _strongBlueOverlay(),
+                                            ),
+                                        onPressed: () async {
+                                          if (widget.adminReadOnly) {
+                                            await widget.onAdminQuantitySaved
+                                                ?.call(1);
+                                            return;
+                                          }
+                                          await ref
+                                              .read(
+                                                appControllerProvider.notifier,
+                                              )
+                                              .addToCart(
+                                                widget.product,
+                                                quantity: 1,
+                                              );
+                                        },
+                                        child: const Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.add_shopping_cart),
+                                            SizedBox(width: 4),
+                                            Text('Add to Cart'),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    _CartQuantityControl(
+                                      quantity: effectiveCardQuantity,
+                                      height: buttonHeight,
+                                      onDecrease: () async {
+                                        if (widget.adminReadOnly) {
+                                          if (effectiveCardQuantity <= 1) {
+                                            final shouldRemove =
+                                                await _showRemoveProductDialog(
+                                                  context,
+                                                );
+                                            if (shouldRemove != true) {
+                                              return;
+                                            }
+                                            await widget.onAdminQuantitySaved
+                                                ?.call(0);
+                                            return;
+                                          }
+                                          await widget.onAdminQuantitySaved
+                                              ?.call(effectiveCardQuantity - 1);
+                                          return;
+                                        }
+                                        final controller = ref.read(
+                                          appControllerProvider.notifier,
+                                        );
+                                        if (cartQuantity <= 1) {
+                                          final shouldRemove =
+                                              await _showRemoveProductDialog(
+                                                context,
+                                              );
+                                          if (shouldRemove != true) {
+                                            return;
+                                          }
+                                          await controller.removeFromCart(
+                                            widget.product.id,
+                                          );
+                                          if (!context.mounted) {
+                                            return;
+                                          }
+                                          _popAllRoutesUntilFirst(context);
+                                        } else {
+                                          await controller.updateCartQuantity(
+                                            widget.product.id,
+                                            cartQuantity - 1,
+                                          );
+                                        }
+                                      },
+                                      onIncrease: () async {
+                                        if (widget.adminReadOnly) {
+                                          await widget.onAdminQuantitySaved
+                                              ?.call(effectiveCardQuantity + 1);
+                                          return;
+                                        }
+                                        await ref
+                                            .read(
+                                              appControllerProvider.notifier,
+                                            )
+                                            .updateCartQuantity(
+                                              widget.product.id,
+                                              cartQuantity + 1,
+                                            );
+                                      },
+                                      onEditQuantity: () async {
+                                        final nextQuantity =
+                                            await _showQuantityInputDialog(
+                                              context,
+                                              initialQuantity:
+                                                  effectiveCardQuantity,
+                                            );
+                                        if (nextQuantity == null ||
+                                            nextQuantity ==
+                                                effectiveCardQuantity) {
+                                          return;
+                                        }
+                                        if (!context.mounted) {
+                                          return;
+                                        }
+                                        if (widget.adminReadOnly) {
+                                          if (nextQuantity <= 0) {
+                                            final shouldRemove =
+                                                await _showRemoveProductDialog(
+                                                  context,
+                                                );
+                                            if (shouldRemove != true) {
+                                              return;
+                                            }
+                                            await widget.onAdminQuantitySaved
+                                                ?.call(0);
+                                            return;
+                                          }
+                                          await widget.onAdminQuantitySaved
+                                              ?.call(nextQuantity);
+                                          return;
+                                        }
+                                        await ref
+                                            .read(
+                                              appControllerProvider.notifier,
+                                            )
+                                            .updateCartQuantity(
+                                              widget.product.id,
+                                              nextQuantity,
+                                            );
+                                      },
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -3700,9 +4148,29 @@ class _ProductCardState extends ConsumerState<ProductCard> {
 }
 
 class _ProductModal extends ConsumerStatefulWidget {
-  const _ProductModal({required this.product});
+  const _ProductModal({
+    required this.product,
+    this.displayUnit,
+    this.displayPriceCentavos,
+    this.displayPriceUpdatedAt,
+    this.displayName,
+    this.onEditProduct,
+    this.showEditAction = false,
+    this.adminReadOnly = false,
+    this.initialAdminQuantity,
+    this.onAdminQuantitySaved,
+  });
 
   final Product product;
+  final String? displayUnit;
+  final int? displayPriceCentavos;
+  final DateTime? displayPriceUpdatedAt;
+  final String? displayName;
+  final Future<Product?> Function(BuildContext context)? onEditProduct;
+  final bool showEditAction;
+  final bool adminReadOnly;
+  final int? initialAdminQuantity;
+  final Future<void> Function(int quantity)? onAdminQuantitySaved;
 
   @override
   ConsumerState<_ProductModal> createState() => _ProductModalState();
@@ -3710,9 +4178,25 @@ class _ProductModal extends ConsumerStatefulWidget {
 
 class _ProductModalState extends ConsumerState<_ProductModal> {
   int? _draftQuantity;
+  String? _liveDisplayName;
+  String? _liveDisplayUnit;
+  int? _liveDisplayPriceCentavos;
+  DateTime? _liveDisplayPriceUpdatedAt;
+  String? _livePhotoUrl;
 
   @override
   Widget build(BuildContext context) {
+    final liveProduct =
+        ref.watch(
+          appControllerProvider.select(
+            (state) =>
+                state.products
+                    .where((item) => item.id == widget.product.id)
+                    .cast<Product?>()
+                    .firstWhere((item) => item != null, orElse: () => null),
+          ),
+        ) ??
+        widget.product;
     final cartItem = ref.watch(
       appControllerProvider.select(
         (state) => state.cart
@@ -3722,7 +4206,22 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
       ),
     );
     final cartQuantity = cartItem?.quantity ?? 0;
-    final draftQuantity = _draftQuantity ?? cartQuantity;
+    final resolvedInitialQuantity = widget.adminReadOnly
+        ? (widget.initialAdminQuantity ?? 0)
+        : cartQuantity;
+    final draftQuantity = _draftQuantity ?? resolvedInitialQuantity;
+    final displayName =
+        _liveDisplayName ?? widget.displayName ?? liveProduct.name;
+    final displayUnit =
+        _liveDisplayUnit ?? widget.displayUnit ?? liveProduct.displayUnit;
+    final displayPriceCentavos =
+        _liveDisplayPriceCentavos ??
+        widget.displayPriceCentavos ??
+        liveProduct.referencePriceCentavos;
+    final displayPriceUpdatedAt =
+        _liveDisplayPriceUpdatedAt ??
+        widget.displayPriceUpdatedAt ??
+        liveProduct.priceUpdatedAt;
     final viewportWidth = MediaQuery.of(context).size.width;
     final viewportHeight = MediaQuery.of(context).size.height;
     const contentPadding = 16.0;
@@ -3762,17 +4261,17 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
       color: const Color(0xFFE31E24),
     );
     final unitPainter = TextPainter(
-      text: TextSpan(text: widget.product.displayUnit, style: unitStyle),
+      text: TextSpan(text: displayUnit, style: unitStyle),
       maxLines: 1,
       textDirection: Directionality.of(context),
     )..layout(maxWidth: innerMaxWidth);
     final titlePainter = TextPainter(
-      text: TextSpan(text: widget.product.name, style: titleStyle),
+      text: TextSpan(text: displayName, style: titleStyle),
       textDirection: Directionality.of(context),
     )..layout(maxWidth: innerMaxWidth);
     final pricePainter = TextPainter(
       text: TextSpan(
-        text: formatPesos(widget.product.referencePriceCentavos),
+        text: formatPesos(displayPriceCentavos),
         style: priceStyle,
       ),
       maxLines: 1,
@@ -3780,12 +4279,15 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
     )..layout(maxWidth: innerMaxWidth);
     final asOfPainter = TextPainter(
       text: TextSpan(
-        text: 'as of ${formatAsOfDate(widget.product.priceUpdatedAt)}',
+        text: 'as of ${formatAsOfDate(displayPriceUpdatedAt)}',
         style: asOfStyle,
       ),
       maxLines: 1,
       textDirection: Directionality.of(context),
     )..layout(maxWidth: innerMaxWidth);
+    final actionAreaHeight = widget.adminReadOnly
+        ? (buttonHeight * 2) + 12
+        : buttonHeight;
     final fixedContentHeight =
         20 +
         titlePainter.height +
@@ -3794,7 +4296,7 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
         12 +
         math.max(pricePainter.height, asOfPainter.height) +
         24 +
-        buttonHeight;
+        actionAreaHeight;
     final responsiveImageSize = math.max(
       120.0,
       math.min(
@@ -3825,34 +4327,71 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                     width: responsiveImageSize,
                     height: responsiveImageSize,
                     child: ProductPlaceholder(
-                      label: widget.product.name,
+                      label: displayName,
                       posterMode: true,
                       fullRounded: true,
+                      imageUrl: _livePhotoUrl ?? liveProduct.photoUrl,
+                      imageFit: BoxFit.contain,
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
-                Text(widget.product.name, style: titleStyle),
+                Text(displayName, style: titleStyle),
                 const SizedBox(height: 2),
-                Text(widget.product.displayUnit, style: unitStyle),
+                Text(displayUnit, style: unitStyle),
                 const SizedBox(height: 12),
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.end,
-                  spacing: 4,
-                  runSpacing: 4,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
-                      formatPesos(widget.product.referencePriceCentavos),
-                      style: priceStyle,
+                    Expanded(
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.end,
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          Text(
+                            formatPesos(displayPriceCentavos),
+                            style: priceStyle,
+                          ),
+                          Text(
+                            'as of ${formatAsOfDate(displayPriceUpdatedAt)}',
+                            style: asOfStyle,
+                          ),
+                        ],
+                      ),
                     ),
-                    Text(
-                      'as of ${formatAsOfDate(widget.product.priceUpdatedAt)}',
-                      style: asOfStyle,
-                    ),
+                    if (widget.showEditAction && widget.onEditProduct != null)
+                      MousePressable(
+                        onTap: () async {
+                          final result = await widget.onEditProduct!(context);
+                          if (mounted) {
+                            setState(() {
+                              if (result != null) {
+                                _liveDisplayName = result.name;
+                                _liveDisplayUnit = result.displayUnit;
+                                _liveDisplayPriceCentavos =
+                                    result.referencePriceCentavos;
+                                _liveDisplayPriceUpdatedAt =
+                                    result.priceUpdatedAt;
+                                _livePhotoUrl = result.photoUrl;
+                              }
+                            });
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.edit_outlined,
+                            size: 18,
+                            color: AppColors.logoBlue,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 24),
-                if (draftQuantity == 0)
+                if (!widget.adminReadOnly && draftQuantity == 0)
                   SizedBox(
                     width: double.infinity,
                     height: buttonHeight,
@@ -3886,7 +4425,7 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                       label: Text('Add to Cart', style: addToCartLabelStyle),
                     ),
                   )
-                else
+                else if (!widget.adminReadOnly)
                   _CartQuantityControl(
                     quantity: draftQuantity,
                     height: buttonHeight,
@@ -3906,10 +4445,10 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                           await ref
                               .read(appControllerProvider.notifier)
                               .removeFromCart(widget.product.id);
-                          if (!mounted) {
+                          if (!context.mounted) {
                             return;
                           }
-                          _popAllRoutesUntilFirst(this.context);
+                          _popAllRoutesUntilFirst(context);
                           return;
                         }
                         setState(() => _draftQuantity = 0);
@@ -3937,10 +4476,69 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                     },
                   ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
+                if (widget.adminReadOnly)
+                  Column(
+                    children: [
+                      _CartQuantityControl(
+                        quantity: draftQuantity,
+                        height: buttonHeight,
+                        onDecrease: () async {
+                          if (draftQuantity <= 1) {
+                            final shouldRemove = await _showRemoveProductDialog(
+                              context,
+                            );
+                            if (shouldRemove != true) {
+                              return;
+                            }
+                            await widget.onAdminQuantitySaved?.call(0);
+                            if (!mounted) {
+                              return;
+                            }
+                            Navigator.of(this.context).pop();
+                            return;
+                          }
+                          final nextQuantity = draftQuantity - 1;
+                          setState(() => _draftQuantity = nextQuantity);
+                          await widget.onAdminQuantitySaved?.call(nextQuantity);
+                        },
+                        onIncrease: () async {
+                          final nextQuantity = draftQuantity + 1;
+                          setState(() => _draftQuantity = nextQuantity);
+                          await widget.onAdminQuantitySaved?.call(nextQuantity);
+                        },
+                        onEditQuantity: () async {
+                          final nextQuantity = await _showQuantityInputDialog(
+                            context,
+                            initialQuantity: draftQuantity,
+                          );
+                          if (nextQuantity == null ||
+                              nextQuantity == draftQuantity) {
+                            return;
+                          }
+                          if (!context.mounted) {
+                            return;
+                          }
+                          if (nextQuantity <= 0) {
+                            final shouldRemove = await _showRemoveProductDialog(
+                              context,
+                            );
+                            if (shouldRemove != true) {
+                              return;
+                            }
+                            await widget.onAdminQuantitySaved?.call(0);
+                            if (!mounted) {
+                              return;
+                            }
+                            Navigator.of(this.context).pop();
+                            return;
+                          }
+                          setState(() => _draftQuantity = nextQuantity);
+                          await widget.onAdminQuantitySaved?.call(nextQuantity);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
                         height: buttonHeight,
                         child: OutlinedButton(
                           style: OutlinedButton.styleFrom(
@@ -3966,87 +4564,129 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                           child: Text('Close', style: closeLabelStyle),
                         ),
                       ),
-                    ),
-                    if (cartQuantity > 0 || draftQuantity >= 1) ...[
-                      const SizedBox(width: 10),
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
                       Expanded(
                         child: SizedBox(
                           height: buttonHeight,
                           child: OutlinedButton(
-                            style:
-                                OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.logoBlue,
-                                  backgroundColor: AppColors.logoBlue
-                                      .withValues(alpha: 0.10),
-                                  textStyle: actionLabelStyle,
-                                  minimumSize: const Size(0, buttonHeight),
-                                  maximumSize: const Size(
-                                    double.infinity,
-                                    buttonHeight,
-                                  ),
-                                  fixedSize: const Size(
-                                    double.infinity,
-                                    buttonHeight,
-                                  ),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  side: BorderSide.none,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                ).copyWith(
-                                  backgroundColor: _lightBlueBackground(
-                                    baseColor: AppColors.logoBlue.withValues(
-                                      alpha: 0.10,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFE31E24),
+                              backgroundColor: const Color(0x1AE31E24),
+                              textStyle: actionLabelStyle,
+                              minimumSize: const Size(0, buttonHeight),
+                              maximumSize: const Size(
+                                double.infinity,
+                                buttonHeight,
+                              ),
+                              fixedSize: const Size(
+                                double.infinity,
+                                buttonHeight,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              side: BorderSide.none,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: Text('Close', style: closeLabelStyle),
+                          ),
+                        ),
+                      ),
+                      if (cartQuantity > 0 || draftQuantity >= 1) ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SizedBox(
+                            height: buttonHeight,
+                            child: OutlinedButton(
+                              style:
+                                  OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.logoBlue,
+                                    backgroundColor: AppColors.logoBlue
+                                        .withValues(alpha: 0.10),
+                                    textStyle: actionLabelStyle,
+                                    minimumSize: const Size(0, buttonHeight),
+                                    maximumSize: const Size(
+                                      double.infinity,
+                                      buttonHeight,
                                     ),
+                                    fixedSize: const Size(
+                                      double.infinity,
+                                      buttonHeight,
+                                    ),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    side: BorderSide.none,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                  ).copyWith(
+                                    backgroundColor: _lightBlueBackground(
+                                      baseColor: AppColors.logoBlue.withValues(
+                                        alpha: 0.10,
+                                      ),
+                                    ),
+                                    overlayColor: _strongBlueOverlay(),
                                   ),
-                                  overlayColor: _strongBlueOverlay(),
-                                ),
-                            onPressed: () async {
-                              final nextQuantity =
-                                  _draftQuantity ?? cartQuantity;
-                              final controller = ref.read(
-                                appControllerProvider.notifier,
-                              );
-                              if (nextQuantity != cartQuantity) {
-                                if (nextQuantity <= 0) {
-                                  await controller.removeFromCart(
-                                    widget.product.id,
+                              onPressed: () async {
+                                final nextQuantity =
+                                    _draftQuantity ?? cartQuantity;
+                                if (widget.onAdminQuantitySaved != null) {
+                                  await widget.onAdminQuantitySaved!(
+                                    nextQuantity,
                                   );
                                   if (!mounted) {
                                     return;
                                   }
-                                  _popAllRoutesUntilFirst(this.context);
+                                  Navigator.of(this.context).pop();
                                   return;
-                                } else if (cartQuantity <= 0) {
-                                  await controller.addToCart(
-                                    widget.product,
-                                    quantity: nextQuantity,
-                                  );
-                                } else {
-                                  await controller.updateCartQuantity(
-                                    widget.product.id,
-                                    nextQuantity,
-                                  );
                                 }
-                              }
-                              if (!mounted) {
-                                return;
-                              }
-                              Navigator.of(this.context).pop();
-                            },
-                            child: Text(
-                              'Save',
-                              style: actionLabelStyle?.copyWith(
-                                color: AppColors.logoBlue,
+                                final controller = ref.read(
+                                  appControllerProvider.notifier,
+                                );
+                                if (nextQuantity != cartQuantity) {
+                                  if (nextQuantity <= 0) {
+                                    await controller.removeFromCart(
+                                      widget.product.id,
+                                    );
+                                    if (!mounted) {
+                                      return;
+                                    }
+                                    _popAllRoutesUntilFirst(this.context);
+                                    return;
+                                  } else if (cartQuantity <= 0) {
+                                    await controller.addToCart(
+                                      widget.product,
+                                      quantity: nextQuantity,
+                                    );
+                                  } else {
+                                    await controller.updateCartQuantity(
+                                      widget.product.id,
+                                      nextQuantity,
+                                    );
+                                  }
+                                }
+                                if (!mounted) {
+                                  return;
+                                }
+                                Navigator.of(this.context).pop();
+                              },
+                              child: Text(
+                                'Save',
+                                style: actionLabelStyle?.copyWith(
+                                  color: AppColors.logoBlue,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
-                ),
+                  ),
               ],
             ),
           ),
@@ -4180,10 +4820,24 @@ Future<bool?> _showOrderAgainDialog(BuildContext context) async {
   );
 }
 
-Future<void> _showContactUsDialog(BuildContext context) async {
+Future<bool?> _showPlaceOrderConfirmationDialog(
+  BuildContext context, {
+  required int itemCount,
+}) async {
+  return showDialog<bool>(
+    context: context,
+    builder: (dialogContext) =>
+        _PlaceOrderConfirmationDialog(itemCount: itemCount),
+  );
+}
+
+Future<void> _showContactUsDialog(
+  BuildContext context,
+  AppSettings settings,
+) async {
   return showDialog<void>(
     context: context,
-    builder: (dialogContext) => const _ContactUsDialog(),
+    builder: (dialogContext) => _ContactUsDialog(settings: settings),
   );
 }
 
@@ -4223,7 +4877,7 @@ class _OrderPlacedDialog extends StatelessWidget {
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                height: 36,
+                height: _kSharedModalButtonHeight,
                 child: OutlinedButton(
                   style:
                       OutlinedButton.styleFrom(
@@ -4232,9 +4886,15 @@ class _OrderPlacedDialog extends StatelessWidget {
                         ),
                         foregroundColor: AppColors.logoBlue,
                         textStyle: actionLabelStyle,
-                        minimumSize: const Size(0, 36),
-                        maximumSize: const Size(double.infinity, 36),
-                        fixedSize: const Size(double.infinity, 36),
+                        minimumSize: const Size(0, _kSharedModalButtonHeight),
+                        maximumSize: const Size(
+                          double.infinity,
+                          _kSharedModalButtonHeight,
+                        ),
+                        fixedSize: const Size(
+                          double.infinity,
+                          _kSharedModalButtonHeight,
+                        ),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         side: BorderSide.none,
                         shape: RoundedRectangleBorder(
@@ -4263,8 +4923,141 @@ class _OrderPlacedDialog extends StatelessWidget {
   }
 }
 
+class _PlaceOrderConfirmationDialog extends StatelessWidget {
+  const _PlaceOrderConfirmationDialog({required this.itemCount});
+
+  final int itemCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
+      fontSize: 16,
+      fontWeight: FontWeight.w800,
+      height: 1.15,
+    );
+    final bodyStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: const Color(0xFF667085),
+      height: 1.15,
+    );
+    final actionLabelStyle = Theme.of(
+      context,
+    ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.15);
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kSharedModalMaxWidth),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Place order?', style: titleStyle),
+              const SizedBox(height: 10),
+              Text(
+                'Are you sure you want to order $itemCount item${itemCount == 1 ? '' : 's'}?',
+                style: bodyStyle,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: _kSharedModalButtonHeight,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFE31E24),
+                          backgroundColor: const Color(0x1AE31E24),
+                          textStyle: actionLabelStyle,
+                          minimumSize: const Size(0, _kSharedModalButtonHeight),
+                          maximumSize: const Size(
+                            double.infinity,
+                            _kSharedModalButtonHeight,
+                          ),
+                          fixedSize: const Size(
+                            double.infinity,
+                            _kSharedModalButtonHeight,
+                          ),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: Text(
+                          'No',
+                          style: actionLabelStyle?.copyWith(
+                            color: const Color(0xFFE31E24),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: _kSharedModalButtonHeight,
+                      child: OutlinedButton(
+                        style:
+                            OutlinedButton.styleFrom(
+                              backgroundColor: AppColors.logoBlue.withValues(
+                                alpha: 0.10,
+                              ),
+                              foregroundColor: AppColors.logoBlue,
+                              textStyle: actionLabelStyle,
+                              minimumSize: const Size(
+                                0,
+                                _kSharedModalButtonHeight,
+                              ),
+                              maximumSize: const Size(
+                                double.infinity,
+                                _kSharedModalButtonHeight,
+                              ),
+                              fixedSize: const Size(
+                                double.infinity,
+                                _kSharedModalButtonHeight,
+                              ),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              side: BorderSide.none,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ).copyWith(
+                              backgroundColor: _lightBlueBackground(
+                                baseColor: AppColors.logoBlue.withValues(
+                                  alpha: 0.10,
+                                ),
+                              ),
+                              overlayColor: _strongBlueOverlay(),
+                            ),
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: Text(
+                          'Yes',
+                          style: actionLabelStyle?.copyWith(
+                            color: AppColors.logoBlue,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ContactUsDialog extends StatelessWidget {
-  const _ContactUsDialog();
+  const _ContactUsDialog({required this.settings});
+
+  final AppSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -4274,10 +5067,25 @@ class _ContactUsDialog extends StatelessWidget {
       height: 1.15,
     );
 
-    void handleAction(String message) {
+    Future<void> handleAction({
+      required String? url,
+      required String successMessage,
+      required String errorMessage,
+    }) async {
       final messenger = ScaffoldMessenger.of(context);
+      if (url == null || url.trim().isEmpty) {
+        messenger.clearSnackBars();
+        messenger.showSnackBar(errorSnackBar(errorMessage));
+        return;
+      }
+      final opened = await openExternalUrl(url.trim());
+      if (!context.mounted) {
+        return;
+      }
       messenger.clearSnackBars();
-      messenger.showSnackBar(successSnackBar(message));
+      messenger.showSnackBar(
+        opened ? successSnackBar(successMessage) : errorSnackBar(errorMessage),
+      );
     }
 
     return Dialog(
@@ -4311,21 +5119,35 @@ class _ContactUsDialog extends StatelessWidget {
               _ContactUsActionButton(
                 icon: Icons.facebook,
                 label: 'Message us on Facebook',
-                onPressed: () =>
-                    handleAction('Facebook support option selected.'),
+                onPressed: () => handleAction(
+                  url: settings.facebookMessengerUrl,
+                  successMessage: 'Opening Facebook / Messenger.',
+                  errorMessage: 'Facebook link not set.',
+                ),
               ),
               const SizedBox(height: 10),
               _ContactUsActionButton(
-                icon: Icons.mail_outline_rounded,
+                icon: Icons.sms_outlined,
                 label: 'Send us a message',
-                onPressed: () =>
-                    handleAction('Message support option selected.'),
+                onPressed: () => handleAction(
+                  url: settings.storeContactNumber.trim().isEmpty
+                      ? null
+                      : 'sms:${settings.storeContactNumber.trim()}',
+                  successMessage: 'Opening SMS.',
+                  errorMessage: 'Phone number not set.',
+                ),
               ),
               const SizedBox(height: 10),
               _ContactUsActionButton(
                 icon: Icons.call_outlined,
                 label: 'Contact us',
-                onPressed: () => handleAction('Call support option selected.'),
+                onPressed: () => handleAction(
+                  url: settings.storeContactNumber.trim().isEmpty
+                      ? null
+                      : 'tel:${settings.storeContactNumber.trim()}',
+                  successMessage: 'Opening contact number.',
+                  errorMessage: 'Phone number not set.',
+                ),
               ),
             ],
           ),
@@ -4356,7 +5178,7 @@ class _ContactUsActionButton extends StatelessWidget {
 
     return SizedBox(
       width: double.infinity,
-      height: 36,
+      height: _kSharedModalButtonHeight,
       child: OutlinedButton(
         style:
             OutlinedButton.styleFrom(
@@ -4364,9 +5186,12 @@ class _ContactUsActionButton extends StatelessWidget {
               foregroundColor: AppColors.logoBlue,
               textStyle: actionLabelStyle,
               alignment: Alignment.centerLeft,
-              minimumSize: const Size(0, 36),
-              maximumSize: const Size(double.infinity, 36),
-              fixedSize: const Size(double.infinity, 36),
+              minimumSize: const Size(0, _kSharedModalButtonHeight),
+              maximumSize: const Size(
+                double.infinity,
+                _kSharedModalButtonHeight,
+              ),
+              fixedSize: const Size(double.infinity, _kSharedModalButtonHeight),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               side: BorderSide.none,
               shape: RoundedRectangleBorder(
@@ -4430,15 +5255,21 @@ class _OrderAgainDialog extends StatelessWidget {
                 children: [
                   Expanded(
                     child: SizedBox(
-                      height: 36,
+                      height: _kSharedModalButtonHeight,
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFFE31E24),
                           backgroundColor: const Color(0x1AE31E24),
                           textStyle: actionLabelStyle,
-                          minimumSize: const Size(0, 36),
-                          maximumSize: const Size(double.infinity, 36),
-                          fixedSize: const Size(double.infinity, 36),
+                          minimumSize: const Size(0, _kSharedModalButtonHeight),
+                          maximumSize: const Size(
+                            double.infinity,
+                            _kSharedModalButtonHeight,
+                          ),
+                          fixedSize: const Size(
+                            double.infinity,
+                            _kSharedModalButtonHeight,
+                          ),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           side: BorderSide.none,
                           shape: RoundedRectangleBorder(
@@ -4458,7 +5289,7 @@ class _OrderAgainDialog extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: SizedBox(
-                      height: 36,
+                      height: _kSharedModalButtonHeight,
                       child: OutlinedButton(
                         style:
                             OutlinedButton.styleFrom(
@@ -4467,9 +5298,18 @@ class _OrderAgainDialog extends StatelessWidget {
                               ),
                               foregroundColor: AppColors.logoBlue,
                               textStyle: actionLabelStyle,
-                              minimumSize: const Size(0, 36),
-                              maximumSize: const Size(double.infinity, 36),
-                              fixedSize: const Size(double.infinity, 36),
+                              minimumSize: const Size(
+                                0,
+                                _kSharedModalButtonHeight,
+                              ),
+                              maximumSize: const Size(
+                                double.infinity,
+                                _kSharedModalButtonHeight,
+                              ),
+                              fixedSize: const Size(
+                                double.infinity,
+                                _kSharedModalButtonHeight,
+                              ),
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               side: BorderSide.none,
                               shape: RoundedRectangleBorder(
@@ -4515,6 +5355,7 @@ class _QuantityInputDialog extends StatefulWidget {
 class _QuantityInputDialogState extends State<_QuantityInputDialog> {
   late final TextEditingController _controller;
   final _formKey = GlobalKey<FormState>();
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -4529,7 +5370,11 @@ class _QuantityInputDialogState extends State<_QuantityInputDialog> {
   }
 
   void _submit() {
+    if (_isSubmitting) {
+      return;
+    }
     if (_formKey.currentState?.validate() ?? false) {
+      _isSubmitting = true;
       Navigator.of(context).pop(int.parse(_controller.text));
     }
   }
@@ -4582,15 +5427,21 @@ class _QuantityInputDialogState extends State<_QuantityInputDialog> {
                 children: [
                   Expanded(
                     child: SizedBox(
-                      height: 36,
+                      height: _kSharedModalButtonHeight,
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFFE31E24),
                           backgroundColor: const Color(0x1AE31E24),
                           textStyle: actionLabelStyle,
-                          minimumSize: const Size(0, 36),
-                          maximumSize: const Size(double.infinity, 36),
-                          fixedSize: const Size(double.infinity, 36),
+                          minimumSize: const Size(0, _kSharedModalButtonHeight),
+                          maximumSize: const Size(
+                            double.infinity,
+                            _kSharedModalButtonHeight,
+                          ),
+                          fixedSize: const Size(
+                            double.infinity,
+                            _kSharedModalButtonHeight,
+                          ),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           side: BorderSide.none,
                           shape: RoundedRectangleBorder(
@@ -4610,7 +5461,7 @@ class _QuantityInputDialogState extends State<_QuantityInputDialog> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: SizedBox(
-                      height: 36,
+                      height: _kSharedModalButtonHeight,
                       child: OutlinedButton(
                         style:
                             OutlinedButton.styleFrom(
@@ -4619,9 +5470,18 @@ class _QuantityInputDialogState extends State<_QuantityInputDialog> {
                               ),
                               foregroundColor: AppColors.logoBlue,
                               textStyle: actionLabelStyle,
-                              minimumSize: const Size(0, 36),
-                              maximumSize: const Size(double.infinity, 36),
-                              fixedSize: const Size(double.infinity, 36),
+                              minimumSize: const Size(
+                                0,
+                                _kSharedModalButtonHeight,
+                              ),
+                              maximumSize: const Size(
+                                double.infinity,
+                                _kSharedModalButtonHeight,
+                              ),
+                              fixedSize: const Size(
+                                double.infinity,
+                                _kSharedModalButtonHeight,
+                              ),
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               side: BorderSide.none,
                               shape: RoundedRectangleBorder(
@@ -4673,7 +5533,7 @@ class _RemoveProductDialog extends StatelessWidget {
       context,
     ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.15);
     const contentPadding = 16.0;
-    const buttonHeight = 36.0;
+    const buttonHeight = _kSharedModalButtonHeight;
 
     return Dialog(
       backgroundColor: Colors.white,

@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../constants/app_colors.dart';
@@ -65,7 +68,8 @@ class MousePressable extends StatefulWidget {
     bool hovered,
     bool pressed,
     Widget child,
-  )? stateBuilder;
+  )?
+  stateBuilder;
 
   @override
   State<MousePressable> createState() => _MousePressableState();
@@ -81,7 +85,9 @@ class _MousePressableState extends State<MousePressable> {
         ? null
         : _pressed
         ? Colors.black.withValues(alpha: widget.pressedOverlayAlpha)
-        : (_hovered ? Colors.black.withValues(alpha: widget.hoverOverlayAlpha) : null);
+        : (_hovered
+              ? Colors.black.withValues(alpha: widget.hoverOverlayAlpha)
+              : null);
 
     Widget child = Stack(
       fit: StackFit.passthrough,
@@ -116,10 +122,7 @@ class _MousePressableState extends State<MousePressable> {
     if (widget.shape == BoxShape.circle) {
       child = ClipOval(child: child);
     } else if (widget.borderRadius != null) {
-      child = ClipRRect(
-        borderRadius: widget.borderRadius!,
-        child: child,
-      );
+      child = ClipRRect(borderRadius: widget.borderRadius!, child: child);
     }
 
     return MouseRegion(
@@ -206,6 +209,8 @@ class ProductPlaceholder extends StatelessWidget {
     this.posterMode = false,
     this.fullRounded = false,
     this.backgroundColor = Colors.white,
+    this.imageUrl,
+    this.imageFit = BoxFit.cover,
   });
 
   final String label;
@@ -213,6 +218,8 @@ class ProductPlaceholder extends StatelessWidget {
   final bool posterMode;
   final bool fullRounded;
   final Color backgroundColor;
+  final String? imageUrl;
+  final BoxFit imageFit;
 
   @override
   Widget build(BuildContext context) {
@@ -230,26 +237,72 @@ class ProductPlaceholder extends StatelessWidget {
         borderRadius: borderRadius,
       ),
       clipBehavior: Clip.antiAlias,
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Image.asset(
-            'assets/branding/as_logo_dark.png',
-            fit: BoxFit.contain,
-          ),
-        ),
+      child: ClipRRect(borderRadius: borderRadius, child: _buildImageContent()),
+    );
+  }
+
+  Widget _buildImageContent() {
+    final resolvedImageUrl = imageUrl?.trim() ?? '';
+    if (resolvedImageUrl.isNotEmpty) {
+      final bytes = _tryDecodeDataUrl(resolvedImageUrl);
+      if (bytes != null) {
+        return Image.memory(
+          bytes,
+          fit: imageFit,
+          width: double.infinity,
+          height: double.infinity,
+          gaplessPlayback: true,
+          errorBuilder: (context, error, stackTrace) => _buildFallback(),
+        );
+      }
+      if (resolvedImageUrl.startsWith('assets/')) {
+        return Image.asset(
+          resolvedImageUrl,
+          fit: imageFit,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) => _buildFallback(),
+        );
+      }
+      if (resolvedImageUrl.startsWith('http://') ||
+          resolvedImageUrl.startsWith('https://')) {
+        return Image.network(
+          resolvedImageUrl,
+          fit: imageFit,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) => _buildFallback(),
+        );
+      }
+    }
+    return _buildFallback();
+  }
+
+  Widget _buildFallback() {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Image.asset(
+        'assets/branding/as_logo_dark.png',
+        fit: BoxFit.contain,
       ),
     );
   }
 }
 
+Uint8List? _tryDecodeDataUrl(String value) {
+  final match = RegExp(r'^data:image/[^;]+;base64,(.+)$').firstMatch(value);
+  if (match == null) {
+    return null;
+  }
+  try {
+    return base64Decode(match.group(1)!);
+  } catch (_) {
+    return null;
+  }
+}
+
 class StatusBadge extends StatelessWidget {
-  const StatusBadge({
-    super.key,
-    required this.status,
-    this.fontSize = 14,
-  });
+  const StatusBadge({super.key, required this.status, this.fontSize = 14});
 
   final OrderStatus status;
   final double fontSize;
@@ -257,16 +310,11 @@ class StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (status) {
-      OrderStatus.newRequest => const Color(0xFFFFA726),
-      OrderStatus.underReview => const Color(0xFF42A5F5),
-      OrderStatus.awaitingCustomerConfirmation => const Color(0xFF8E24AA),
-      OrderStatus.confirmed => const Color(0xFF43A047),
-      OrderStatus.preparing => const Color(0xFF1E88E5),
-      OrderStatus.readyForPickup => const Color(0xFF00897B),
-      OrderStatus.outForDelivery => const Color(0xFF5E35B1),
+      OrderStatus.waiting => const Color(0xFFFFA726),
+      OrderStatus.checking => const Color(0xFFFFA726),
+      OrderStatus.ready => AppColors.logoBlue,
       OrderStatus.completed => const Color(0xFF2E7D32),
       OrderStatus.cancelled => const Color(0xFFE53935),
-      OrderStatus.rejected => const Color(0xFFB71C1C),
     };
 
     return DecoratedBox(
@@ -296,11 +344,13 @@ class AdminStateBadge extends StatelessWidget {
     super.key,
     required this.label,
     required this.color,
+    this.textColor = Colors.white,
     this.fontSize = 14,
   });
 
   final String label;
   final Color color;
+  final Color textColor;
   final double fontSize;
 
   @override
@@ -316,7 +366,7 @@ class AdminStateBadge extends StatelessWidget {
           label,
           softWrap: false,
           style: TextStyle(
-            color: Colors.white,
+            color: textColor,
             fontWeight: FontWeight.w700,
             fontSize: fontSize,
             height: 1.15,
@@ -349,9 +399,7 @@ class EmptyStateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: showBorder
-            ? Border.all(color: const Color(0xFFE4E7EC))
-            : null,
+        border: showBorder ? Border.all(color: const Color(0xFFE4E7EC)) : null,
       ),
       child: Padding(
         padding: const EdgeInsets.all(28),
@@ -366,9 +414,7 @@ class EmptyStateCard extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w700,
                 height: 1.15,
               ),
@@ -434,9 +480,7 @@ class SectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(color: borderColor),
         boxShadow: showShadow
-            ? const [
-                BoxShadow(color: AppColors.logoBlueShadow, blurRadius: 18),
-              ]
+            ? const [BoxShadow(color: AppColors.logoBlueShadow, blurRadius: 18)]
             : null,
       ),
       child: Padding(padding: padding, child: child),
@@ -452,6 +496,7 @@ class AppModalFrame extends StatelessWidget {
     this.maxWidth = 332,
     this.trailing,
     this.actions,
+    this.onSubmit,
   });
 
   final String title;
@@ -459,14 +504,15 @@ class AppModalFrame extends StatelessWidget {
   final double maxWidth;
   final Widget? trailing;
   final List<Widget>? actions;
+  final VoidCallback? onSubmit;
 
   static const double borderRadius = 28;
   static const double contentPadding = 16;
-  static const double actionHeight = 36;
+  static const double actionHeight = 44;
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
+    final dialog = Dialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
       insetPadding: const EdgeInsets.all(24),
@@ -491,7 +537,7 @@ class AppModalFrame extends StatelessWidget {
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             height: 1.15,
-                      ),
+                          ),
                     ),
                   ),
                   ...switch (trailing) {
@@ -510,6 +556,18 @@ class AppModalFrame extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    if (onSubmit == null) {
+      return dialog;
+    }
+
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.enter): onSubmit!,
+        const SingleActivator(LogicalKeyboardKey.numpadEnter): onSubmit!,
+      },
+      child: dialog,
     );
   }
 }
@@ -563,10 +621,7 @@ class AppModalButton extends StatelessWidget {
             height: 1.15,
           ),
           minimumSize: const Size(0, AppModalFrame.actionHeight),
-          maximumSize: const Size(
-            double.infinity,
-            AppModalFrame.actionHeight,
-          ),
+          maximumSize: const Size(double.infinity, AppModalFrame.actionHeight),
           fixedSize: expanded
               ? const Size(double.infinity, AppModalFrame.actionHeight)
               : null,

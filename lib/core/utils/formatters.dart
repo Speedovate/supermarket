@@ -13,10 +13,11 @@ final _currencyWhole = NumberFormat.currency(
   decimalDigits: 0,
 );
 final _shortDate = DateFormat('MMM d, yyyy');
-final _orderThreadDateTime = DateFormat('MMM d, yyyy - h:mm a');
+final _orderThreadDateTime = DateFormat('MMM d, yyyy - hh:mm:ss a');
 final _orderDate = DateFormat('MMM d, yyyy');
 final _orderTime = DateFormat('h:mm a');
 final _orderTimeWithSeconds = DateFormat('hh:mm:ss a');
+final _cutoffTime = DateFormat('hh:mm a');
 
 String formatPesos(int centavos) {
   final pesos = centavos / 100;
@@ -87,17 +88,11 @@ String displayFulfillment(FulfillmentMethod method) {
 
 String displayStatus(OrderStatus status) {
   return switch (status) {
-    OrderStatus.newRequest => 'Waiting',
-    OrderStatus.underReview => 'Under Review',
-    OrderStatus.awaitingCustomerConfirmation =>
-      'Awaiting Customer Confirmation',
-    OrderStatus.confirmed => 'Confirmed',
-    OrderStatus.preparing => 'Preparing',
-    OrderStatus.readyForPickup => 'Ready for Pickup',
-    OrderStatus.outForDelivery => 'Out for Delivery',
+    OrderStatus.waiting => 'Waiting',
+    OrderStatus.checking => 'Checking',
+    OrderStatus.ready => 'Ready',
     OrderStatus.completed => 'Completed',
     OrderStatus.cancelled => 'Cancelled',
-    OrderStatus.rejected => 'Rejected',
   };
 }
 
@@ -109,4 +104,60 @@ String displayAvailability(AvailabilityStatus status) {
     AvailabilityStatus.unavailable => 'Unavailable',
     AvailabilityStatus.substituted => 'Substituted',
   };
+}
+
+String displayBarangayStatus(bool isActive) => isActive ? 'Active' : 'Inactive';
+
+String formatBarangayName(String input) {
+  final trimmed = input.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  return trimmed
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .map(_capitalizeBarangayToken)
+      .join(' ');
+}
+
+String _capitalizeBarangayToken(String token) {
+  return token
+      .split('-')
+      .where((part) => part.isNotEmpty)
+      .map((part) {
+        final lower = part.toLowerCase();
+        if (lower.length == 1) {
+          return lower.toUpperCase();
+        }
+        return '${lower[0].toUpperCase()}${lower.substring(1)}';
+      })
+      .join('-');
+}
+
+String displayWeekday(int weekday, {bool plural = false}) {
+  final label = switch (weekday) {
+    DateTime.monday => 'Monday',
+    DateTime.tuesday => 'Tuesday',
+    DateTime.wednesday => 'Wednesday',
+    DateTime.thursday => 'Thursday',
+    DateTime.friday => 'Friday',
+    DateTime.saturday => 'Saturday',
+    DateTime.sunday => 'Sunday',
+    _ => 'Monday',
+  };
+  return plural ? '${label}s' : label;
+}
+
+String formatCutoffTimeFromMinutes(int minutes) {
+  final normalized = minutes.clamp(0, 1439);
+  final value = DateTime(2026, 8, 16).add(Duration(minutes: normalized));
+  return _cutoffTime.format(value).replaceFirst(' ', '\u00A0');
+}
+
+String formatBarangayCutoffSchedule(Barangay barangay) {
+  return 'Cutoff on ${displayWeekday(barangay.cutoffWeekday, plural: true)} ${formatCutoffTimeFromMinutes(barangay.cutoffMinutes)}';
+}
+
+String formatBarangayCutoffValue(Barangay barangay) {
+  return '${displayWeekday(barangay.cutoffWeekday)}\u00A0${formatCutoffTimeFromMinutes(barangay.cutoffMinutes)}';
 }

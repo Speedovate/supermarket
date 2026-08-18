@@ -2,18 +2,7 @@ import 'dart:convert';
 
 enum FulfillmentMethod { pickup, delivery }
 
-enum OrderStatus {
-  newRequest,
-  underReview,
-  awaitingCustomerConfirmation,
-  confirmed,
-  preparing,
-  readyForPickup,
-  outForDelivery,
-  completed,
-  cancelled,
-  rejected,
-}
+enum OrderStatus { waiting, checking, ready, completed, cancelled }
 
 enum AvailabilityStatus {
   pending,
@@ -91,157 +80,196 @@ class Category {
 class Product {
   const Product({
     required this.id,
+    required this.active,
+    required this.createdAt,
+    required this.updatedAt,
     required this.name,
+    required this.category,
+    required this.details,
+    required this.price,
+    required this.sold,
     this.photoUrl,
     this.photoStoragePath,
-    required this.categoryId,
-    required this.categoryNameSnapshot,
-    required this.quantity,
-    required this.unit,
-    this.type = '',
-    required this.referencePriceCentavos,
-    required this.priceUpdatedAt,
-    required this.isActive,
-    required this.validOrderedQuantity,
-    required this.validOrderCount,
-    this.lastValidOrderAt,
-    this.createdAt,
-    this.updatedAt,
   });
 
   final int id;
+  final bool active;
+  final DateTime createdAt;
+  final DateTime updatedAt;
   final String name;
+  final int category;
+  final String details;
+  final int price;
+  final int sold;
   final String? photoUrl;
   final String? photoStoragePath;
-  final int categoryId;
-  final String categoryNameSnapshot;
-  final String quantity;
-  final String unit;
-  final String type;
-  final int referencePriceCentavos;
-  final DateTime priceUpdatedAt;
-  final bool isActive;
-  final int validOrderedQuantity;
-  final int validOrderCount;
-  final DateTime? lastValidOrderAt;
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
 
   String get normalizedName => name.trim().toLowerCase();
 
-  String get displayUnit {
-    final suffix = type.trim();
-    final base = '${quantity.trim()}${unit.trim()}';
-    return suffix.isEmpty ? base : '$base $suffix';
-  }
+  bool get isActive => active;
+
+  int get categoryId => category;
+
+  int get referencePriceCentavos => price;
+
+  DateTime get priceUpdatedAt => updatedAt;
+
+  String get displayUnit => details.trim();
+
+  String get quantity => _parseLegacyMeasure(details).quantity;
+
+  String get unit => _parseLegacyMeasure(details).unit;
+
+  String get type => _parseLegacyMeasure(details).type;
 
   Product copyWith({
     int? id,
-    String? name,
-    Object? photoUrl = _sentinel,
-    Object? photoStoragePath = _sentinel,
-    int? categoryId,
-    String? categoryNameSnapshot,
-    String? quantity,
-    String? unit,
-    String? type,
-    int? referencePriceCentavos,
-    DateTime? priceUpdatedAt,
-    bool? isActive,
-    int? validOrderedQuantity,
-    int? validOrderCount,
-    Object? lastValidOrderAt = _sentinel,
+    bool? active,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? name,
+    int? category,
+    int? categoryId,
+    String? details,
+    int? price,
+    int? sold,
+    int? referencePriceCentavos,
+    bool? isActive,
+    DateTime? priceUpdatedAt,
+    Object? photoUrl = _sentinel,
+    Object? photoStoragePath = _sentinel,
   }) {
     return Product(
       id: id ?? this.id,
+      active: active ?? isActive ?? this.active,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? priceUpdatedAt ?? this.updatedAt,
       name: name ?? this.name,
+      category: category ?? categoryId ?? this.category,
+      details: details ?? this.details,
+      price: price ?? referencePriceCentavos ?? this.price,
+      sold: sold ?? this.sold,
       photoUrl: photoUrl == _sentinel ? this.photoUrl : photoUrl as String?,
       photoStoragePath: photoStoragePath == _sentinel
           ? this.photoStoragePath
           : photoStoragePath as String?,
-      categoryId: categoryId ?? this.categoryId,
-      categoryNameSnapshot: categoryNameSnapshot ?? this.categoryNameSnapshot,
-      quantity: quantity ?? this.quantity,
-      unit: unit ?? this.unit,
-      type: type ?? this.type,
-      referencePriceCentavos:
-          referencePriceCentavos ?? this.referencePriceCentavos,
-      priceUpdatedAt: priceUpdatedAt ?? this.priceUpdatedAt,
-      isActive: isActive ?? this.isActive,
-      validOrderedQuantity: validOrderedQuantity ?? this.validOrderedQuantity,
-      validOrderCount: validOrderCount ?? this.validOrderCount,
-      lastValidOrderAt: lastValidOrderAt == _sentinel
-          ? this.lastValidOrderAt
-          : lastValidOrderAt as DateTime?,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
   Map<String, dynamic> toMap() => {
     'id': id,
+    'active': active,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
     'name': name,
     'normalizedName': normalizedName,
+    'category': category,
+    'details': details,
+    'price': price,
+    'sold': sold,
     'photoUrl': photoUrl,
     'photoStoragePath': photoStoragePath,
-    'categoryId': categoryId,
-    'categoryNameSnapshot': categoryNameSnapshot,
-    'quantity': quantity,
-    'unit': unit,
-    'type': type,
-    'displayUnit': displayUnit,
-    'referencePriceCentavos': referencePriceCentavos,
-    'priceUpdatedAt': priceUpdatedAt.toIso8601String(),
-    'isActive': isActive,
-    'validOrderedQuantity': validOrderedQuantity,
-    'validOrderCount': validOrderCount,
-    'lastValidOrderAt': lastValidOrderAt?.toIso8601String(),
-    'createdAt': createdAt?.toIso8601String(),
-    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   factory Product.fromMap(Map<String, dynamic> map) {
     final parsedLegacyUnit = _parseLegacyMeasure(map['unit'] as String?);
+    final legacyDetails = [
+      (map['quantity'] as String?)?.trim() ?? parsedLegacyUnit.quantity,
+      (map['unit'] as String?)?.trim() ?? parsedLegacyUnit.unit,
+      (map['type'] as String?)?.trim() ?? parsedLegacyUnit.type,
+    ].where((item) => item.isNotEmpty).join(itemNeedsSpaceJoiner);
+    final fallbackDate = DateTime(2026, 7, 31);
     return Product(
-      id: map['id'] is int
-          ? map['id'] as int
-          : int.tryParse('${map['id']}') ?? 0,
-      name: map['name'] as String,
-      photoUrl: map['photoUrl'] as String?,
-      photoStoragePath: map['photoStoragePath'] as String?,
-      categoryId: map['categoryId'] is int
-          ? map['categoryId'] as int
-          : int.tryParse('${map['categoryId']}') ?? 0,
-      categoryNameSnapshot: map['categoryNameSnapshot'] as String,
-      quantity: (map['quantity'] as String?)?.trim().isNotEmpty == true
-          ? (map['quantity'] as String).trim()
-          : parsedLegacyUnit.quantity,
-      unit:
-          (map['unit'] as String?)?.trim().isNotEmpty == true &&
-              (map['quantity'] != null || map['type'] != null)
-          ? (map['unit'] as String).trim()
-          : parsedLegacyUnit.unit,
-      type: (map['type'] as String?)?.trim().isNotEmpty == true
-          ? (map['type'] as String).trim()
-          : parsedLegacyUnit.type,
-      referencePriceCentavos: map['referencePriceCentavos'] as int,
-      priceUpdatedAt: map['priceUpdatedAt'] == null
-          ? DateTime(2026, 7, 31)
-          : DateTime.parse(map['priceUpdatedAt'] as String),
-      isActive: map['isActive'] as bool,
-      validOrderedQuantity: map['validOrderedQuantity'] as int,
-      validOrderCount: map['validOrderCount'] as int,
-      lastValidOrderAt: map['lastValidOrderAt'] == null
-          ? null
-          : DateTime.parse(map['lastValidOrderAt'] as String),
+      id: _parseInt(map['id']),
+      active: (map['active'] ?? map['isActive']) as bool? ?? true,
       createdAt: map['createdAt'] == null
+          ? fallbackDate
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] != null
+          ? DateTime.parse(map['updatedAt'] as String)
+          : map['priceUpdatedAt'] != null
+          ? DateTime.parse(map['priceUpdatedAt'] as String)
+          : fallbackDate,
+      name: map['name'] as String,
+      category: _parseInt(map['category'] ?? map['categoryId']),
+      details: (map['details'] as String?)?.trim().isNotEmpty == true
+          ? (map['details'] as String).trim()
+          : legacyDetails,
+      price: _parseInt(map['price'] ?? map['referencePriceCentavos']),
+      sold: _parseInt(map['sold']),
+      photoUrl: (map['photoUrl'] as String?)?.trim().isEmpty == true
           ? null
+          : (map['photoUrl'] as String?)?.trim(),
+      photoStoragePath:
+          (map['photoStoragePath'] as String?)?.trim().isEmpty == true
+          ? null
+          : (map['photoStoragePath'] as String?)?.trim(),
+    );
+  }
+}
+
+class AppBanner {
+  const AppBanner({
+    required this.id,
+    required this.active,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.imageUrl,
+    this.externalUrl,
+  });
+
+  final int id;
+  final bool active;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String imageUrl;
+  final String? externalUrl;
+
+  bool get isActive => active;
+
+  AppBanner copyWith({
+    int? id,
+    bool? active,
+    bool? isActive,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? imageUrl,
+    String? externalUrl,
+  }) {
+    return AppBanner(
+      id: id ?? this.id,
+      active: active ?? isActive ?? this.active,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      imageUrl: imageUrl ?? this.imageUrl,
+      externalUrl: externalUrl ?? this.externalUrl,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'active': active,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    'imageUrl': imageUrl,
+    'externalUrl': externalUrl,
+  };
+
+  factory AppBanner.fromMap(Map<String, dynamic> map) {
+    final fallbackDate = DateTime(2026, 8, 7);
+    return AppBanner(
+      id: _parseInt(map['id']),
+      active: (map['active'] ?? map['isActive']) as bool? ?? true,
+      createdAt: map['createdAt'] == null
+          ? fallbackDate
           : DateTime.parse(map['createdAt'] as String),
       updatedAt: map['updatedAt'] == null
-          ? null
+          ? fallbackDate
           : DateTime.parse(map['updatedAt'] as String),
+      imageUrl: (map['imageUrl'] as String? ?? '').trim(),
+      externalUrl: (map['externalUrl'] as String?)?.trim().isEmpty == true
+          ? null
+          : (map['externalUrl'] as String?)?.trim(),
     );
   }
 }
@@ -273,6 +301,15 @@ _ParsedMeasure _parseLegacyMeasure(String? raw) {
     type: match.group(3)?.trim() ?? '',
   );
 }
+
+int _parseInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  return int.tryParse('$value') ?? 0;
+}
+
+const itemNeedsSpaceJoiner = ' ';
 
 class CartItem {
   const CartItem({
@@ -366,6 +403,7 @@ class CustomerDraft {
     this.mobileNumber = '',
     this.normalizedMobileNumber = '',
     this.barangay = '',
+    this.addressStreet = '',
     this.addressLandmark = '',
     this.note = '',
     this.fulfillmentMethod = FulfillmentMethod.pickup,
@@ -378,6 +416,7 @@ class CustomerDraft {
   final String mobileNumber;
   final String normalizedMobileNumber;
   final String barangay;
+  final String addressStreet;
   final String addressLandmark;
   final String note;
   final FulfillmentMethod fulfillmentMethod;
@@ -390,6 +429,7 @@ class CustomerDraft {
     String? mobileNumber,
     String? normalizedMobileNumber,
     String? barangay,
+    String? addressStreet,
     String? addressLandmark,
     String? note,
     FulfillmentMethod? fulfillmentMethod,
@@ -403,6 +443,7 @@ class CustomerDraft {
       normalizedMobileNumber:
           normalizedMobileNumber ?? this.normalizedMobileNumber,
       barangay: barangay ?? this.barangay,
+      addressStreet: addressStreet ?? this.addressStreet,
       addressLandmark: addressLandmark ?? this.addressLandmark,
       note: note ?? this.note,
       fulfillmentMethod: fulfillmentMethod ?? this.fulfillmentMethod,
@@ -419,6 +460,9 @@ class CustomerDraft {
     'barangay': fulfillmentMethod == FulfillmentMethod.delivery
         ? barangay
         : null,
+    'addressStreet': fulfillmentMethod == FulfillmentMethod.delivery
+        ? addressStreet
+        : '',
     'addressLandmark': addressLandmark,
     'note': note,
     'fulfillmentMethod': fulfillmentMethod.name,
@@ -435,7 +479,10 @@ class CustomerDraft {
       mobileNumber: map['mobileNumber'] as String? ?? '',
       normalizedMobileNumber: map['normalizedMobileNumber'] as String? ?? '',
       barangay: map['barangay'] as String? ?? '',
-      addressLandmark: map['addressLandmark'] as String? ?? '',
+      addressStreet:
+          map['addressStreet'] as String? ?? map['street'] as String? ?? '',
+      addressLandmark:
+          map['addressLandmark'] as String? ?? map['landmark'] as String? ?? '',
       note: map['note'] as String? ?? '',
       fulfillmentMethod: FulfillmentMethod.values.byName(
         map['fulfillmentMethod'] as String? ?? FulfillmentMethod.pickup.name,
@@ -670,244 +717,283 @@ class OrderItem {
   }
 }
 
-class StatusHistoryEntry {
-  const StatusHistoryEntry({
-    required this.id,
-    required this.previousStatus,
-    required this.newStatus,
-    required this.timestamp,
-    required this.adminUserId,
-    this.note,
-    this.createdAt,
-    this.updatedAt,
-  });
-
-  final int id;
-  final OrderStatus previousStatus;
-  final OrderStatus newStatus;
-  final DateTime timestamp;
-  final String adminUserId;
-  final String? note;
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
-
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'previousStatus': previousStatus.name,
-    'newStatus': newStatus.name,
-    'timestamp': timestamp.toIso8601String(),
-    'adminUserId': adminUserId,
-    'note': note,
-    'createdAt': createdAt?.toIso8601String(),
-    'updatedAt': updatedAt?.toIso8601String(),
-  };
-
-  factory StatusHistoryEntry.fromMap(Map<String, dynamic> map) {
-    return StatusHistoryEntry(
-      id: map['id'] is int
-          ? map['id'] as int
-          : int.tryParse('${map['id']}') ?? 0,
-      previousStatus: OrderStatus.values.byName(
-        map['previousStatus'] as String,
-      ),
-      newStatus: OrderStatus.values.byName(map['newStatus'] as String),
-      timestamp: DateTime.parse(map['timestamp'] as String),
-      adminUserId: map['adminUserId'] as String,
-      note: map['note'] as String?,
-      createdAt: map['createdAt'] == null
-          ? null
-          : DateTime.parse(map['createdAt'] as String),
-      updatedAt: map['updatedAt'] == null
-          ? null
-          : DateTime.parse(map['updatedAt'] as String),
-    );
-  }
-}
-
 class OrderRequest {
   const OrderRequest({
     required this.id,
-    required this.referenceNumber,
-    required this.customer,
-    required this.items,
-    required this.estimatedTotalCentavos,
-    required this.fulfillmentMethod,
-    required this.deliveryFeeCentavos,
-    required this.discountCentavos,
-    required this.manualAdjustmentCentavos,
-    required this.finalQuotedTotalCentavos,
-    this.quotationNote,
-    this.internalAdminNote,
     required this.status,
-    required this.customerConfirmation,
-    this.cancellationReason,
-    this.rejectionReason,
-    required this.bestSellerMetricsApplied,
     required this.createdAt,
     required this.updatedAt,
-    this.createdByAdminId,
-    this.updatedByAdminId,
-    required this.statusHistory,
+    required this.total,
+    required this.name,
+    required this.phone,
+    required this.method,
+    required this.place,
+    this.addressStreet = '',
+    this.addressLandmark = '',
+    required this.products,
   });
 
   final int id;
-  final String referenceNumber;
-  final CustomerDraft customer;
-  final List<OrderItem> items;
-  final int estimatedTotalCentavos;
-  final FulfillmentMethod fulfillmentMethod;
-  final int deliveryFeeCentavos;
-  final int discountCentavos;
-  final int manualAdjustmentCentavos;
-  final int finalQuotedTotalCentavos;
-  final String? quotationNote;
-  final String? internalAdminNote;
   final OrderStatus status;
-  final CustomerConfirmationStatus customerConfirmation;
-  final String? cancellationReason;
-  final String? rejectionReason;
-  final bool bestSellerMetricsApplied;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final String? createdByAdminId;
-  final String? updatedByAdminId;
-  final List<StatusHistoryEntry> statusHistory;
+  final int total;
+  final String name;
+  final String phone;
+  final FulfillmentMethod method;
+  final String place;
+  final String addressStreet;
+  final String addressLandmark;
+  final List<OrderItem> products;
+
+  CustomerDraft get customer => CustomerDraft(
+    name: name,
+    mobileNumber: phone,
+    normalizedMobileNumber: phone,
+    barangay: method == FulfillmentMethod.delivery ? place : '',
+    addressStreet: method == FulfillmentMethod.delivery ? addressStreet : '',
+    addressLandmark: method == FulfillmentMethod.delivery
+        ? addressLandmark
+        : '',
+    fulfillmentMethod: method,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+  );
+
+  List<OrderItem> get items => products;
+
+  int get estimatedTotalCentavos => total;
+
+  FulfillmentMethod get fulfillmentMethod => method;
+
+  int get deliveryFeeCentavos => 0;
+
+  int get discountCentavos => 0;
+
+  int get manualAdjustmentCentavos => 0;
+
+  int get finalQuotedTotalCentavos => total;
+
+  CustomerConfirmationStatus get customerConfirmation =>
+      CustomerConfirmationStatus.pending;
+
+  String? get cancellationReason => null;
+
+  String? get rejectionReason => null;
+
+  bool get bestSellerMetricsApplied => false;
+
+  String? get createdByAdminId => null;
+
+  String? get updatedByAdminId => null;
 
   OrderRequest copyWith({
     int? id,
-    String? referenceNumber,
+    int? total,
+    String? name,
+    String? phone,
+    FulfillmentMethod? method,
+    String? place,
+    String? addressStreet,
+    String? addressLandmark,
+    List<OrderItem>? products,
     CustomerDraft? customer,
     List<OrderItem>? items,
     int? estimatedTotalCentavos,
     FulfillmentMethod? fulfillmentMethod,
-    int? deliveryFeeCentavos,
-    int? discountCentavos,
-    int? manualAdjustmentCentavos,
-    int? finalQuotedTotalCentavos,
-    Object? quotationNote = _sentinel,
-    Object? internalAdminNote = _sentinel,
     OrderStatus? status,
-    CustomerConfirmationStatus? customerConfirmation,
-    Object? cancellationReason = _sentinel,
-    Object? rejectionReason = _sentinel,
-    bool? bestSellerMetricsApplied,
     DateTime? createdAt,
     DateTime? updatedAt,
-    Object? createdByAdminId = _sentinel,
-    Object? updatedByAdminId = _sentinel,
-    List<StatusHistoryEntry>? statusHistory,
   }) {
+    final effectiveCustomer = customer;
     return OrderRequest(
       id: id ?? this.id,
-      referenceNumber: referenceNumber ?? this.referenceNumber,
-      customer: customer ?? this.customer,
-      items: items ?? this.items,
-      estimatedTotalCentavos:
-          estimatedTotalCentavos ?? this.estimatedTotalCentavos,
-      fulfillmentMethod: fulfillmentMethod ?? this.fulfillmentMethod,
-      deliveryFeeCentavos: deliveryFeeCentavos ?? this.deliveryFeeCentavos,
-      discountCentavos: discountCentavos ?? this.discountCentavos,
-      manualAdjustmentCentavos:
-          manualAdjustmentCentavos ?? this.manualAdjustmentCentavos,
-      finalQuotedTotalCentavos:
-          finalQuotedTotalCentavos ?? this.finalQuotedTotalCentavos,
-      quotationNote: quotationNote == _sentinel
-          ? this.quotationNote
-          : quotationNote as String?,
-      internalAdminNote: internalAdminNote == _sentinel
-          ? this.internalAdminNote
-          : internalAdminNote as String?,
+      total: total ?? estimatedTotalCentavos ?? this.total,
+      name: name ?? effectiveCustomer?.name ?? this.name,
+      phone: phone ?? effectiveCustomer?.mobileNumber ?? this.phone,
+      method:
+          method ??
+          fulfillmentMethod ??
+          effectiveCustomer?.fulfillmentMethod ??
+          this.method,
+      place: place ?? effectiveCustomer?.barangay ?? this.place,
+      addressStreet:
+          addressStreet ??
+          effectiveCustomer?.addressStreet ??
+          this.addressStreet,
+      addressLandmark:
+          addressLandmark ??
+          effectiveCustomer?.addressLandmark ??
+          this.addressLandmark,
+      products: products ?? items ?? this.products,
       status: status ?? this.status,
-      customerConfirmation: customerConfirmation ?? this.customerConfirmation,
-      cancellationReason: cancellationReason == _sentinel
-          ? this.cancellationReason
-          : cancellationReason as String?,
-      rejectionReason: rejectionReason == _sentinel
-          ? this.rejectionReason
-          : rejectionReason as String?,
-      bestSellerMetricsApplied:
-          bestSellerMetricsApplied ?? this.bestSellerMetricsApplied,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      createdByAdminId: createdByAdminId == _sentinel
-          ? this.createdByAdminId
-          : createdByAdminId as String?,
-      updatedByAdminId: updatedByAdminId == _sentinel
-          ? this.updatedByAdminId
-          : updatedByAdminId as String?,
-      statusHistory: statusHistory ?? this.statusHistory,
     );
   }
 
   Map<String, dynamic> toMap() => {
     'id': id,
-    'referenceNumber': referenceNumber,
-    'customer': customer.toMap(),
-    'items': items.map((item) => item.toMap()).toList(),
-    'estimatedTotalCentavos': estimatedTotalCentavos,
-    'fulfillmentMethod': fulfillmentMethod.name,
-    'deliveryFeeCentavos': deliveryFeeCentavos,
-    'discountCentavos': discountCentavos,
-    'manualAdjustmentCentavos': manualAdjustmentCentavos,
-    'finalQuotedTotalCentavos': finalQuotedTotalCentavos,
-    'quotationNote': quotationNote,
-    'internalAdminNote': internalAdminNote,
     'status': status.name,
-    'customerConfirmation': customerConfirmation.name,
-    'cancellationReason': cancellationReason,
-    'rejectionReason': rejectionReason,
-    'bestSellerMetricsApplied': bestSellerMetricsApplied,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
-    'createdByAdminId': createdByAdminId,
-    'updatedByAdminId': updatedByAdminId,
-    'statusHistory': statusHistory.map((entry) => entry.toMap()).toList(),
+    'total': total,
+    'name': name,
+    'phone': phone,
+    'method': method.name,
+    'place': method == FulfillmentMethod.delivery ? place : '',
+    'addressStreet': method == FulfillmentMethod.delivery ? addressStreet : '',
+    'addressLandmark': method == FulfillmentMethod.delivery
+        ? addressLandmark
+        : '',
+    'products': products.map((item) => item.toMap()).toList(),
   };
 
   factory OrderRequest.fromMap(Map<String, dynamic> map) {
+    final customerMap = map['customer'] == null
+        ? null
+        : CustomerDraft.fromMap(
+            Map<String, dynamic>.from(map['customer'] as Map),
+          );
+    final parsedMethod = FulfillmentMethod.values.byName(
+      map['method'] as String? ??
+          map['fulfillmentMethod'] as String? ??
+          customerMap?.fulfillmentMethod.name ??
+          FulfillmentMethod.pickup.name,
+    );
+    final parsedProducts =
+        (map['products'] as List<dynamic>? ??
+                map['items'] as List<dynamic>? ??
+                [])
+            .map(
+              (item) =>
+                  OrderItem.fromMap(Map<String, dynamic>.from(item as Map)),
+            )
+            .toList();
     return OrderRequest(
       id: map['id'] is int
           ? map['id'] as int
           : int.tryParse('${map['id']}') ?? 0,
-      referenceNumber: map['referenceNumber'] as String,
-      customer: CustomerDraft.fromMap(
-        Map<String, dynamic>.from(map['customer'] as Map),
-      ),
-      items: (map['items'] as List<dynamic>)
-          .map(
-            (item) => OrderItem.fromMap(Map<String, dynamic>.from(item as Map)),
-          )
-          .toList(),
-      estimatedTotalCentavos: map['estimatedTotalCentavos'] as int,
-      fulfillmentMethod: FulfillmentMethod.values.byName(
-        map['fulfillmentMethod'] as String,
-      ),
-      deliveryFeeCentavos: map['deliveryFeeCentavos'] as int? ?? 0,
-      discountCentavos: map['discountCentavos'] as int? ?? 0,
-      manualAdjustmentCentavos: map['manualAdjustmentCentavos'] as int? ?? 0,
-      finalQuotedTotalCentavos: map['finalQuotedTotalCentavos'] as int? ?? 0,
-      quotationNote: map['quotationNote'] as String?,
-      internalAdminNote: map['internalAdminNote'] as String?,
-      status: OrderStatus.values.byName(map['status'] as String),
-      customerConfirmation: CustomerConfirmationStatus.values.byName(
-        map['customerConfirmation'] as String? ??
-            CustomerConfirmationStatus.pending.name,
-      ),
-      cancellationReason: map['cancellationReason'] as String?,
-      rejectionReason: map['rejectionReason'] as String?,
-      bestSellerMetricsApplied:
-          map['bestSellerMetricsApplied'] as bool? ?? false,
+      status: _parseOrderStatus(map['status'] as String?),
       createdAt: DateTime.parse(map['createdAt'] as String),
       updatedAt: DateTime.parse(map['updatedAt'] as String),
-      createdByAdminId: map['createdByAdminId'] as String?,
-      updatedByAdminId: map['updatedByAdminId'] as String?,
-      statusHistory: (map['statusHistory'] as List<dynamic>? ?? [])
-          .map(
-            (entry) => StatusHistoryEntry.fromMap(
-              Map<String, dynamic>.from(entry as Map),
-            ),
-          )
-          .toList(),
+      total: _parseInt(
+        map['total'] ??
+            map['estimatedTotalCentavos'] ??
+            map['finalQuotedTotalCentavos'],
+      ),
+      name: map['name'] as String? ?? customerMap?.name ?? '',
+      phone: map['phone'] as String? ?? customerMap?.mobileNumber ?? '',
+      method: parsedMethod,
+      place:
+          map['place'] as String? ??
+          map['barangay'] as String? ??
+          customerMap?.barangay ??
+          '',
+      addressStreet:
+          map['addressStreet'] as String? ??
+          map['street'] as String? ??
+          customerMap?.addressStreet ??
+          '',
+      addressLandmark:
+          map['addressLandmark'] as String? ??
+          map['landmark'] as String? ??
+          customerMap?.addressLandmark ??
+          '',
+      products: parsedProducts,
+    );
+  }
+}
+
+OrderStatus _parseOrderStatus(String? raw) {
+  return switch (raw) {
+    'waiting' || 'newRequest' => OrderStatus.waiting,
+    'checking' ||
+    'underReview' ||
+    'awaitingCustomerConfirmation' => OrderStatus.checking,
+    'ready' ||
+    'confirmed' ||
+    'preparing' ||
+    'readyForPickup' ||
+    'outForDelivery' => OrderStatus.ready,
+    'completed' => OrderStatus.completed,
+    'cancelled' || 'rejected' => OrderStatus.cancelled,
+    _ => OrderStatus.waiting,
+  };
+}
+
+class Barangay {
+  const Barangay({
+    required this.id,
+    required this.name,
+    required this.isActive,
+    required this.cutoffWeekday,
+    required this.cutoffMinutes,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final int id;
+  final String name;
+  final bool isActive;
+  final int cutoffWeekday;
+  final int cutoffMinutes;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  Barangay copyWith({
+    int? id,
+    String? name,
+    bool? isActive,
+    int? cutoffWeekday,
+    int? cutoffMinutes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return Barangay(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      isActive: isActive ?? this.isActive,
+      cutoffWeekday: cutoffWeekday ?? this.cutoffWeekday,
+      cutoffMinutes: cutoffMinutes ?? this.cutoffMinutes,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'name': name,
+    'isActive': isActive,
+    'cutoffWeekday': cutoffWeekday,
+    'cutoffMinutes': cutoffMinutes,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
+
+  factory Barangay.fromMap(Map<String, dynamic> map) {
+    final fallbackDate = DateTime(2026, 8, 16);
+    final parsedWeekday = _parseInt(map['cutoffWeekday']);
+    final normalizedWeekday =
+        parsedWeekday >= DateTime.monday && parsedWeekday <= DateTime.sunday
+        ? parsedWeekday
+        : DateTime.monday;
+    final parsedCutoffMinutes = _parseInt(map['cutoffMinutes']);
+    return Barangay(
+      id: _parseInt(map['id']),
+      name: (map['name'] as String? ?? '').trim(),
+      isActive:
+          (map['isActive'] ?? map['active'] ?? map['status']) as bool? ?? true,
+      cutoffWeekday: normalizedWeekday,
+      cutoffMinutes: parsedCutoffMinutes >= 0 && parsedCutoffMinutes < 1440
+          ? parsedCutoffMinutes
+          : 17 * 60,
+      createdAt: map['createdAt'] == null
+          ? fallbackDate
+          : DateTime.parse(map['createdAt'] as String),
+      updatedAt: map['updatedAt'] == null
+          ? fallbackDate
+          : DateTime.parse(map['updatedAt'] as String),
     );
   }
 }
@@ -916,28 +1002,93 @@ class AppSettings {
   const AppSettings({
     this.id = 1,
     this.bestSellersEnabled = true,
+    this.bestSellersShowAll = false,
+    this.bestSellerMinSoldUnits = 1,
     this.bestSellersLimit = 6,
+    this.bestSellerBasis = BestSellerBasis.lifetime,
+    this.storeName = "Andrew's Supermarket",
+    this.storeContactNumber = '09064493206',
+    this.facebookMessengerUrl =
+        'https://www.facebook.com/andrew.s.supermarket.2024',
+    this.supportContactUrl = '',
+    this.logoReference = 'assets/branding/as_logo_dark.png',
+    this.faviconReference = 'assets/branding/as_logo_dark.png',
+    this.serviceableBarangays = const [],
+    this.useFlatDeliveryFee = true,
+    this.flatDeliveryFee = 0,
+    this.deliveryFeesByBarangay = const {},
+    this.minimumDeliveryOrderAmount = 0,
+    this.requirePlaceForDeliveryOnly = true,
     this.createdAt,
     this.updatedAt,
   });
 
   final int id;
   final bool bestSellersEnabled;
+  final bool bestSellersShowAll;
+  final int bestSellerMinSoldUnits;
   final int bestSellersLimit;
+  final BestSellerBasis bestSellerBasis;
+  final String storeName;
+  final String storeContactNumber;
+  final String facebookMessengerUrl;
+  final String supportContactUrl;
+  final String logoReference;
+  final String faviconReference;
+  final List<String> serviceableBarangays;
+  final bool useFlatDeliveryFee;
+  final int flatDeliveryFee;
+  final Map<String, int> deliveryFeesByBarangay;
+  final int minimumDeliveryOrderAmount;
+  final bool requirePlaceForDeliveryOnly;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   AppSettings copyWith({
     int? id,
     bool? bestSellersEnabled,
+    bool? bestSellersShowAll,
+    int? bestSellerMinSoldUnits,
     int? bestSellersLimit,
+    BestSellerBasis? bestSellerBasis,
+    String? storeName,
+    String? storeContactNumber,
+    String? facebookMessengerUrl,
+    String? supportContactUrl,
+    String? logoReference,
+    String? faviconReference,
+    List<String>? serviceableBarangays,
+    bool? useFlatDeliveryFee,
+    int? flatDeliveryFee,
+    Map<String, int>? deliveryFeesByBarangay,
+    int? minimumDeliveryOrderAmount,
+    bool? requirePlaceForDeliveryOnly,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
     return AppSettings(
       id: id ?? this.id,
       bestSellersEnabled: bestSellersEnabled ?? this.bestSellersEnabled,
+      bestSellersShowAll: bestSellersShowAll ?? this.bestSellersShowAll,
+      bestSellerMinSoldUnits:
+          bestSellerMinSoldUnits ?? this.bestSellerMinSoldUnits,
       bestSellersLimit: bestSellersLimit ?? this.bestSellersLimit,
+      bestSellerBasis: bestSellerBasis ?? this.bestSellerBasis,
+      storeName: storeName ?? this.storeName,
+      storeContactNumber: storeContactNumber ?? this.storeContactNumber,
+      facebookMessengerUrl: facebookMessengerUrl ?? this.facebookMessengerUrl,
+      supportContactUrl: supportContactUrl ?? this.supportContactUrl,
+      logoReference: logoReference ?? this.logoReference,
+      faviconReference: faviconReference ?? this.faviconReference,
+      serviceableBarangays: serviceableBarangays ?? this.serviceableBarangays,
+      useFlatDeliveryFee: useFlatDeliveryFee ?? this.useFlatDeliveryFee,
+      flatDeliveryFee: flatDeliveryFee ?? this.flatDeliveryFee,
+      deliveryFeesByBarangay:
+          deliveryFeesByBarangay ?? this.deliveryFeesByBarangay,
+      minimumDeliveryOrderAmount:
+          minimumDeliveryOrderAmount ?? this.minimumDeliveryOrderAmount,
+      requirePlaceForDeliveryOnly:
+          requirePlaceForDeliveryOnly ?? this.requirePlaceForDeliveryOnly,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -946,7 +1097,22 @@ class AppSettings {
   Map<String, dynamic> toMap() => {
     'id': id,
     'bestSellersEnabled': bestSellersEnabled,
+    'bestSellersShowAll': bestSellersShowAll,
+    'bestSellerMinSoldUnits': bestSellerMinSoldUnits,
     'bestSellersLimit': bestSellersLimit,
+    'bestSellerBasis': bestSellerBasis.name,
+    'storeName': storeName,
+    'storeContactNumber': storeContactNumber,
+    'facebookMessengerUrl': facebookMessengerUrl,
+    'supportContactUrl': supportContactUrl,
+    'logoReference': logoReference,
+    'faviconReference': faviconReference,
+    'serviceableBarangays': serviceableBarangays,
+    'useFlatDeliveryFee': useFlatDeliveryFee,
+    'flatDeliveryFee': flatDeliveryFee,
+    'deliveryFeesByBarangay': deliveryFeesByBarangay,
+    'minimumDeliveryOrderAmount': minimumDeliveryOrderAmount,
+    'requirePlaceForDeliveryOnly': requirePlaceForDeliveryOnly,
     'createdAt': createdAt?.toIso8601String(),
     'updatedAt': updatedAt?.toIso8601String(),
   };
@@ -957,7 +1123,45 @@ class AppSettings {
           ? map['id'] as int
           : int.tryParse('${map['id']}') ?? 1,
       bestSellersEnabled: map['bestSellersEnabled'] as bool? ?? true,
-      bestSellersLimit: map['bestSellersLimit'] as int? ?? 6,
+      bestSellersShowAll: map['bestSellersShowAll'] as bool? ?? false,
+      bestSellerMinSoldUnits: _parseInt(map['bestSellerMinSoldUnits']) == 0
+          ? 1
+          : _parseInt(map['bestSellerMinSoldUnits']),
+      bestSellersLimit: _parseInt(map['bestSellersLimit']) == 0
+          ? 6
+          : _parseInt(map['bestSellersLimit']),
+      bestSellerBasis: _parseBestSellerBasis(map['bestSellerBasis'] as String?),
+      storeName: (map['storeName'] as String?)?.trim().isNotEmpty == true
+          ? (map['storeName'] as String).trim()
+          : "Andrew's Supermarket",
+      storeContactNumber: (map['storeContactNumber'] as String? ?? '').trim(),
+      facebookMessengerUrl: (map['facebookMessengerUrl'] as String? ?? '')
+          .trim(),
+      supportContactUrl: (map['supportContactUrl'] as String? ?? '').trim(),
+      logoReference:
+          (map['logoReference'] as String?)?.trim().isNotEmpty == true
+          ? (map['logoReference'] as String).trim()
+          : 'assets/branding/as_logo_dark.png',
+      faviconReference:
+          (map['faviconReference'] as String?)?.trim().isNotEmpty == true
+          ? (map['faviconReference'] as String).trim()
+          : 'assets/branding/as_logo_dark.png',
+      serviceableBarangays:
+          (map['serviceableBarangays'] as List<dynamic>?)
+              ?.map((item) => '$item'.trim())
+              .where((item) => item.isNotEmpty)
+              .toList() ??
+          const [],
+      useFlatDeliveryFee: map['useFlatDeliveryFee'] as bool? ?? true,
+      flatDeliveryFee: _parseInt(map['flatDeliveryFee']),
+      deliveryFeesByBarangay:
+          (map['deliveryFeesByBarangay'] as Map?)?.map(
+            (key, value) => MapEntry('$key', _parseInt(value)),
+          ) ??
+          const {},
+      minimumDeliveryOrderAmount: _parseInt(map['minimumDeliveryOrderAmount']),
+      requirePlaceForDeliveryOnly:
+          map['requirePlaceForDeliveryOnly'] as bool? ?? true,
       createdAt: map['createdAt'] == null
           ? null
           : DateTime.parse(map['createdAt'] as String),
@@ -966,6 +1170,15 @@ class AppSettings {
           : DateTime.parse(map['updatedAt'] as String),
     );
   }
+}
+
+enum BestSellerBasis { lifetime, recent30Days }
+
+BestSellerBasis _parseBestSellerBasis(String? raw) {
+  return switch (raw) {
+    'recent30Days' => BestSellerBasis.recent30Days,
+    _ => BestSellerBasis.lifetime,
+  };
 }
 
 class AdminSession {
@@ -984,6 +1197,24 @@ class AdminSession {
   final String displayName;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  AdminSession copyWith({
+    int? id,
+    String? uid,
+    String? email,
+    String? displayName,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return AdminSession(
+      id: id ?? this.id,
+      uid: uid ?? this.uid,
+      email: email ?? this.email,
+      displayName: displayName ?? this.displayName,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 
   Map<String, dynamic> toMap() => {
     'id': id,
@@ -1016,6 +1247,8 @@ class PersistedData {
   const PersistedData({
     this.id = 1,
     required this.categories,
+    required this.barangays,
+    required this.banners,
     required this.products,
     required this.orders,
     required this.settings,
@@ -1028,6 +1261,8 @@ class PersistedData {
 
   final int id;
   final List<Category> categories;
+  final List<Barangay> barangays;
+  final List<AppBanner> banners;
   final List<Product> products;
   final List<OrderRequest> orders;
   final AppSettings settings;
@@ -1040,6 +1275,8 @@ class PersistedData {
   Map<String, dynamic> toMap() => {
     'id': id,
     'categories': categories.map((item) => item.toMap()).toList(),
+    'barangays': barangays.map((item) => item.toMap()).toList(),
+    'banners': banners.map((item) => item.toMap()).toList(),
     'products': products.map((item) => item.toMap()).toList(),
     'orders': orders.map((item) => item.toMap()).toList(),
     'settings': settings.toMap(),
@@ -1061,6 +1298,16 @@ class PersistedData {
       categories: (map['categories'] as List<dynamic>)
           .map(
             (item) => Category.fromMap(Map<String, dynamic>.from(item as Map)),
+          )
+          .toList(),
+      barangays: ((map['barangays'] as List<dynamic>?) ?? const <dynamic>[])
+          .map(
+            (item) => Barangay.fromMap(Map<String, dynamic>.from(item as Map)),
+          )
+          .toList(),
+      banners: ((map['banners'] as List<dynamic>?) ?? const <dynamic>[])
+          .map(
+            (item) => AppBanner.fromMap(Map<String, dynamic>.from(item as Map)),
           )
           .toList(),
       products: (map['products'] as List<dynamic>)

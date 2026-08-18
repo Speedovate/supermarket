@@ -9,33 +9,29 @@ import '../../../core/models/app_models.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
-import 'admin_product_dialog.dart';
 
-class AdminProductsPage extends ConsumerStatefulWidget {
-  const AdminProductsPage({super.key});
+class AdminBannersPage extends ConsumerStatefulWidget {
+  const AdminBannersPage({super.key});
 
   @override
-  ConsumerState<AdminProductsPage> createState() => _AdminProductsPageState();
+  ConsumerState<AdminBannersPage> createState() => _AdminBannersPageState();
 }
 
-class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
+class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
   static const double _filtersMenuWidth = 248;
   static const double _filtersContentHorizontalPadding = 16;
   static const double _columnWidthAllowance = 2;
   static const double _dateHeaderExtraAllowance = 2;
+  static const double _statusBadgeHorizontalPadding = 28;
   static const double _actionHitSize = 34;
-  static double get _actionsWidth => _actionHitSize * 4;
+  static double get _actionsWidth => _actionHitSize * 3;
   static double get _filtersFieldWidth =>
       _filtersMenuWidth - (_filtersContentHorizontalPadding * 2);
 
   String query = '';
   DateTime? createdAtFilter;
   DateTime? updatedAtFilter;
-  int? categoryFilter;
   String? statusFilter;
-  String? priceSort;
-  String? nameSort;
-  String? soldSort;
 
   @override
   void didChangeDependencies() {
@@ -45,22 +41,10 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
 
   void _applyRouteFilters() {
     final uri = GoRouterState.of(context).uri;
-    final categories = ref.read(appControllerProvider).categories;
     query = uri.queryParameters['query'] ?? uri.queryParameters['q'] ?? '';
-    createdAtFilter = _parseRouteDate(
-      uri.queryParameters['filters[created_at]'],
-    );
-    updatedAtFilter = _parseRouteDate(
-      uri.queryParameters['filters[updated_at]'],
-    );
-    categoryFilter = _parseCategoryFilter(
-      uri.queryParameters['filters[category]'],
-      categories,
-    );
+    createdAtFilter = _parseRouteDate(uri.queryParameters['filters[created_at]']);
+    updatedAtFilter = _parseRouteDate(uri.queryParameters['filters[updated_at]']);
     statusFilter = _normalizeNullable(uri.queryParameters['filters[status]']);
-    priceSort = _normalizeNullable(uri.queryParameters['filters[price]']);
-    nameSort = _normalizeNullable(uri.queryParameters['filters[name]']);
-    soldSort = _normalizeNullable(uri.queryParameters['filters[sold]']);
   }
 
   void _setFilters(VoidCallback update) {
@@ -70,33 +54,12 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
 
   void _updateRouteFilters() {
     final currentUri = GoRouterState.of(context).uri;
-    final categories = ref.read(appControllerProvider).categories;
     final params = <String, String>{};
     if (query.trim().isNotEmpty) {
       params['query'] = query.trim();
     }
-    if (categoryFilter != null) {
-      final category = categories.cast<Category?>().firstWhere(
-        (item) => item?.id == categoryFilter,
-        orElse: () => null,
-      );
-      if (category != null) {
-        params['filters[category]'] = _slugify(category.name);
-      } else {
-        params['filters[category]'] = '$categoryFilter';
-      }
-    }
     if (statusFilter != null) {
       params['filters[status]'] = statusFilter!;
-    }
-    if (priceSort != null) {
-      params['filters[price]'] = priceSort!;
-    }
-    if (nameSort != null) {
-      params['filters[name]'] = nameSort!;
-    }
-    if (soldSort != null) {
-      params['filters[sold]'] = soldSort!;
     }
     if (createdAtFilter != null) {
       params['filters[created_at]'] = _formatRouteDate(createdAtFilter!);
@@ -113,11 +76,6 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appControllerProvider);
-    final categories = [...state.categories]
-      ..sort((a, b) => a.id.compareTo(b.id));
-    final categoryById = {
-      for (final category in categories) category.id: category.name,
-    };
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 700;
     final gap = _columnGapForWidth(screenWidth);
@@ -139,83 +97,45 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
             );
 
     final normalizedQuery = query.trim().toLowerCase();
-    final products = [...state.products];
-    final filteredProducts =
-        products.where((product) {
-          final categoryName = categoryById[product.categoryId] ?? '';
-          final matchesQuery =
-              normalizedQuery.isEmpty ||
-              product.name.toLowerCase().contains(normalizedQuery) ||
-              categoryName.toLowerCase().contains(normalizedQuery) ||
-              '${product.id}'.contains(normalizedQuery);
-          final createdAt = product.createdAt;
-          final updatedAt = product.updatedAt;
-          final matchesCreatedAt =
-              createdAtFilter == null ||
-              _isSameDay(createdAt, createdAtFilter!);
-          final matchesUpdatedAt =
-              updatedAtFilter == null ||
-              _isSameDay(updatedAt, updatedAtFilter!);
-          final matchesCategory =
-              categoryFilter == null || product.categoryId == categoryFilter;
-          final matchesStatus = switch (statusFilter) {
-            'active' => product.isActive,
-            'inactive' => !product.isActive,
-            _ => true,
-          };
-          return matchesQuery &&
-              matchesCreatedAt &&
-              matchesUpdatedAt &&
-              matchesCategory &&
-              matchesStatus;
-        }).toList()..sort((a, b) {
-          if (priceSort != null) {
-            final priceCompare = priceSort == 'low_high'
-                ? a.referencePriceCentavos.compareTo(b.referencePriceCentavos)
-                : b.referencePriceCentavos.compareTo(a.referencePriceCentavos);
-            if (priceCompare != 0) {
-              return priceCompare;
-            }
-          }
-          if (nameSort != null) {
-            final nameCompare = nameSort == 'a_z'
-                ? a.name.toLowerCase().compareTo(b.name.toLowerCase())
-                : b.name.toLowerCase().compareTo(a.name.toLowerCase());
-            if (nameCompare != 0) {
-              return nameCompare;
-            }
-          }
-          if (soldSort != null) {
-            final soldCompare = soldSort == 'few_many'
-                ? a.sold.compareTo(b.sold)
-                : b.sold.compareTo(a.sold);
-            if (soldCompare != 0) {
-              return soldCompare;
-            }
-          }
-          final createdAtCompare = b.createdAt.compareTo(a.createdAt);
-          if (createdAtCompare != 0) {
-            return createdAtCompare;
-          }
-          return b.id.compareTo(a.id);
-        });
+    final banners = [...state.banners]
+      ..sort((a, b) {
+        final createdAtCompare = b.createdAt.compareTo(a.createdAt);
+        if (createdAtCompare != 0) {
+          return createdAtCompare;
+        }
+        return b.id.compareTo(a.id);
+      });
+    final filteredBanners = banners.where((banner) {
+      final matchesQuery =
+          normalizedQuery.isEmpty ||
+          banner.imageUrl.toLowerCase().contains(normalizedQuery) ||
+          (banner.externalUrl ?? '').toLowerCase().contains(normalizedQuery) ||
+          '${banner.id}'.contains(normalizedQuery);
+      final matchesCreatedAt =
+          createdAtFilter == null || _isSameDay(banner.createdAt, createdAtFilter!);
+      final matchesUpdatedAt =
+          updatedAtFilter == null || _isSameDay(banner.updatedAt, updatedAtFilter!);
+      final matchesStatus = switch (statusFilter) {
+        'active' => banner.isActive,
+        'inactive' => !banner.isActive,
+        _ => true,
+      };
+      return matchesQuery &&
+          matchesCreatedAt &&
+          matchesUpdatedAt &&
+          matchesStatus;
+    }).toList();
 
-    final widths = _computeProductColumnWidths(
+    final widths = _computeBannerColumnWidths(
       screenWidth: screenWidth,
-      products: filteredProducts,
-      categoryById: categoryById,
+      banners: filteredBanners,
       headerStyle: headerStyle,
       bodyStyle: bodyStyle,
-      gap: gap,
     );
     final activeFilterCount =
         (createdAtFilter == null ? 0 : 1) +
         (updatedAtFilter == null ? 0 : 1) +
-        (categoryFilter == null ? 0 : 1) +
-        (statusFilter == null ? 0 : 1) +
-        (priceSort == null ? 0 : 1) +
-        (nameSort == null ? 0 : 1) +
-        (soldSort == null ? 0 : 1);
+        (statusFilter == null ? 0 : 1);
     final toolbarActionSize = isMobile ? 48.0 : 0.0;
 
     return Column(
@@ -229,8 +149,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                       children: [
                         Expanded(
                           child: TextField(
-                            onChanged: (value) =>
-                                _setFilters(() => query = value),
+                            onChanged: (value) => _setFilters(() => query = value),
                             decoration: const InputDecoration(
                               hintText: 'Search',
                               hintStyle: TextStyle(
@@ -263,11 +182,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                             ),
                           ),
                           menuChildren: [
-                            _buildFiltersMenu(
-                              context: context,
-                              products: products,
-                              categories: categories,
-                            ),
+                            _buildFiltersMenu(context: context, banners: banners),
                           ],
                           builder: (context, controller, child) {
                             return MousePressable(
@@ -305,8 +220,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                         SizedBox(
                           width: 280,
                           child: TextField(
-                            onChanged: (value) =>
-                                _setFilters(() => query = value),
+                            onChanged: (value) => _setFilters(() => query = value),
                             decoration: const InputDecoration(
                               hintText: 'Search',
                               hintStyle: TextStyle(
@@ -338,11 +252,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                             ),
                           ),
                           menuChildren: [
-                            _buildFiltersMenu(
-                              context: context,
-                              products: products,
-                              categories: categories,
-                            ),
+                            _buildFiltersMenu(context: context, banners: banners),
                           ],
                           builder: (context, controller, child) {
                             return MousePressable(
@@ -410,7 +320,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
             ),
             SizedBox(width: isMobile ? 8 : 12),
             MousePressable(
-              onTap: () => _showProductDialog(context, ref),
+              onTap: () => _showBannerDialog(context, ref),
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 width: isMobile ? toolbarActionSize : null,
@@ -430,7 +340,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                     if (!isMobile) ...[
                       const SizedBox(width: 8),
                       const Text(
-                        'New Product',
+                        'New Banner',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -452,44 +362,37 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
               final contentWidth =
                   widths.id +
                   gap +
-                  widths.name +
+                  widths.status +
                   gap +
-                  widths.details +
+                  widths.imageUrl +
                   gap +
-                  widths.category +
-                  gap +
-                  widths.price +
-                  gap +
-                  widths.sold +
+                  widths.externalUrl +
                   gap +
                   widths.createdAt +
                   gap +
                   widths.updatedAt +
                   gap +
                   _actionsWidth;
-              final effectiveTableWidth =
-                  constraints.maxWidth > contentWidth + 40
+              final effectiveTableWidth = constraints.maxWidth > contentWidth + 40
                   ? constraints.maxWidth
                   : contentWidth + 40;
               final trailingSpace = effectiveTableWidth - (contentWidth + 40);
               const headerHeight = 53.0;
               const dividerHeight = 0.6;
               const emptyStateHeight = 232.0;
-              final rowHeights = filteredProducts
+              final rowHeights = filteredBanners
                   .map(
-                    (product) => _measureProductRowHeight(
-                      product: product,
-                      categoryName: categoryById[product.categoryId] ?? '',
+                    (banner) => _measureBannerRowHeight(
+                      banner: banner,
                       widths: widths,
                       bodyStyle: bodyStyle,
                     ),
                   )
                   .toList();
-              final contentHeightEstimate = filteredProducts.isEmpty
+              final contentHeightEstimate = filteredBanners.isEmpty
                   ? emptyStateHeight
                   : rowHeights.fold<double>(0, (sum, height) => sum + height) +
-                        math.max(0, filteredProducts.length - 1) *
-                            dividerHeight;
+                      math.max(0, filteredBanners.length - 1) * dividerHeight;
               final maxTableHeight = constraints.maxHeight.isFinite
                   ? constraints.maxHeight
                   : headerHeight + dividerHeight + contentHeightEstimate;
@@ -520,24 +423,16 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                             Container(
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                color: AppColors.logoBlue.withValues(
-                                  alpha: 0.10,
-                                ),
+                                color: AppColors.logoBlue.withValues(alpha: 0.10),
                                 borderRadius: const BorderRadius.only(
                                   topLeft: Radius.circular(16),
                                   topRight: Radius.circular(16),
                                 ),
                               ),
-                              padding: const EdgeInsets.fromLTRB(
-                                20,
-                                16,
-                                20,
-                                16,
-                              ),
-                              child: _ProductHeaderRow(
+                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                              child: _BannerHeaderRow(
                                 widths: widths,
                                 trailingSpace: trailingSpace,
-                                isEmpty: filteredProducts.isEmpty,
                               ),
                             ),
                             const Divider(
@@ -545,7 +440,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                               thickness: 0.6,
                               color: Color(0xFFE4E7EC),
                             ),
-                            if (filteredProducts.isEmpty)
+                            if (filteredBanners.isEmpty)
                               if (shouldScrollBody)
                                 Expanded(
                                   child: ClipRRect(
@@ -554,9 +449,9 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                                       bottomRight: Radius.circular(16),
                                     ),
                                     child: const EmptyStateCard(
-                                      title: 'No products found',
+                                      title: 'No banners found',
                                       message:
-                                          'Adjust filters or add a new product.',
+                                          'Adjust filters or add a new banner.',
                                       showBorder: false,
                                     ),
                                   ),
@@ -568,9 +463,9 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                                     bottomRight: Radius.circular(16),
                                   ),
                                   child: const EmptyStateCard(
-                                    title: 'No products found',
+                                    title: 'No banners found',
                                     message:
-                                        'Adjust filters or add a new product.',
+                                        'Adjust filters or add a new banner.',
                                     showBorder: false,
                                   ),
                                 )
@@ -579,54 +474,43 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                                   ? Expanded(
                                       child: ListView.separated(
                                         padding: EdgeInsets.zero,
-                                        itemCount: filteredProducts.length,
-                                        itemBuilder: (context, i) => _ProductRow(
-                                          product: filteredProducts[i],
-                                          categoryName:
-                                              categoryById[filteredProducts[i]
-                                                  .categoryId] ??
-                                              '',
+                                        itemCount: filteredBanners.length,
+                                        itemBuilder: (context, i) => _BannerRow(
+                                          banner: filteredBanners[i],
                                           widths: widths,
                                           trailingSpace: trailingSpace,
                                           isLast:
-                                              i == filteredProducts.length - 1,
-                                          onPreview: () =>
-                                              _showProductPreviewDialog(
-                                                context,
-                                                filteredProducts[i],
-                                              ),
-                                          onEdit: () => _showProductDialog(
+                                              i == filteredBanners.length - 1,
+                                          onEdit: () => _showBannerDialog(
                                             context,
                                             ref,
-                                            initial: filteredProducts[i],
+                                            initial: filteredBanners[i],
                                           ),
                                           onToggleActive: () async {
-                                            final product = filteredProducts[i];
-                                            final nextIsActive =
-                                                !product.isActive;
+                                            final banner = filteredBanners[i];
+                                            final nextIsActive = !banner.isActive;
                                             final shouldToggle =
-                                                await _showToggleProductStatusDialog(
+                                                await _showToggleBannerStatusDialog(
                                                   context,
-                                                  product.name,
+                                                  banner.id,
                                                   nextIsActive,
                                                 );
                                             if (shouldToggle == true) {
                                               await ref
                                                   .read(
-                                                    appControllerProvider
-                                                        .notifier,
+                                                    appControllerProvider.notifier,
                                                   )
-                                                  .saveProduct(
-                                                    product.copyWith(
+                                                  .saveBanner(
+                                                    banner.copyWith(
                                                       isActive: nextIsActive,
                                                       updatedAt: DateTime.now(),
                                                     ),
                                                   );
                                             }
                                           },
-                                          onDelete: () => _deleteProduct(
+                                          onDelete: () => _deleteBanner(
                                             context,
-                                            filteredProducts[i],
+                                            filteredBanners[i],
                                           ),
                                         ),
                                         separatorBuilder: (context, i) =>
@@ -640,41 +524,28 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                                   : Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        for (
-                                          var i = 0;
-                                          i < filteredProducts.length;
-                                          i++
-                                        ) ...[
-                                          _ProductRow(
-                                            product: filteredProducts[i],
-                                            categoryName:
-                                                categoryById[filteredProducts[i]
-                                                    .categoryId] ??
-                                                '',
+                                        for (var i = 0;
+                                            i < filteredBanners.length;
+                                            i++) ...[
+                                          _BannerRow(
+                                            banner: filteredBanners[i],
                                             widths: widths,
                                             trailingSpace: trailingSpace,
                                             isLast:
-                                                i ==
-                                                filteredProducts.length - 1,
-                                            onPreview: () =>
-                                                _showProductPreviewDialog(
-                                                  context,
-                                                  filteredProducts[i],
-                                                ),
-                                            onEdit: () => _showProductDialog(
+                                                i == filteredBanners.length - 1,
+                                            onEdit: () => _showBannerDialog(
                                               context,
                                               ref,
-                                              initial: filteredProducts[i],
+                                              initial: filteredBanners[i],
                                             ),
                                             onToggleActive: () async {
-                                              final product =
-                                                  filteredProducts[i];
+                                              final banner = filteredBanners[i];
                                               final nextIsActive =
-                                                  !product.isActive;
+                                                  !banner.isActive;
                                               final shouldToggle =
-                                                  await _showToggleProductStatusDialog(
+                                                  await _showToggleBannerStatusDialog(
                                                     context,
-                                                    product.name,
+                                                    banner.id,
                                                     nextIsActive,
                                                   );
                                               if (shouldToggle == true) {
@@ -683,8 +554,8 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                                                       appControllerProvider
                                                           .notifier,
                                                     )
-                                                    .saveProduct(
-                                                      product.copyWith(
+                                                    .saveBanner(
+                                                      banner.copyWith(
                                                         isActive: nextIsActive,
                                                         updatedAt:
                                                             DateTime.now(),
@@ -692,12 +563,12 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                                                     );
                                               }
                                             },
-                                            onDelete: () => _deleteProduct(
+                                            onDelete: () => _deleteBanner(
                                               context,
-                                              filteredProducts[i],
+                                              filteredBanners[i],
                                             ),
                                           ),
-                                          if (i != filteredProducts.length - 1)
+                                          if (i != filteredBanners.length - 1)
                                             const Divider(
                                               height: 0,
                                               thickness: 0.6,
@@ -744,8 +615,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
 
   Widget _buildFiltersMenu({
     required BuildContext context,
-    required List<Product> products,
-    required List<Category> categories,
+    required List<AppBanner> banners,
   }) {
     return SizedBox(
       width: _filtersMenuWidth,
@@ -753,35 +623,6 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _FiltersSection(
-            title: 'Category',
-            child: SizedBox(
-              width: _filtersFieldWidth,
-              child: DropdownButtonFormField<int?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: categoryFilter,
-                decoration: _filterDropdownDecoration('Category'),
-                items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('Any')),
-                  ...categories.map(
-                    (item) => DropdownMenuItem<int?>(
-                      value: item.id,
-                      child: Text(item.name),
-                    ),
-                  ),
-                ],
-                onChanged: (value) {
-                  _setFilters(() => categoryFilter = value);
-                },
-              ),
-            ),
-          ),
-          const _FilterDivider(),
           _FiltersSection(
             title: 'Status',
             child: SizedBox(
@@ -797,10 +638,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                 decoration: _filterDropdownDecoration('Status'),
                 items: const [
                   DropdownMenuItem<String?>(value: null, child: Text('Any')),
-                  DropdownMenuItem<String?>(
-                    value: 'active',
-                    child: Text('Active'),
-                  ),
+                  DropdownMenuItem<String?>(value: 'active', child: Text('Active')),
                   DropdownMenuItem<String?>(
                     value: 'inactive',
                     child: Text('Inactive'),
@@ -808,93 +646,6 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                 ],
                 onChanged: (value) {
                   _setFilters(() => statusFilter = value);
-                },
-              ),
-            ),
-          ),
-          const _FilterDivider(),
-          _FiltersSection(
-            title: 'Sold',
-            child: SizedBox(
-              width: _filtersFieldWidth,
-              child: DropdownButtonFormField<String?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: soldSort,
-                decoration: _filterDropdownDecoration('Sold'),
-                items: const [
-                  DropdownMenuItem<String?>(value: null, child: Text('Any')),
-                  DropdownMenuItem<String?>(
-                    value: 'few_many',
-                    child: Text('Few-Many'),
-                  ),
-                  DropdownMenuItem<String?>(
-                    value: 'many_few',
-                    child: Text('Many-Few'),
-                  ),
-                ],
-                onChanged: (value) {
-                  _setFilters(() => soldSort = value);
-                },
-              ),
-            ),
-          ),
-          const _FilterDivider(),
-          _FiltersSection(
-            title: 'Price',
-            child: SizedBox(
-              width: _filtersFieldWidth,
-              child: DropdownButtonFormField<String?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: priceSort,
-                decoration: _filterDropdownDecoration('Price'),
-                items: const [
-                  DropdownMenuItem<String?>(value: null, child: Text('Any')),
-                  DropdownMenuItem<String?>(
-                    value: 'low_high',
-                    child: Text('Low-High'),
-                  ),
-                  DropdownMenuItem<String?>(
-                    value: 'high_low',
-                    child: Text('High-Low'),
-                  ),
-                ],
-                onChanged: (value) {
-                  _setFilters(() => priceSort = value);
-                },
-              ),
-            ),
-          ),
-          const _FilterDivider(),
-          _FiltersSection(
-            title: 'Name',
-            child: SizedBox(
-              width: _filtersFieldWidth,
-              child: DropdownButtonFormField<String?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: nameSort,
-                decoration: _filterDropdownDecoration('Name'),
-                items: const [
-                  DropdownMenuItem<String?>(value: null, child: Text('Any')),
-                  DropdownMenuItem<String?>(value: 'a_z', child: Text('A-Z')),
-                  DropdownMenuItem<String?>(value: 'z_a', child: Text('Z-A')),
-                ],
-                onChanged: (value) {
-                  _setFilters(() => nameSort = value);
                 },
               ),
             ),
@@ -911,7 +662,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                 decoration: _filterDropdownDecoration('Created at'),
                 icon: Icons.calendar_month_rounded,
                 onTap: () async {
-                  final dates = products.map((item) => item.createdAt).toList();
+                  final dates = banners.map((item) => item.createdAt).toList();
                   final picked = await showDatePicker(
                     context: context,
                     firstDate: dates.isEmpty
@@ -941,7 +692,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                 decoration: _filterDropdownDecoration('Updated at'),
                 icon: Icons.calendar_month_rounded,
                 onTap: () async {
-                  final dates = products.map((item) => item.updatedAt).toList();
+                  final dates = banners.map((item) => item.updatedAt).toList();
                   final picked = await showDatePicker(
                     context: context,
                     firstDate: dates.isEmpty
@@ -976,11 +727,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                     _setFilters(() {
                       createdAtFilter = null;
                       updatedAtFilter = null;
-                      categoryFilter = null;
                       statusFilter = null;
-                      priceSort = null;
-                      nameSort = null;
-                      soldSort = null;
                     });
                   },
                   borderRadius: BorderRadius.circular(12),
@@ -998,10 +745,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                     alignment: Alignment.center,
                     child: const Text(
                       'Clear',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        height: 1.15,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.w700, height: 1.15),
                     ),
                   ),
                 ),
@@ -1029,35 +773,11 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     return '${value.year}-$month-$day';
   }
 
-  int? _parseCategoryFilter(String? raw, List<Category> categories) {
-    if (raw == null || raw.isEmpty) {
-      return null;
-    }
-    final parsedId = int.tryParse(raw);
-    if (parsedId != null) {
-      return parsedId;
-    }
-    final normalized = raw.trim().toLowerCase();
-    final category = categories.cast<Category?>().firstWhere(
-      (item) =>
-          item != null &&
-          (item.name.toLowerCase() == normalized ||
-              _slugify(item.name) == normalized),
-      orElse: () => null,
-    );
-    return category?.id;
-  }
-
-  String _slugify(String value) =>
-      value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
-
-  _ProductColumnWidths _computeProductColumnWidths({
+  _BannerColumnWidths _computeBannerColumnWidths({
     required double screenWidth,
-    required List<Product> products,
-    required Map<int, String> categoryById,
+    required List<AppBanner> banners,
     required TextStyle headerStyle,
     required TextStyle bodyStyle,
-    required double gap,
   }) {
     double maxWidth(
       String header,
@@ -1082,53 +802,42 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
       String header,
       Iterable<String> values, {
       required double max,
-      TextStyle? valuesStyle,
     }) {
-      final width = maxWidth(header, values, valuesStyle: valuesStyle);
+      final width = maxWidth(header, values);
       return width > max ? max : width;
     }
 
-    return _ProductColumnWidths(
-      gap: gap,
-      id: maxWidth('ID', products.map((item) => '${item.id}')),
-      name: cappedMaxWidth(
-        'Name',
-        products.map((item) => item.name),
-        max: screenWidth < 700 ? 144 : 176,
+    return _BannerColumnWidths(
+      gap: _columnGapForWidth(screenWidth),
+      id: maxWidth('ID', banners.map((item) => '${item.id}')),
+      status: maxWidth(
+        'Status',
+        banners.map((item) => item.isActive ? 'Active' : 'Inactive'),
+      ) + _statusBadgeHorizontalPadding,
+      imageUrl: cappedMaxWidth(
+        'Image URL',
+        banners.map((item) => item.imageUrl),
+        max: screenWidth < 700 ? 220 : 300,
       ),
-      details: cappedMaxWidth(
-        'Details',
-        products.map((item) => item.details),
-        max: screenWidth < 700 ? 132 : 164,
+      externalUrl: cappedMaxWidth(
+        'External URL',
+        banners.map((item) => item.externalUrl ?? ''),
+        max: screenWidth < 700 ? 220 : 300,
       ),
-      category: cappedMaxWidth(
-        'Category',
-        products.map((item) => categoryById[item.categoryId] ?? ''),
-        max: screenWidth < 700 ? 128 : 156,
-      ),
-      price: maxWidth(
-        'Price',
-        products.map((item) => formatPesos(item.referencePriceCentavos)),
-      ),
-      sold: maxWidth('Sold', products.map((item) => '${item.sold}')) + 8,
-      createdAt:
-          maxWidth(
-            'Created at',
-            products.map(
-              (item) =>
-                  '${formatOrderDate(item.createdAt)}\n${formatOrderTimeWithSeconds(item.createdAt)}',
-            ),
-          ) +
-          _dateHeaderExtraAllowance,
-      updatedAt:
-          maxWidth(
-            'Updated at',
-            products.map(
-              (item) =>
-                  '${formatOrderDate(item.updatedAt)}\n${formatOrderTimeWithSeconds(item.updatedAt)}',
-            ),
-          ) +
-          _dateHeaderExtraAllowance,
+      createdAt: maxWidth(
+        'Created at',
+        banners.map(
+          (item) =>
+              '${formatOrderDate(item.createdAt)}\n${formatOrderTimeWithSeconds(item.createdAt)}',
+        ),
+      ) + _dateHeaderExtraAllowance,
+      updatedAt: maxWidth(
+        'Updated at',
+        banners.map(
+          (item) =>
+              '${formatOrderDate(item.updatedAt)}\n${formatOrderTimeWithSeconds(item.updatedAt)}',
+        ),
+      ) + _dateHeaderExtraAllowance,
     );
   }
 
@@ -1147,51 +856,33 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     return painter.height;
   }
 
-  double _measureProductRowHeight({
-    required Product product,
-    required String categoryName,
-    required _ProductColumnWidths widths,
+  double _measureBannerRowHeight({
+    required AppBanner banner,
+    required _BannerColumnWidths widths,
     required TextStyle bodyStyle,
   }) {
     final createdAtText =
-        '${formatOrderDate(product.createdAt)}\n${formatOrderTimeWithSeconds(product.createdAt)}';
+        '${formatOrderDate(banner.createdAt)}\n${formatOrderTimeWithSeconds(banner.createdAt)}';
     final updatedAtText =
-        '${formatOrderDate(product.updatedAt)}\n${formatOrderTimeWithSeconds(product.updatedAt)}';
+        '${formatOrderDate(banner.updatedAt)}\n${formatOrderTimeWithSeconds(banner.updatedAt)}';
 
     final tallestContent = <double>[
-      _measureTextHeight('${product.id}', bodyStyle, widths.id, maxLines: 1),
-      _measureTextHeight(product.name, bodyStyle, widths.name),
+      _measureTextHeight('${banner.id}', bodyStyle, widths.id, maxLines: 1),
       _measureTextHeight(
-        product.details,
+        banner.isActive ? 'Active' : 'Inactive',
         bodyStyle,
-        widths.details,
+        widths.status,
         maxLines: 1,
       ),
-      _measureTextHeight(categoryName, bodyStyle, widths.category, maxLines: 1),
+      _measureTextHeight(banner.imageUrl, bodyStyle, widths.imageUrl, maxLines: 2),
       _measureTextHeight(
-        formatPesos(product.referencePriceCentavos),
+        (banner.externalUrl ?? '').isEmpty ? '-' : banner.externalUrl!,
         bodyStyle,
-        widths.price,
-        maxLines: 1,
-      ),
-      _measureTextHeight(
-        '${product.sold}',
-        bodyStyle,
-        widths.sold,
-        maxLines: 1,
-      ),
-      _measureTextHeight(
-        createdAtText,
-        bodyStyle,
-        widths.createdAt,
+        widths.externalUrl,
         maxLines: 2,
       ),
-      _measureTextHeight(
-        updatedAtText,
-        bodyStyle,
-        widths.updatedAt,
-        maxLines: 2,
-      ),
+      _measureTextHeight(createdAtText, bodyStyle, widths.createdAt, maxLines: 2),
+      _measureTextHeight(updatedAtText, bodyStyle, widths.updatedAt, maxLines: 2),
       34,
     ].reduce(math.max);
 
@@ -1212,12 +903,12 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     return 1;
   }
 
-  Future<void> _deleteProduct(BuildContext context, Product product) async {
+  Future<void> _deleteBanner(BuildContext context, AppBanner banner) async {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AppModalFrame(
-          title: 'Remove Product?',
+          title: 'Remove Banner?',
           actions: [
             AppModalButton(
               label: 'Close',
@@ -1230,26 +921,26 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
               onPressed: () => Navigator.of(dialogContext).pop(true),
             ),
           ],
-          child: AppModalBodyText('${product.name.trim()} will be deleted.'),
+          child: AppModalBodyText('Banner #${banner.id} will be deleted.'),
         );
       },
     );
     if (shouldDelete != true || !mounted) {
       return;
     }
-    await ref.read(appControllerProvider.notifier).deleteProduct(product.id);
+    await ref.read(appControllerProvider.notifier).deleteBanner(banner.id);
   }
 
-  Future<bool?> _showToggleProductStatusDialog(
+  Future<bool?> _showToggleBannerStatusDialog(
     BuildContext context,
-    String productName,
+    int bannerId,
     bool nextIsActive,
   ) {
     return showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AppModalFrame(
-          title: nextIsActive ? 'Activate Product?' : 'Deactivate Product?',
+          title: nextIsActive ? 'Activate Banner?' : 'Deactivate Banner?',
           actions: [
             AppModalButton(
               label: 'Close',
@@ -1264,101 +955,36 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
           ],
           child: AppModalBodyText(
             nextIsActive
-                ? '${productName.trim()} will be activated.'
-                : '${productName.trim()} will be deactivated.',
+                ? 'Banner #$bannerId will be activated.'
+                : 'Banner #$bannerId will be deactivated.',
           ),
         );
       },
     );
   }
 
-  Future<void> _showProductPreviewDialog(
-    BuildContext context,
-    Product product,
-  ) {
-    final titleStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
-      fontSize: 16,
-      fontWeight: FontWeight.w800,
-      height: 1.15,
-    );
-    final unitStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-      color: const Color(0xFF667085),
-      fontSize: 12,
-      height: 1.15,
-    );
-    final priceStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
-      fontSize: 16,
-      color: AppColors.logoBlue,
-      fontWeight: FontWeight.w800,
-      height: 1.15,
-    );
-    final asOfStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-      color: const Color(0xFF667085),
-      fontSize: 11.5,
-      height: 1.15,
-    );
-
-    return showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AppModalFrame(
-          title: '',
-          actions: [
-            AppModalButton(
-              label: 'Close',
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-          ],
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: SizedBox(
-                  width: 300,
-                  height: 300,
-                  child: ProductPlaceholder(
-                    fullRounded: true,
-                    label: product.name,
-                    posterMode: true,
-                    imageUrl: product.photoUrl,
-                    imageFit: BoxFit.contain,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(product.name, style: titleStyle),
-              const SizedBox(height: 2),
-              Text(product.displayUnit, style: unitStyle),
-              const SizedBox(height: 12),
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.end,
-                spacing: 4,
-                runSpacing: 4,
-                children: [
-                  Text(
-                    formatPesos(product.referencePriceCentavos),
-                    style: priceStyle,
-                  ),
-                  Text(
-                    'as of ${formatAsOfDate(product.priceUpdatedAt)}',
-                    style: asOfStyle,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _showProductDialog(
+  Future<void> _showBannerDialog(
     BuildContext context,
     WidgetRef ref, {
-    Product? initial,
+    AppBanner? initial,
   }) async {
-    await showAdminProductDialog(context, ref, initial: initial);
+    final nextId =
+        initial?.id ??
+        ((ref
+                    .read(appControllerProvider)
+                    .banners
+                    .map((item) => item.id)
+                    .fold<int>(0, (max, value) => value > max ? value : max)) +
+                1);
+    final banner = await showAdminBannerDialog(
+      context,
+      initial: initial,
+      nextId: nextId,
+    );
+    if (banner == null) {
+      return;
+    }
+    await ref.read(appControllerProvider.notifier).saveBanner(banner);
   }
 }
 
@@ -1372,9 +998,9 @@ class _FiltersSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        _AdminProductsPageState._filtersContentHorizontalPadding,
+        _AdminBannersPageState._filtersContentHorizontalPadding,
         16,
-        _AdminProductsPageState._filtersContentHorizontalPadding,
+        _AdminBannersPageState._filtersContentHorizontalPadding,
         16,
       ),
       child: Column(
@@ -1450,16 +1076,14 @@ class _DateField extends StatelessWidget {
   }
 }
 
-class _ProductHeaderRow extends StatelessWidget {
-  const _ProductHeaderRow({
+class _BannerHeaderRow extends StatelessWidget {
+  const _BannerHeaderRow({
     required this.widths,
     required this.trailingSpace,
-    required this.isEmpty,
   });
 
-  final _ProductColumnWidths widths;
+  final _BannerColumnWidths widths;
   final double trailingSpace;
-  final bool isEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -1471,34 +1095,18 @@ class _ProductHeaderRow extends StatelessWidget {
     );
     return Row(
       children: [
+        SizedBox(width: widths.id, child: Text('ID', style: labelStyle)),
+        SizedBox(width: widths.gap),
+        SizedBox(width: widths.status, child: Text('Status', style: labelStyle)),
+        SizedBox(width: widths.gap),
         SizedBox(
-          width: widths.id,
-          child: Text('ID', style: labelStyle, maxLines: 1),
+          width: widths.imageUrl,
+          child: Text('Image URL', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
-          width: widths.name,
-          child: Text('Name', style: labelStyle, maxLines: 1),
-        ),
-        SizedBox(width: widths.gap),
-        SizedBox(
-          width: widths.details,
-          child: Text('Details', style: labelStyle, maxLines: 1),
-        ),
-        SizedBox(width: widths.gap),
-        SizedBox(
-          width: widths.category,
-          child: Text('Category', style: labelStyle, maxLines: 1),
-        ),
-        SizedBox(width: widths.gap),
-        SizedBox(
-          width: widths.price,
-          child: Text('Price', style: labelStyle, maxLines: 1),
-        ),
-        SizedBox(width: widths.gap),
-        SizedBox(
-          width: widths.sold,
-          child: Text('Sold', style: labelStyle, maxLines: 1),
+          width: widths.externalUrl,
+          child: Text('External URL', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
@@ -1523,7 +1131,7 @@ class _ProductHeaderRow extends StatelessWidget {
         SizedBox(width: widths.gap),
         if (trailingSpace > 0) SizedBox(width: trailingSpace),
         SizedBox(
-          width: _AdminProductsPageState._actionsWidth,
+          width: _AdminBannersPageState._actionsWidth,
           child: Align(
             alignment: Alignment.centerRight,
             child: Text(
@@ -1540,25 +1148,21 @@ class _ProductHeaderRow extends StatelessWidget {
   }
 }
 
-class _ProductRow extends StatelessWidget {
-  const _ProductRow({
-    required this.product,
-    required this.categoryName,
+class _BannerRow extends StatelessWidget {
+  const _BannerRow({
+    required this.banner,
     required this.widths,
     required this.trailingSpace,
     required this.isLast,
-    required this.onPreview,
     required this.onEdit,
     required this.onToggleActive,
     required this.onDelete,
   });
 
-  final Product product;
-  final String categoryName;
-  final _ProductColumnWidths widths;
+  final AppBanner banner;
+  final _BannerColumnWidths widths;
   final double trailingSpace;
   final bool isLast;
-  final VoidCallback onPreview;
   final VoidCallback onEdit;
   final Future<void> Function() onToggleActive;
   final Future<void> Function() onDelete;
@@ -1570,8 +1174,6 @@ class _ProductRow extends StatelessWidget {
       fontSize: (DefaultTextStyle.of(context).style.fontSize ?? 14) * scale,
       height: 1.15,
     );
-    final createdAt = product.createdAt;
-    final updatedAt = product.updatedAt;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -1588,54 +1190,38 @@ class _ProductRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            SizedBox(width: widths.id, child: Text('${banner.id}', style: bodyStyle)),
+            SizedBox(width: widths.gap),
             SizedBox(
-              width: widths.id,
-              child: Text('${product.id}', style: bodyStyle),
+              width: widths.status,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: AdminStateBadge(
+                  label: banner.isActive ? 'Active' : 'Inactive',
+                  color: banner.isActive
+                      ? AppColors.statusActiveGreen
+                      : const Color(0xFFE53935),
+                  fontSize: bodyStyle.fontSize ?? 14,
+                ),
+              ),
             ),
             SizedBox(width: widths.gap),
             SizedBox(
-              width: widths.name,
-              child: Text(product.name, style: bodyStyle),
-            ),
-            SizedBox(width: widths.gap),
-            SizedBox(
-              width: widths.details,
+              width: widths.imageUrl,
               child: Text(
-                product.details,
+                banner.imageUrl,
                 style: bodyStyle,
-                maxLines: 1,
-                softWrap: false,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             SizedBox(width: widths.gap),
             SizedBox(
-              width: widths.category,
+              width: widths.externalUrl,
               child: Text(
-                categoryName,
+                (banner.externalUrl ?? '').isEmpty ? '-' : banner.externalUrl!,
                 style: bodyStyle,
-                maxLines: 1,
-                softWrap: false,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            SizedBox(width: widths.gap),
-            SizedBox(
-              width: widths.price,
-              child: Text(
-                formatPesos(product.referencePriceCentavos),
-                style: bodyStyle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            SizedBox(width: widths.gap),
-            SizedBox(
-              width: widths.sold,
-              child: Text(
-                '${product.sold}',
-                style: bodyStyle,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1643,7 +1229,7 @@ class _ProductRow extends StatelessWidget {
             SizedBox(
               width: widths.createdAt,
               child: Text(
-                '${formatOrderDate(createdAt)}\n${formatOrderTimeWithSeconds(createdAt)}',
+                '${formatOrderDate(banner.createdAt)}\n${formatOrderTimeWithSeconds(banner.createdAt)}',
                 style: bodyStyle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -1653,7 +1239,7 @@ class _ProductRow extends StatelessWidget {
             SizedBox(
               width: widths.updatedAt,
               child: Text(
-                '${formatOrderDate(updatedAt)}\n${formatOrderTimeWithSeconds(updatedAt)}',
+                '${formatOrderDate(banner.updatedAt)}\n${formatOrderTimeWithSeconds(banner.updatedAt)}',
                 style: bodyStyle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -1662,22 +1248,10 @@ class _ProductRow extends StatelessWidget {
             SizedBox(width: widths.gap),
             if (trailingSpace > 0) SizedBox(width: trailingSpace),
             SizedBox(
-              width: _AdminProductsPageState._actionsWidth,
+              width: _AdminBannersPageState._actionsWidth,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  MousePressable(
-                    onTap: onPreview,
-                    borderRadius: BorderRadius.circular(10),
-                    child: const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Icon(
-                        Icons.visibility_outlined,
-                        size: 18,
-                        color: AppColors.logoBlue,
-                      ),
-                    ),
-                  ),
                   MousePressable(
                     onTap: onEdit,
                     borderRadius: BorderRadius.circular(10),
@@ -1696,7 +1270,7 @@ class _ProductRow extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(8),
                       child: Icon(
-                        product.isActive
+                        banner.isActive
                             ? Icons.close_rounded
                             : Icons.check_rounded,
                         size: 18,
@@ -1726,26 +1300,22 @@ class _ProductRow extends StatelessWidget {
   }
 }
 
-class _ProductColumnWidths {
-  const _ProductColumnWidths({
+class _BannerColumnWidths {
+  const _BannerColumnWidths({
     required this.gap,
     required this.id,
-    required this.name,
-    required this.category,
-    required this.details,
-    required this.price,
-    required this.sold,
+    required this.status,
+    required this.imageUrl,
+    required this.externalUrl,
     required this.createdAt,
     required this.updatedAt,
   });
 
   final double gap;
   final double id;
-  final double name;
-  final double category;
-  final double details;
-  final double price;
-  final double sold;
+  final double status;
+  final double imageUrl;
+  final double externalUrl;
   final double createdAt;
   final double updatedAt;
 }
@@ -1764,4 +1334,143 @@ double _textScaleForWidth(double width) {
     return 0.90;
   }
   return 1;
+}
+
+Future<AppBanner?> showAdminBannerDialog(
+  BuildContext context,
+  {
+  AppBanner? initial,
+  required int nextId,
+}) async {
+  return showDialog<AppBanner>(
+    context: context,
+    builder: (dialogContext) {
+      return _AdminBannerDialog(initial: initial, nextId: nextId);
+    },
+  );
+}
+
+class _AdminBannerDialog extends StatefulWidget {
+  const _AdminBannerDialog({required this.initial, required this.nextId});
+
+  final AppBanner? initial;
+  final int nextId;
+
+  @override
+  State<_AdminBannerDialog> createState() => _AdminBannerDialogState();
+}
+
+class _AdminBannerDialogState extends State<_AdminBannerDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _imageUrlController;
+  late final TextEditingController _externalUrlController;
+  late bool _isActive;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageUrlController = TextEditingController(
+      text: widget.initial?.imageUrl ?? '',
+    );
+    _externalUrlController = TextEditingController(
+      text: widget.initial?.externalUrl ?? '',
+    );
+    _isActive = widget.initial?.isActive ?? true;
+  }
+
+  @override
+  void dispose() {
+    _imageUrlController.dispose();
+    _externalUrlController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_isSubmitting) {
+      return;
+    }
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    _isSubmitting = true;
+    final banner = AppBanner(
+      id: widget.initial?.id ?? widget.nextId,
+      active: _isActive,
+      createdAt: widget.initial?.createdAt ?? DateTime.now(),
+      updatedAt: DateTime.now(),
+      imageUrl: _imageUrlController.text.trim(),
+      externalUrl: _externalUrlController.text.trim().isEmpty
+          ? null
+          : _externalUrlController.text.trim(),
+    );
+    Navigator.of(context).pop(banner);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppModalFrame(
+      title: widget.initial == null ? 'New Banner' : 'Edit Banner',
+      onSubmit: _submit,
+      actions: [
+        AppModalButton(
+          label: 'Close',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        const SizedBox(width: 10),
+        AppModalButton(label: 'Save', isPrimary: true, onPressed: _submit),
+      ],
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 6),
+              TextFormField(
+                controller: _imageUrlController,
+                textInputAction: TextInputAction.next,
+                onFieldSubmitted: (_) => _submit(),
+                decoration: const InputDecoration(labelText: 'Image URL'),
+                validator: (value) {
+                  if ((value?.trim() ?? '').isEmpty) {
+                    return 'Image URL is required.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _externalUrlController,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _submit(),
+                decoration: const InputDecoration(labelText: 'External URL'),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                dense: true,
+                visualDensity: const VisualDensity(vertical: -4),
+                contentPadding: EdgeInsets.zero,
+                thumbColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return Colors.white;
+                  }
+                  return null;
+                }),
+                trackColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return AppColors.statusActiveGreen;
+                  }
+                  return null;
+                }),
+                title: const Text('Active'),
+                value: _isActive,
+                onChanged: (value) => setState(() => _isActive = value),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

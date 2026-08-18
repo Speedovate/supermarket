@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/models/app_models.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
@@ -47,6 +48,12 @@ class OrderReviewPage extends ConsumerWidget {
                 Text('Name: ${draft.name}'),
                 Text('Mobile: ${draft.mobileNumber}'),
                 Text('Barangay: ${draft.barangay}'),
+                if (draft.fulfillmentMethod == FulfillmentMethod.delivery &&
+                    draft.barangay.trim().isNotEmpty) ...[
+                  Text(
+                    'Street/Landmark: ${draft.addressStreet.trim().isNotEmpty ? draft.addressStreet : draft.addressLandmark.trim().isNotEmpty ? draft.addressLandmark : "-"}',
+                  ),
+                ],
                 Text(
                   'Fulfillment: ${displayFulfillment(draft.fulfillmentMethod)}',
                 ),

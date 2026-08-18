@@ -16,12 +16,19 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('catalog screen loads', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const ProviderScope(child: AndrewsSupermarketApp()));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(find.text('All Products'), findsOneWidget);
+    expect(find.text('Best Sellers'), findsOneWidget);
   });
 }

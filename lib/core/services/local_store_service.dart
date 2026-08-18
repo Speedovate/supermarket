@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_models.dart';
 
 class LocalStoreService {
-  static const _storageKey = 'andrews_supermarket_demo_state_v1';
+  static const _storageKey = 'andrews_supermarket_demo_state_v2';
 
   Future<PersistedData?> load() async {
     final prefs = await SharedPreferences.getInstance();

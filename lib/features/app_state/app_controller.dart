@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants/barangays.dart';
 import '../../core/constants/sample_data.dart';
 import '../../core/models/app_models.dart';
 import '../../core/services/local_store_service.dart';
@@ -36,6 +39,8 @@ class AppState {
     this.errorMessage,
     this.lastSubmittedOrderId,
     this.categories = const [],
+    this.barangays = const [],
+    this.banners = const [],
     this.products = const [],
     this.cart = const [],
     this.orders = const [],
@@ -51,6 +56,8 @@ class AppState {
   final String? errorMessage;
   final int? lastSubmittedOrderId;
   final List<Category> categories;
+  final List<Barangay> barangays;
+  final List<AppBanner> banners;
   final List<Product> products;
   final List<CartItem> cart;
   final List<OrderRequest> orders;
@@ -70,6 +77,8 @@ class AppState {
     Object? errorMessage = _sentinel,
     Object? lastSubmittedOrderId = _sentinel,
     List<Category>? categories,
+    List<Barangay>? barangays,
+    List<AppBanner>? banners,
     List<Product>? products,
     List<CartItem>? cart,
     List<OrderRequest>? orders,
@@ -89,6 +98,8 @@ class AppState {
           ? this.lastSubmittedOrderId
           : lastSubmittedOrderId as int?,
       categories: categories ?? this.categories,
+      barangays: barangays ?? this.barangays,
+      banners: banners ?? this.banners,
       products: products ?? this.products,
       cart: cart ?? this.cart,
       orders: orders ?? this.orders,
@@ -103,6 +114,9 @@ class AppState {
 
 class AppController extends Notifier<AppState> {
   late final LocalStoreService _store;
+  static const _defaultStoreContactNumber = '09064493206';
+  static const _defaultFacebookMessengerUrl =
+      'https://www.facebook.com/andrew.s.supermarket.2024';
 
   @override
   AppState build() {
@@ -115,39 +129,155 @@ class AppController extends Notifier<AppState> {
     try {
       final persisted = await _store.load();
       if (persisted == null) {
-        state = state.copyWith(
-          initialized: true,
-          categories: sampleCategories,
-          products: sampleProducts,
-          settings: const AppSettings(),
-        );
+        _applyDefaultState();
         await _persist();
         return;
       }
 
-      state = state.copyWith(
-        initialized: true,
-        categories: persisted.categories,
-        products: persisted.products,
-        orders: persisted.orders,
-        settings: persisted.settings,
-        cart: persisted.cart,
-        customerDraft: persisted.customerDraft,
-        adminSession: persisted.adminSession,
-      );
+      _applyPersistedState(persisted);
     } catch (_) {
       await _store.clear();
-      state = state.copyWith(
-        initialized: true,
-        categories: sampleCategories,
-        products: sampleProducts,
-        orders: const [],
-        settings: const AppSettings(),
-        cart: const [],
-        customerDraft: const CustomerDraft(),
-      );
+      _applyDefaultState();
       await _persist();
     }
+  }
+
+  Future<void> reloadFromStore() async {
+    try {
+      final persisted = await _store.load();
+      if (persisted == null) {
+        return;
+      }
+      _applyPersistedState(persisted);
+    } catch (_) {
+      // Keep the current in-memory state if refresh fails.
+    }
+  }
+
+  void _applyDefaultState() {
+    state = state.copyWith(
+      initialized: true,
+      categories: sampleCategories,
+      barangays: sampleBarangays,
+      banners: sampleBanners,
+      products: sampleProducts,
+      orders: const [],
+      settings: const AppSettings(),
+      cart: const [],
+      customerDraft: const CustomerDraft(),
+      adminSession: null,
+    );
+  }
+
+  void _applyPersistedState(PersistedData persisted) {
+    state = state.copyWith(
+      initialized: true,
+      categories: persisted.categories,
+      barangays: _normalizeBarangays(
+        persisted.barangays,
+        settings: persisted.settings,
+      ),
+      banners: persisted.banners,
+      products: persisted.products,
+      orders: persisted.orders,
+      settings: _normalizeSettings(persisted.settings),
+      cart: persisted.cart,
+      customerDraft: _resolveAutofillDraft(
+        currentDraft: persisted.customerDraft,
+        orders: persisted.orders,
+      ),
+      adminSession: persisted.adminSession,
+    );
+  }
+
+  AppSettings _normalizeSettings(AppSettings settings) {
+    return settings.copyWith(
+      storeContactNumber: settings.storeContactNumber.trim().isEmpty
+          ? _defaultStoreContactNumber
+          : settings.storeContactNumber.trim(),
+      facebookMessengerUrl: settings.facebookMessengerUrl.trim().isEmpty
+          ? _defaultFacebookMessengerUrl
+          : settings.facebookMessengerUrl.trim(),
+    );
+  }
+
+  List<Barangay> _normalizeBarangays(
+    List<Barangay> persistedBarangays, {
+    required AppSettings settings,
+  }) {
+    if (persistedBarangays.isNotEmpty) {
+      final sanitized = persistedBarangays
+          .where((item) => item.name.trim().isNotEmpty)
+          .map(
+            (item) => item.copyWith(
+              name: formatBarangayName(item.name),
+              cutoffWeekday:
+                  item.cutoffWeekday >= DateTime.monday &&
+                      item.cutoffWeekday <= DateTime.sunday
+                  ? item.cutoffWeekday
+                  : DateTime.monday,
+              cutoffMinutes:
+                  item.cutoffMinutes >= 0 && item.cutoffMinutes < 1440
+                  ? item.cutoffMinutes
+                  : 5 * 60,
+            ),
+          )
+          .toList();
+      if (sanitized.isNotEmpty) {
+        sanitized.sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
+        return sanitized;
+      }
+    }
+
+    final fallbackNames = settings.serviceableBarangays.isNotEmpty
+        ? settings.serviceableBarangays
+        : puertoPrincesaBarangays;
+    final baseDate = DateTime(2026, 8, 1);
+    return List<Barangay>.generate(fallbackNames.length, (index) {
+      final name = formatBarangayName(fallbackNames[index]);
+      final matchedSample = sampleBarangays.cast<Barangay?>().firstWhere(
+        (item) => item?.name.toLowerCase() == name.toLowerCase(),
+        orElse: () => null,
+      );
+      if (matchedSample != null) {
+        return matchedSample;
+      }
+      final seededDate = baseDate.add(Duration(days: index));
+      return Barangay(
+        id: index + 1,
+        name: name,
+        isActive: true,
+        cutoffWeekday: DateTime.monday,
+        cutoffMinutes: 5 * 60,
+        createdAt: seededDate,
+        updatedAt: seededDate,
+      );
+    });
+  }
+
+  CustomerDraft _resolveAutofillDraft({
+    required CustomerDraft currentDraft,
+    required List<OrderRequest> orders,
+  }) {
+    final hasDraftContent =
+        currentDraft.name.trim().isNotEmpty ||
+        currentDraft.mobileNumber.trim().isNotEmpty ||
+        currentDraft.barangay.trim().isNotEmpty;
+    if (hasDraftContent || orders.isEmpty) {
+      return currentDraft;
+    }
+
+    final latestOrder = [...orders]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final latestCustomer = latestOrder.first.customer;
+    final now = DateTime.now();
+    return latestCustomer.copyWith(
+      normalizedMobileNumber: normalizePhoneNumber(latestCustomer.mobileNumber),
+      createdAt: currentDraft.createdAt ?? latestCustomer.createdAt ?? now,
+      updatedAt: now,
+    );
   }
 
   List<Category> get publicCategories =>
@@ -160,11 +290,18 @@ class AppController extends Notifier<AppState> {
     final activeCategoryIds = publicCategories.map((item) => item.id).toSet();
     final normalizedQuery = query.trim().toLowerCase();
     return state.products.where((product) {
-      final categoryMatch = categoryId == 'all'
-          ? true
-          : product.categoryId.toString() == categoryId;
+      final isUnassignedCategory = !activeCategoryIds.contains(
+        product.category,
+      );
+      final categoryMatch = switch (categoryId) {
+        'all' => true,
+        'others' => isUnassignedCategory,
+        _ => product.category.toString() == categoryId,
+      };
       final publiclyVisible =
-          product.isActive && activeCategoryIds.contains(product.categoryId);
+          product.active &&
+          (activeCategoryIds.contains(product.category) ||
+              isUnassignedCategory);
       final searchMatch = normalizedQuery.isEmpty
           ? true
           : product.normalizedName.contains(normalizedQuery);
@@ -177,43 +314,154 @@ class AppController extends Notifier<AppState> {
       return const [];
     }
 
+    final settings = state.settings;
+    final metrics = settings.bestSellerBasis == BestSellerBasis.lifetime
+        ? {
+            for (final product in state.products)
+              product.id: (
+                quantity: product.sold,
+                count: product.sold > 0 ? 1 : 0,
+              ),
+          }
+        : _recentBestSellerMetrics();
+
     final products = publicProductsFor(categoryId: 'all', query: '')
       ..sort((a, b) {
-        final quantityCompare = b.validOrderedQuantity.compareTo(
-          a.validOrderedQuantity,
-        );
+        final aMetrics = metrics[a.id] ?? (quantity: 0, count: 0);
+        final bMetrics = metrics[b.id] ?? (quantity: 0, count: 0);
+        final quantityCompare = bMetrics.quantity.compareTo(aMetrics.quantity);
         if (quantityCompare != 0) {
           return quantityCompare;
         }
-        return b.validOrderCount.compareTo(a.validOrderCount);
+        return bMetrics.count.compareTo(aMetrics.count);
       });
 
     final rankedProducts = products
-        .where((product) => product.validOrderedQuantity > 0)
-        .take(state.settings.bestSellersLimit)
+        .where(
+          (product) =>
+              (metrics[product.id]?.quantity ?? 0) >=
+              settings.bestSellerMinSoldUnits,
+        )
         .toList();
     if (rankedProducts.isNotEmpty) {
-      return rankedProducts;
+      return settings.bestSellersShowAll
+          ? rankedProducts
+          : rankedProducts.take(settings.bestSellersLimit).toList();
     }
+    return const [];
+  }
 
-    final mockPriority = {
-      for (var i = 0; i < sampleBestSellerProductIds.length; i++)
-        sampleBestSellerProductIds[i]: i,
-    };
-    final mockedProducts = [...products]
-      ..sort((a, b) {
-        final aPriority = mockPriority[a.id] ?? 1 << 20;
-        final bPriority = mockPriority[b.id] ?? 1 << 20;
-        if (aPriority != bPriority) {
-          return aPriority.compareTo(bPriority);
-        }
-        return a.name.compareTo(b.name);
-      });
+  Map<int, ({int quantity, int count})> _recentBestSellerMetrics() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 30));
+    final metrics = <int, ({int quantity, int count})>{};
+    for (final order in state.orders) {
+      if (order.status != OrderStatus.completed ||
+          order.createdAt.isBefore(cutoff)) {
+        continue;
+      }
+      for (final item in order.items) {
+        final current = metrics[item.productId] ?? (quantity: 0, count: 0);
+        metrics[item.productId] = (
+          quantity: current.quantity + item.requestedQuantity,
+          count: current.count + 1,
+        );
+      }
+    }
+    return metrics;
+  }
 
-    return mockedProducts
-        .where((product) => mockPriority.containsKey(product.id))
-        .take(state.settings.bestSellersLimit)
-        .toList();
+  List<Barangay> get activeBarangays {
+    final active =
+        state.barangays
+            .where((item) => item.isActive && item.name.trim().isNotEmpty)
+            .toList()
+          ..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+    if (active.isNotEmpty) {
+      return active;
+    }
+    return _normalizeBarangays(
+        const [],
+        settings: state.settings,
+      ).where((item) => item.isActive).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
+  List<String> get serviceableBarangays =>
+      activeBarangays.map((item) => item.name).toList();
+
+  Barangay? barangayByName(String name) {
+    final normalized = name.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    for (final barangay in state.barangays) {
+      if (barangay.name.trim().toLowerCase() == normalized) {
+        return barangay;
+      }
+    }
+    for (final barangay in _normalizeBarangays(
+      const [],
+      settings: state.settings,
+    )) {
+      if (barangay.name.trim().toLowerCase() == normalized) {
+        return barangay;
+      }
+    }
+    return null;
+  }
+
+  String? barangayCutoffMessage(String name, {DateTime? now}) {
+    final barangay = barangayByName(name);
+    if (barangay == null) {
+      return null;
+    }
+    final current = now ?? DateTime.now();
+    final cutoffLabel = formatBarangayCutoffSchedule(barangay);
+    final currentWeekCutoff = _currentWeekCutoff(
+      barangay: barangay,
+      reference: current,
+    );
+    if (!current.isAfter(currentWeekCutoff)) {
+      return cutoffLabel;
+    }
+    final nextCutoff = currentWeekCutoff.add(const Duration(days: 7));
+    return '$cutoffLabel. Your order will be processed next ${displayWeekday(nextCutoff.weekday)} or you can select pickup instead to get your order faster.';
+  }
+
+  bool isBarangayCutoffReached(String name, {DateTime? now}) {
+    final barangay = barangayByName(name);
+    if (barangay == null) {
+      return false;
+    }
+    final current = now ?? DateTime.now();
+    final currentWeekCutoff = _currentWeekCutoff(
+      barangay: barangay,
+      reference: current,
+    );
+    return current.isAfter(currentWeekCutoff);
+  }
+
+  DateTime _currentWeekCutoff({
+    required Barangay barangay,
+    required DateTime reference,
+  }) {
+    return _cutoffDateForReference(
+      reference,
+      weekday: barangay.cutoffWeekday,
+      cutoffMinutes: barangay.cutoffMinutes,
+    );
+  }
+
+  DateTime _cutoffDateForReference(
+    DateTime reference, {
+    required int weekday,
+    required int cutoffMinutes,
+  }) {
+    final startOfDay = DateTime(reference.year, reference.month, reference.day);
+    final daysUntil = weekday - reference.weekday;
+    return startOfDay.add(Duration(days: daysUntil, minutes: cutoffMinutes));
   }
 
   void clearError() {
@@ -305,6 +553,14 @@ class AppController extends Notifier<AppState> {
     await _persist();
   }
 
+  Future<void> replaceCartAndDraft({
+    required List<CartItem> cart,
+    required CustomerDraft customerDraft,
+  }) async {
+    state = state.copyWith(cart: [...cart], customerDraft: customerDraft);
+    await _persist();
+  }
+
   Future<void> updateCustomerDraft(CustomerDraft draft) async {
     final now = DateTime.now();
     state = state.copyWith(
@@ -318,14 +574,29 @@ class AppController extends Notifier<AppState> {
 
   String? validateCheckoutDraft(CustomerDraft draft) {
     if (draft.name.trim().isEmpty) {
-      return 'Customer name is required.';
+      return 'Please enter your name';
     }
     if (!isValidPhilippineMobile(draft.mobileNumber.trim())) {
-      return 'Enter a valid Philippine mobile number.';
+      return 'Please enter your phone number';
+    }
+    final requiresPlace = state.settings.requirePlaceForDeliveryOnly
+        ? draft.fulfillmentMethod == FulfillmentMethod.delivery
+        : true;
+    if (requiresPlace && draft.barangay.trim().isEmpty) {
+      return 'Please select a barangay';
     }
     if (draft.fulfillmentMethod == FulfillmentMethod.delivery &&
-        draft.barangay.trim().isEmpty) {
-      return 'Place is required.';
+        draft.barangay.trim().isNotEmpty &&
+        !serviceableBarangays.contains(draft.barangay.trim())) {
+      return 'Please select a serviceable barangay';
+    }
+    if (draft.fulfillmentMethod == FulfillmentMethod.delivery &&
+        draft.addressStreet.trim().isEmpty) {
+      return 'Please enter your street/landmark';
+    }
+    if (draft.fulfillmentMethod == FulfillmentMethod.delivery &&
+        state.cartTotalCentavos < state.settings.minimumDeliveryOrderAmount) {
+      return 'Minimum order for delivery not reached';
     }
     if (state.cart.isEmpty) {
       return 'Add at least one product before submitting.';
@@ -350,11 +621,6 @@ class AppController extends Notifier<AppState> {
           return value > max ? value : max;
         })) +
         1;
-    final nextSerial = state.orders.length + 1;
-    final date =
-        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final reference = 'AS-$date-${nextSerial.toString().padLeft(4, '0')}';
-
     final normalizedCustomer = state.customerDraft.copyWith(
       normalizedMobileNumber: normalizePhoneNumber(
         state.customerDraft.mobileNumber,
@@ -381,21 +647,17 @@ class AppController extends Notifier<AppState> {
 
     final order = OrderRequest(
       id: orderId,
-      referenceNumber: reference,
-      customer: normalizedCustomer,
-      items: items,
-      estimatedTotalCentavos: state.cartTotalCentavos,
-      fulfillmentMethod: normalizedCustomer.fulfillmentMethod,
-      deliveryFeeCentavos: 0,
-      discountCentavos: 0,
-      manualAdjustmentCentavos: 0,
-      finalQuotedTotalCentavos: 0,
-      status: OrderStatus.newRequest,
-      customerConfirmation: CustomerConfirmationStatus.pending,
-      bestSellerMetricsApplied: false,
+      status: OrderStatus.waiting,
       createdAt: now,
       updatedAt: now,
-      statusHistory: const [],
+      total: state.cartTotalCentavos,
+      name: normalizedCustomer.name,
+      phone: normalizedCustomer.mobileNumber,
+      method: normalizedCustomer.fulfillmentMethod,
+      place: normalizedCustomer.barangay,
+      addressStreet: normalizedCustomer.addressStreet,
+      addressLandmark: normalizedCustomer.addressLandmark,
+      products: items,
     );
 
     state = state.copyWith(
@@ -403,7 +665,10 @@ class AppController extends Notifier<AppState> {
       orders: [order, ...state.orders],
       cart: const [],
       lastSubmittedOrderId: orderId,
-      customerDraft: const CustomerDraft(),
+      customerDraft: normalizedCustomer.copyWith(
+        createdAt: normalizedCustomer.createdAt ?? now,
+        updatedAt: now,
+      ),
     );
     await _persist();
     return orderId;
@@ -431,7 +696,7 @@ class AppController extends Notifier<AppState> {
       adminSession: AdminSession(
         uid: 'demo-admin',
         email: demoAdminEmail,
-        displayName: 'Andrew Admin',
+        displayName: 'Arjie Lim',
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       ),
@@ -447,17 +712,16 @@ class AppController extends Notifier<AppState> {
 
   Future<void> saveProduct(Product product) async {
     final now = DateTime.now();
-    final category = state.categories.firstWhere(
-      (item) => item.id == product.categoryId,
-    );
     final updated = product.copyWith(
       name: product.name.trim(),
-      categoryNameSnapshot: category.name,
-      quantity: product.quantity.trim(),
-      unit: product.unit.trim(),
-      type: product.type.trim(),
-      priceUpdatedAt: product.priceUpdatedAt,
-      createdAt: product.createdAt ?? now,
+      details: product.details.trim(),
+      photoUrl: product.photoUrl?.trim().isEmpty ?? true
+          ? null
+          : product.photoUrl?.trim(),
+      photoStoragePath: product.photoStoragePath?.trim().isEmpty ?? true
+          ? null
+          : product.photoStoragePath?.trim(),
+      createdAt: product.createdAt,
       updatedAt: now,
     );
     final next = [...state.products];
@@ -467,7 +731,49 @@ class AppController extends Notifier<AppState> {
     } else {
       next[index] = updated;
     }
-    state = state.copyWith(products: next, errorMessage: null);
+    final nextCart = state.cart
+        .map(
+          (item) => item.productId == updated.id
+              ? item.copyWith(
+                  productName: updated.name,
+                  unit: updated.displayUnit,
+                  referenceUnitPriceCentavos: updated.referencePriceCentavos,
+                  photoUrl: updated.photoUrl,
+                  updatedAt: now,
+                )
+              : item,
+        )
+        .toList();
+    state = state.copyWith(products: next, cart: nextCart, errorMessage: null);
+    await _persist();
+  }
+
+  Future<void> saveBanner(AppBanner banner) async {
+    final now = DateTime.now();
+    final updated = banner.copyWith(
+      imageUrl: banner.imageUrl.trim(),
+      externalUrl: banner.externalUrl?.trim().isEmpty ?? true
+          ? null
+          : banner.externalUrl?.trim(),
+      createdAt: banner.createdAt,
+      updatedAt: now,
+    );
+    final next = [...state.banners];
+    final index = next.indexWhere((item) => item.id == updated.id);
+    if (index == -1) {
+      next.add(updated);
+    } else {
+      next[index] = updated;
+    }
+    state = state.copyWith(banners: next, errorMessage: null);
+    await _persist();
+  }
+
+  Future<void> deleteBanner(int bannerId) async {
+    state = state.copyWith(
+      banners: state.banners.where((item) => item.id != bannerId).toList(),
+      errorMessage: null,
+    );
     await _persist();
   }
 
@@ -497,10 +803,10 @@ class AppController extends Notifier<AppState> {
         .where((item) => item.id != categoryId)
         .toList();
     final nextProducts = state.products.map((product) {
-      if (product.categoryId != categoryId) {
+      if (product.category != categoryId) {
         return product;
       }
-      return product.copyWith(categoryId: 8, categoryNameSnapshot: 'Others');
+      return product.copyWith(category: 8);
     }).toList();
 
     state = state.copyWith(
@@ -560,91 +866,133 @@ class AppController extends Notifier<AppState> {
     await _persist();
   }
 
-  Future<void> updateOrder(OrderRequest nextOrder) async {
-    final currentOrder = state.orders.firstWhere(
-      (item) => item.id == nextOrder.id,
+  Future<void> saveBarangay(Barangay barangay) async {
+    final now = DateTime.now();
+    final updated = barangay.copyWith(
+      name: formatBarangayName(barangay.name),
+      createdAt: barangay.createdAt,
+      updatedAt: now,
     );
-    final updatedOrder = _applyBestSellerMetrics(currentOrder, nextOrder);
-    final updatedOrders = state.orders
-        .map((item) => item.id == nextOrder.id ? updatedOrder : item)
-        .toList();
-
-    state = state.copyWith(orders: updatedOrders);
+    final next = [...state.barangays];
+    final index = next.indexWhere((item) => item.id == updated.id);
+    if (index == -1) {
+      next.add(updated);
+    } else {
+      next[index] = updated;
+    }
+    next.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    state = state.copyWith(barangays: next, errorMessage: null);
     await _persist();
   }
 
-  OrderRequest _applyBestSellerMetrics(
-    OrderRequest previous,
-    OrderRequest next,
-  ) {
-    final wasCounted = previous.bestSellerMetricsApplied;
-    final shouldCount = _isBestSellerStatus(next.status);
-    var products = [...state.products];
-    var metricsApplied = wasCounted;
-
-    if (!wasCounted && shouldCount) {
-      products = _updateProductMetrics(products, next.items, add: true);
-      metricsApplied = true;
-    }
-
-    if (wasCounted && !_isBestSellerStatus(next.status)) {
-      products = _updateProductMetrics(products, previous.items, add: false);
-      metricsApplied = false;
-    }
-
-    state = state.copyWith(products: products);
-    return next.copyWith(bestSellerMetricsApplied: metricsApplied);
+  Future<void> deleteBarangay(int barangayId) async {
+    final next = state.barangays.where((item) => item.id != barangayId).toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    state = state.copyWith(barangays: next, errorMessage: null);
+    await _persist();
   }
 
-  List<Product> _updateProductMetrics(
-    List<Product> source,
-    List<OrderItem> items, {
-    required bool add,
-  }) {
-    return source.map((product) {
-      final matching = items.where((item) => item.productId == product.id);
-      if (matching.isEmpty) {
-        return product;
-      }
-      final quantity = matching.fold(
-        0,
-        (sum, item) => sum + item.requestedQuantity,
-      );
-      return product.copyWith(
-        validOrderedQuantity:
-            product.validOrderedQuantity + (add ? quantity : -quantity),
-        validOrderCount: product.validOrderCount + (add ? 1 : -1),
-        lastValidOrderAt: add ? DateTime.now() : product.lastValidOrderAt,
-      );
-    }).toList();
+  Future<void> updateAdminProfile({
+    required String displayName,
+    required String email,
+    required AppSettings settings,
+  }) async {
+    final now = DateTime.now();
+    final currentSession = state.adminSession;
+    state = state.copyWith(
+      adminSession: currentSession?.copyWith(
+        displayName: displayName,
+        email: email,
+        createdAt: currentSession.createdAt ?? now,
+        updatedAt: now,
+      ),
+      settings: settings.copyWith(
+        createdAt: settings.createdAt ?? state.settings.createdAt ?? now,
+        updatedAt: now,
+      ),
+    );
+    await _persist();
   }
 
-  bool _isBestSellerStatus(OrderStatus status) {
-    return {
-      OrderStatus.confirmed,
-      OrderStatus.preparing,
-      OrderStatus.readyForPickup,
-      OrderStatus.outForDelivery,
-      OrderStatus.completed,
-    }.contains(status);
+  Future<void> updateOrder(OrderRequest nextOrder) async {
+    final currentOrder = state.orders
+        .where((item) => item.id == nextOrder.id)
+        .firstOrNull;
+    final currentIsCompleted = currentOrder?.status == OrderStatus.completed;
+    final nextIsCompleted = nextOrder.status == OrderStatus.completed;
+
+    var nextProducts = state.products;
+    if (currentOrder != null && (currentIsCompleted || nextIsCompleted)) {
+      final previousTotals = currentIsCompleted
+          ? _orderQuantityTotalsByProductId(currentOrder)
+          : const <int, int>{};
+      final nextTotals = nextIsCompleted
+          ? _orderQuantityTotalsByProductId(nextOrder)
+          : const <int, int>{};
+      final affectedProductIds = {...previousTotals.keys, ...nextTotals.keys};
+
+      nextProducts = state.products.map((product) {
+        if (!affectedProductIds.contains(product.id)) {
+          return product;
+        }
+        final previousQuantity = previousTotals[product.id] ?? 0;
+        final nextQuantity = nextTotals[product.id] ?? 0;
+        final delta = nextQuantity - previousQuantity;
+        if (delta == 0) {
+          return product;
+        }
+        return product.copyWith(
+          sold: math.max(0, product.sold + delta),
+          updatedAt: DateTime.now(),
+        );
+      }).toList();
+    }
+
+    final updatedOrders = state.orders
+        .map((item) => item.id == nextOrder.id ? nextOrder : item)
+        .toList();
+
+    state = state.copyWith(orders: updatedOrders, products: nextProducts);
+    await _persist();
+  }
+
+  Map<int, int> _orderQuantityTotalsByProductId(OrderRequest order) {
+    final totals = <int, int>{};
+    for (final item in order.items) {
+      totals.update(
+        item.productId,
+        (value) => value + item.requestedQuantity,
+        ifAbsent: () => item.requestedQuantity,
+      );
+    }
+    return totals;
   }
 
   Future<void> _persist() async {
-    await _store.save(
-      PersistedData(
-        categories: state.categories,
-        products: state.products,
-        orders: state.orders,
-        settings: state.settings,
-        cart: state.cart,
-        customerDraft: state.customerDraft,
-        adminSession: state.adminSession,
-        createdAt: state.initialized
-            ? state.settings.createdAt
-            : DateTime.now(),
-        updatedAt: DateTime.now(),
-      ),
-    );
+    try {
+      await _store.save(
+        PersistedData(
+          categories: state.categories,
+          barangays: state.barangays,
+          banners: state.banners,
+          products: state.products,
+          orders: state.orders,
+          settings: state.settings,
+          cart: state.cart,
+          customerDraft: state.customerDraft,
+          adminSession: state.adminSession,
+          createdAt: state.initialized
+              ? state.settings.createdAt
+              : DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+    } catch (_) {
+      state = state.copyWith(
+        errorMessage:
+            'Unable to save the latest local changes. Try a smaller product image.',
+      );
+    }
   }
 }
 

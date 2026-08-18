@@ -155,5 +155,62 @@ ThemeData buildAppTheme() {
       foregroundColor: text,
       elevation: 0,
     ),
+    dialogTheme: const DialogThemeData(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+    ),
+    datePickerTheme: DatePickerThemeData(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shadowColor: Colors.black12,
+      dividerColor: border,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+      ),
+      headerBackgroundColor: Colors.white,
+      headerForegroundColor: text,
+      dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return Colors.white;
+        }
+        return text;
+      }),
+      dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return primary;
+        }
+        return Colors.white;
+      }),
+      todayForegroundColor: const WidgetStatePropertyAll(primaryDark),
+      todayBackgroundColor: const WidgetStatePropertyAll(Colors.white),
+      yearForegroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return Colors.white;
+        }
+        return text;
+      }),
+      yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return primary;
+        }
+        return Colors.white;
+      }),
+      rangePickerBackgroundColor: Colors.white,
+      rangePickerSurfaceTintColor: Colors.white,
+    ),
+    timePickerTheme: TimePickerThemeData(
+      backgroundColor: Colors.white,
+      dialBackgroundColor: Colors.white,
+      dayPeriodColor: Colors.white,
+      dayPeriodTextColor: text,
+      hourMinuteColor: Colors.white,
+      hourMinuteTextColor: text,
+      dialHandColor: primary,
+      dialTextColor: text,
+      entryModeIconColor: text,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+      ),
+    ),
   );
 }

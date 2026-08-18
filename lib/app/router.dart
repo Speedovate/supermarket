@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -5,15 +6,34 @@ import '../core/widgets/admin_scaffold.dart';
 import '../features/admin_auth/presentation/admin_login_page.dart';
 import '../features/admin_dashboard/presentation/admin_dashboard_page.dart';
 import '../features/app_state/app_controller.dart';
+import '../features/banner_management/presentation/admin_banners_page.dart';
+import '../features/barangay_management/presentation/admin_barangays_page.dart';
 import '../features/catalog/presentation/catalog_page.dart';
 import '../features/category_management/presentation/admin_categories_page.dart';
+import '../features/category_management/presentation/admin_category_detail_page.dart';
 import '../features/checkout/presentation/order_review_page.dart';
 import '../features/checkout/presentation/order_success_page.dart';
 import '../features/order_management/presentation/admin_order_detail_page.dart';
 import '../features/order_management/presentation/admin_orders_page.dart';
+import '../features/product_management/presentation/admin_product_detail_page.dart';
 import '../features/product_management/presentation/admin_products_page.dart';
 import '../features/settings/presentation/admin_profile_page.dart';
-import '../features/settings/presentation/admin_settings_page.dart';
+
+bool _isKnownAdminPath(String path) {
+  return path == '/admin' ||
+      path == '/admin/' ||
+      path == '/admin/login' ||
+      path == '/admin/dashboard' ||
+      path == '/admin/products' ||
+      path == '/admin/banners' ||
+      path == '/admin/barangays' ||
+      path == '/admin/categories' ||
+      path == '/admin/orders' ||
+      path == '/admin/profile' ||
+      path.startsWith('/admin/products/') ||
+      path.startsWith('/admin/categories/') ||
+      path.startsWith('/admin/orders/');
+}
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refresh = ref.watch(routerRefreshProvider);
@@ -39,6 +59,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       if (goingToLogin && isAuthed) {
         return '/admin/dashboard';
+      }
+
+      if (goingToAdmin && isAuthed) {
+        final path = state.uri.path;
+        if (path == '/admin' || path == '/admin/' || !_isKnownAdminPath(path)) {
+          return '/admin/dashboard';
+        }
       }
 
       return null;
@@ -76,9 +103,39 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 const NoTransitionPage(child: AdminProductsPage()),
           ),
           GoRoute(
+            path: '/admin/banners',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AdminBannersPage()),
+          ),
+          GoRoute(
+            path: '/admin/barangays',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AdminBarangaysPage()),
+          ),
+          GoRoute(
+            path: '/admin/products/:productId',
+            pageBuilder: (context, state) {
+              final productId =
+                  int.tryParse(state.pathParameters['productId'] ?? '') ?? 0;
+              return NoTransitionPage(
+                child: AdminProductDetailPage(productId: productId),
+              );
+            },
+          ),
+          GoRoute(
             path: '/admin/categories',
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: AdminCategoriesPage()),
+          ),
+          GoRoute(
+            path: '/admin/categories/:categoryId',
+            pageBuilder: (context, state) {
+              final categoryId =
+                  int.tryParse(state.pathParameters['categoryId'] ?? '') ?? 0;
+              return NoTransitionPage(
+                child: AdminCategoryDetailPage(categoryId: categoryId),
+              );
+            },
           ),
           GoRoute(
             path: '/admin/orders',
@@ -91,14 +148,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final orderId =
                   int.tryParse(state.pathParameters['orderId'] ?? '') ?? 0;
               return NoTransitionPage(
+                key: ValueKey('admin-order-$orderId'),
                 child: AdminOrderDetailPage(orderId: orderId),
               );
             },
-          ),
-          GoRoute(
-            path: '/admin/settings',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: AdminSettingsPage()),
           ),
           GoRoute(
             path: '/admin/profile',

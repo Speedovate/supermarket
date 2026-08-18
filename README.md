@@ -69,8 +69,8 @@ flutter run -d chrome
 ```text
 admins/{uid}
 {
-  "email": "your-admin@email.com",
-  "displayName": "Andrew Admin"
+  "email": "admin@andrews.com",
+  "displayName": "Arjie Lim"
 }
 ```
 

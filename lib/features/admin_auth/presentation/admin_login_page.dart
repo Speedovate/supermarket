@@ -15,6 +15,7 @@ class AdminLoginPage extends ConsumerStatefulWidget {
 }
 
 class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController(text: demoAdminEmail);
   final _passwordController = TextEditingController(text: demoAdminPassword);
 
@@ -62,54 +63,79 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: SectionCard(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(right: 14, bottom: 28),
-                      child: Center(child: BrandLogo()),
-                    ),
-                    TextField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(labelText: 'Email'),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(labelText: 'Password'),
-                    ),
-                    if (state.errorMessage != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        state.errorMessage!,
-                        style: const TextStyle(color: Color(0xFFE31E24)),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(right: 14, bottom: 28),
+                        child: Center(child: BrandLogo()),
                       ),
-                    ],
-                    const SizedBox(height: 18),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: state.adminLoading
-                            ? null
-                            : () async {
-                                final success = await ref
-                                    .read(appControllerProvider.notifier)
-                                    .loginAdmin(
-                                      email: _emailController.text,
-                                      password: _passwordController.text,
-                                    );
-                                if (success && context.mounted) {
-                                  context.go('/admin/dashboard');
-                                }
-                              },
-                        child: Text(
-                          state.adminLoading ? 'Signing in...' : 'Login',
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: const InputDecoration(labelText: 'Email'),
+                        validator: (value) {
+                          final text = value?.trim() ?? '';
+                          if (text.isEmpty) {
+                            return 'Email is required.';
+                          }
+                          if (!text.contains('@') || !text.contains('.')) {
+                            return 'Enter a valid email.';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Password',
+                        ),
+                        validator: (value) {
+                          if ((value?.trim() ?? '').isEmpty) {
+                            return 'Password is required.';
+                          }
+                          return null;
+                        },
+                      ),
+                      if (state.errorMessage != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          state.errorMessage!,
+                          style: const TextStyle(color: Color(0xFFE31E24)),
+                        ),
+                      ],
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: state.adminLoading
+                              ? null
+                              : () async {
+                                  if (!(_formKey.currentState?.validate() ??
+                                      false)) {
+                                    return;
+                                  }
+                                  final success = await ref
+                                      .read(appControllerProvider.notifier)
+                                      .loginAdmin(
+                                        email: _emailController.text,
+                                        password: _passwordController.text,
+                                      );
+                                  if (success && context.mounted) {
+                                    context.go('/admin/dashboard');
+                                  }
+                                },
+                          child: Text(
+                            state.adminLoading ? 'Signing in...' : 'Login',
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
