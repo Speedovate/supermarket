@@ -1438,6 +1438,9 @@ class _CartButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final badgePadding = showLabel
+        ? const EdgeInsets.only(right: 10)
+        : const EdgeInsets.only(top: 4, right: 12);
     return MousePressable(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -1449,7 +1452,7 @@ class _CartButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.only(right: 10),
+                padding: badgePadding,
                 child: Badge(
                   isLabelVisible: cartCount > 0,
                   alignment: AlignmentDirectional.topEnd,
