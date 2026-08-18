@@ -4584,14 +4584,30 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                                               ?.call(nextQuantity);
                                           return;
                                         }
-                                        await ref
-                                            .read(
-                                              appControllerProvider.notifier,
-                                            )
-                                            .updateCartQuantity(
-                                              widget.product.id,
-                                              nextQuantity,
-                                            );
+                                        final controller = ref.read(
+                                          appControllerProvider.notifier,
+                                        );
+                                        if (nextQuantity <= 0) {
+                                          final shouldRemove =
+                                              await _showRemoveProductDialog(
+                                                context,
+                                              );
+                                          if (shouldRemove != true) {
+                                            return;
+                                          }
+                                          await controller.removeFromCart(
+                                            widget.product.id,
+                                          );
+                                          if (!context.mounted) {
+                                            return;
+                                          }
+                                          _popAllRoutesUntilFirst(context);
+                                          return;
+                                        }
+                                        await controller.updateCartQuantity(
+                                          widget.product.id,
+                                          nextQuantity,
+                                        );
                                       },
                                     ),
                                 ],
@@ -4937,6 +4953,17 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                           nextQuantity == draftQuantity) {
                         return;
                       }
+                      if (!context.mounted) {
+                        return;
+                      }
+                      if (nextQuantity <= 0 && cartQuantity > 0) {
+                        final shouldRemove = await _showRemoveProductDialog(
+                          context,
+                        );
+                        if (shouldRemove != true) {
+                          return;
+                        }
+                      }
                       setState(() => _draftQuantity = nextQuantity);
                     },
                   ),
@@ -5115,6 +5142,15 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                                 );
                                 if (nextQuantity != cartQuantity) {
                                   if (nextQuantity <= 0) {
+                                    final shouldRemove =
+                                        cartQuantity > 0
+                                            ? await _showRemoveProductDialog(
+                                              context,
+                                            )
+                                            : true;
+                                    if (shouldRemove != true) {
+                                      return;
+                                    }
                                     await controller.removeFromCart(
                                       widget.product.id,
                                     );
