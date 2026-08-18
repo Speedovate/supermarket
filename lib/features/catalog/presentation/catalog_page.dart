@@ -256,6 +256,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
       backgroundColor: Colors.transparent,
       constraints: BoxConstraints(
         minWidth: MediaQuery.of(context).size.width,
@@ -1448,6 +1450,7 @@ class _CartButton extends StatelessWidget {
             children: [
               Badge(
                 isLabelVisible: cartCount > 0,
+                offset: const Offset(-8, 0),
                 label: Text(
                   formatCompactCount(cartCount),
                   style: const TextStyle(
@@ -2540,12 +2543,62 @@ class _DesktopCartPanel extends ConsumerWidget {
   final Future<void> Function(OrderRequest order) onOrderAgain;
   final bool isBottomSheet;
 
-  Future<void> _scrollToTopIfNeeded() async {
+  Future<void> _scrollToRevealBarangayField(BuildContext fieldContext) async {
     if (!isBottomSheet || !scrollController.hasClients) {
       return;
     }
+    await WidgetsBinding.instance.endOfFrame;
+    if (!scrollController.hasClients || !fieldContext.mounted) {
+      return;
+    }
+
+    await Scrollable.ensureVisible(
+      fieldContext,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      alignment: 0.08,
+    );
+
+    await WidgetsBinding.instance.endOfFrame;
+    if (!scrollController.hasClients || !fieldContext.mounted) {
+      return;
+    }
+
+    final renderObject = fieldContext.findRenderObject();
+    if (renderObject is! RenderBox) {
+      return;
+    }
+
+    final media = MediaQuery.of(fieldContext);
+    final fieldTop = renderObject.localToGlobal(Offset.zero).dy;
+    final fieldHeight = renderObject.size.height;
+    const overlayGap = 12.0;
+    const searchFieldHeight = 68.0;
+    const bottomOuterPadding = 24.0;
+    const targetVisiblePadding = 16.0;
+    final visibleBottom =
+        media.size.height - media.viewInsets.bottom - bottomOuterPadding;
+    final requiredBottom =
+        fieldTop +
+        fieldHeight +
+        overlayGap +
+        searchFieldHeight +
+        targetVisiblePadding;
+    final missingSpace = requiredBottom - visibleBottom;
+
+    if (missingSpace <= 0) {
+      return;
+    }
+
+    final nextOffset = math.min(
+      scrollController.offset + missingSpace,
+      scrollController.position.maxScrollExtent,
+    );
+    if ((nextOffset - scrollController.offset).abs() < 1) {
+      return;
+    }
     await scrollController.animateTo(
-      0,
+      nextOffset,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
     );
@@ -2641,6 +2694,7 @@ class _DesktopCartPanel extends ConsumerWidget {
                             children: [
                               Badge(
                                 isLabelVisible: finalCartCount > 0,
+                                offset: const Offset(-8, 0),
                                 label: Text(
                                   formatCompactCount(finalCartCount),
                                   style: const TextStyle(
@@ -2725,7 +2779,7 @@ class _DesktopCartPanel extends ConsumerWidget {
                         selectedOrder: selectedOrder,
                         onContactUs: onContactUs,
                         onDraftChanged: onDraftChanged,
-                        onBarangayActivated: _scrollToTopIfNeeded,
+                        onBarangayActivated: _scrollToRevealBarangayField,
                       ),
                     ),
                       const SizedBox(height: 12),
@@ -2824,7 +2878,7 @@ class _DesktopCartPanel extends ConsumerWidget {
   }
 }
 
-class _DesktopCartCustomerCard extends ConsumerWidget {
+class _DesktopCartCustomerCard extends ConsumerStatefulWidget {
   const _DesktopCartCustomerCard({
     required this.settings,
     required this.serviceableBarangays,
@@ -2843,19 +2897,33 @@ class _DesktopCartCustomerCard extends ConsumerWidget {
   final OrderRequest? selectedOrder;
   final VoidCallback onContactUs;
   final Future<void> Function({FulfillmentMethod? method}) onDraftChanged;
-  final Future<void> Function() onBarangayActivated;
+  final Future<void> Function(BuildContext fieldContext) onBarangayActivated;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DesktopCartCustomerCard> createState() =>
+      _DesktopCartCustomerCardState();
+}
+
+class _DesktopCartCustomerCardState
+    extends ConsumerState<_DesktopCartCustomerCard> {
+  bool _isBarangayMenuOpen = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = widget.settings;
+    final controllers = widget.controllers;
+    final selectedOrder = widget.selectedOrder;
     final isReadOnly = selectedOrder != null;
-    final effectiveDraft = selectedOrder?.customer ?? draft;
+    final effectiveDraft = selectedOrder?.customer ?? widget.draft;
     final appController = ref.read(appControllerProvider.notifier);
     final barangays = {
-      ...serviceableBarangays,
+      ...widget.serviceableBarangays,
       if (controllers.barangay.text.trim().isNotEmpty)
         controllers.barangay.text.trim(),
     }.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    final cutoffReference = isReadOnly ? selectedOrder?.createdAt : null;
+    final cutoffReference = isReadOnly ? selectedOrder.createdAt : null;
+    final hideStreetLabel =
+        _isBarangayMenuOpen && controllers.street.text.trim().isNotEmpty;
     final cutoffMessage =
         effectiveDraft.fulfillmentMethod == FulfillmentMethod.delivery &&
             effectiveDraft.barangay.trim().isNotEmpty
@@ -2903,7 +2971,7 @@ class _DesktopCartCustomerCard extends ConsumerWidget {
                 )
               else
                 MousePressable(
-                  onTap: onContactUs,
+                  onTap: widget.onContactUs,
                   hoverOverlayAlpha: 0,
                   pressedOverlayAlpha: 0,
                   child: Text(
@@ -2924,7 +2992,7 @@ class _DesktopCartCustomerCard extends ConsumerWidget {
           ] else ...[
             TextField(
               controller: controllers.name,
-              onChanged: (_) => onDraftChanged(),
+              onChanged: (_) => widget.onDraftChanged(),
               decoration: const InputDecoration(labelText: 'Name'),
             ),
             const SizedBox(height: 12),
@@ -2935,7 +3003,7 @@ class _DesktopCartCustomerCard extends ConsumerWidget {
                 LengthLimitingTextInputFormatter(11),
                 _PhilippineMobileInputFormatter(),
               ],
-              onChanged: (_) => onDraftChanged(),
+              onChanged: (_) => widget.onDraftChanged(),
               decoration: const InputDecoration(labelText: 'Phone'),
             ),
           ],
@@ -2953,9 +3021,15 @@ class _DesktopCartCustomerCard extends ConsumerWidget {
               _BarangayField(
                 controller: controllers.barangay,
                 items: barangays,
-                onActivated: onBarangayActivated,
+                onActivated: widget.onBarangayActivated,
+                onMenuVisibilityChanged: (isOpen) {
+                  if (!mounted || _isBarangayMenuOpen == isOpen) {
+                    return;
+                  }
+                  setState(() => _isBarangayMenuOpen = isOpen);
+                },
                 onChanged: () async {
-                  await onDraftChanged();
+                  await widget.onDraftChanged();
                 },
               ),
             if (effectiveDraft.fulfillmentMethod ==
@@ -2972,9 +3046,9 @@ class _DesktopCartCustomerCard extends ConsumerWidget {
               else
                 TextField(
                   controller: controllers.street,
-                  onChanged: (_) => onDraftChanged(),
-                  decoration: const InputDecoration(
-                    labelText: 'Street/Landmark',
+                  onChanged: (_) => widget.onDraftChanged(),
+                  decoration: InputDecoration(
+                    labelText: hideStreetLabel ? null : 'Street/Landmark',
                   ),
                 ),
               if (cutoffMessage != null) ...[
@@ -2996,11 +3070,11 @@ class _DesktopCartCustomerCard extends ConsumerWidget {
             ignoring: isReadOnly,
             child: Opacity(
               opacity: isReadOnly ? 0.72 : 1,
-              child: RadioGroup<FulfillmentMethod>(
-                groupValue: effectiveDraft.fulfillmentMethod,
-                onChanged: (value) async {
-                  await onDraftChanged(method: value);
-                },
+                child: RadioGroup<FulfillmentMethod>(
+                  groupValue: effectiveDraft.fulfillmentMethod,
+                  onChanged: (value) async {
+                    await widget.onDraftChanged(method: value);
+                  },
                 child: Row(
                   children: [
                     Expanded(
@@ -3066,12 +3140,14 @@ class _BarangayField extends StatefulWidget {
     required this.controller,
     required this.items,
     required this.onActivated,
+    required this.onMenuVisibilityChanged,
     required this.onChanged,
   });
 
   final TextEditingController controller;
   final List<String> items;
-  final Future<void> Function() onActivated;
+  final Future<void> Function(BuildContext fieldContext) onActivated;
+  final ValueChanged<bool> onMenuVisibilityChanged;
   final Future<void> Function() onChanged;
 
   @override
@@ -3142,7 +3218,7 @@ class _BarangayFieldState extends State<_BarangayField> {
       if (!mounted) {
         return;
       }
-      unawaited(widget.onActivated());
+      unawaited(widget.onActivated(context));
       _overlayEntry ??= _buildOverlayEntry();
       final overlay = Overlay.of(context);
       if (_overlayEntry!.mounted) {
@@ -3154,6 +3230,7 @@ class _BarangayFieldState extends State<_BarangayField> {
       if (mounted) {
         setState(() => _menuOpen = true);
       }
+      widget.onMenuVisibilityChanged(true);
     });
   }
 
@@ -3161,6 +3238,7 @@ class _BarangayFieldState extends State<_BarangayField> {
     _overlayEntry?.remove();
     _overlayEntry = null;
     _searchController.clear();
+    widget.onMenuVisibilityChanged(false);
     if (notify && mounted) {
       setState(() => _menuOpen = false);
     }
