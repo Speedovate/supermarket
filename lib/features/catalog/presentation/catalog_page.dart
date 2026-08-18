@@ -4957,12 +4957,21 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                         return;
                       }
                       if (nextQuantity <= 0 && cartQuantity > 0) {
+                        final controller = ref.read(
+                          appControllerProvider.notifier,
+                        );
                         final shouldRemove = await _showRemoveProductDialog(
                           context,
                         );
                         if (shouldRemove != true) {
                           return;
                         }
+                        await controller.removeFromCart(widget.product.id);
+                        if (!mounted) {
+                          return;
+                        }
+                        _popAllRoutesUntilFirst(this.context);
+                        return;
                       }
                       setState(() => _draftQuantity = nextQuantity);
                     },
