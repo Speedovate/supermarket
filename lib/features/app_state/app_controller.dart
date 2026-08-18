@@ -238,10 +238,11 @@ class AppController extends Notifier<AppState> {
   void _restartOrdersRealtimeSync() {
     unawaited(_ordersSubscription?.cancel());
     final adminSession = state.adminSession;
+    final trackedPhones = _customerLookupPhones();
     final stream = adminSession != null
         ? _firestoreCatalog.watchOrders()
         : _firestoreCatalog.watchOrdersForNormalizedPhones(
-            _customerLookupPhones(),
+            trackedPhones,
           );
     _ordersSubscription = stream.listen((orders) async {
       state = state.copyWith(
@@ -250,6 +251,7 @@ class AppController extends Notifier<AppState> {
             : _mergeOrdersPreservingLocal(
                 existing: state.orders,
                 incoming: orders,
+                trackedPhones: trackedPhones,
               ),
       );
       await _persist();
@@ -1224,10 +1226,11 @@ class AppController extends Notifier<AppState> {
   Future<void> _refreshOrdersFromFirebase() async {
     try {
       final adminSession = state.adminSession;
+      final trackedPhones = _customerLookupPhones();
       final remoteOrders = adminSession != null
           ? await _firestoreCatalog.loadOrders()
           : await _firestoreCatalog.loadOrdersForNormalizedPhones(
-              _customerLookupPhones(),
+              trackedPhones,
             );
       state = state.copyWith(
         orders: adminSession != null
@@ -1235,6 +1238,7 @@ class AppController extends Notifier<AppState> {
             : _mergeOrdersPreservingLocal(
                 existing: state.orders,
                 incoming: remoteOrders,
+                trackedPhones: trackedPhones,
               ),
       );
       await _persist();
@@ -1269,9 +1273,19 @@ class AppController extends Notifier<AppState> {
   List<OrderRequest> _mergeOrdersPreservingLocal({
     required List<OrderRequest> existing,
     required List<OrderRequest> incoming,
+    required Set<String> trackedPhones,
   }) {
+    final incomingById = <int, OrderRequest>{
+      for (final order in incoming) order.id: order,
+    };
     final mergedById = <int, OrderRequest>{
-      for (final order in existing) order.id: order,
+      for (final order in existing)
+        if (!_shouldPruneLocalOrder(
+          order,
+          trackedPhones: trackedPhones,
+          incomingById: incomingById,
+        ))
+          order.id: order,
     };
 
     for (final order in incoming) {
@@ -1294,6 +1308,21 @@ class AppController extends Notifier<AppState> {
         return b.id.compareTo(a.id);
       });
     return merged;
+  }
+
+  bool _shouldPruneLocalOrder(
+    OrderRequest order, {
+    required Set<String> trackedPhones,
+    required Map<int, OrderRequest> incomingById,
+  }) {
+    if (incomingById.containsKey(order.id)) {
+      return false;
+    }
+    final normalizedPhone = normalizePhoneNumber(order.phone);
+    if (normalizedPhone.isEmpty) {
+      return false;
+    }
+    return trackedPhones.contains(normalizedPhone);
   }
 
   String _mapAdminLoginError(FirebaseAuthException error) {

@@ -3086,6 +3086,18 @@ class _BarangayFieldState extends State<_BarangayField> {
           return const SizedBox.shrink();
         }
         final size = renderBox.size;
+        final fieldOffset = renderBox.localToGlobal(Offset.zero);
+        final media = MediaQuery.of(context);
+        const overlayGap = 12.0;
+        const bottomOuterPadding = 24.0;
+        final availableHeight =
+            media.size.height -
+            fieldOffset.dy -
+            size.height -
+            overlayGap -
+            media.padding.bottom -
+            bottomOuterPadding;
+        final resolvedMaxHeight = availableHeight.clamp(160.0, 480.0);
         final matches = _matches;
         final showNoMatchState = _showNoMatchState;
         return Positioned.fill(
@@ -3103,114 +3115,117 @@ class _BarangayFieldState extends State<_BarangayField> {
                 CompositedTransformFollower(
                   link: _layerLink,
                   showWhenUnlinked: false,
-                  offset: Offset(0, size.height + 12),
+                  offset: Offset(0, size.height + overlayGap),
                   child: Material(
                     color: Colors.transparent,
-                    child: Container(
-                      width: size.width,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE4E7EC)),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 320),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: TextField(
-                                controller: _searchController,
-                                focusNode: _searchFocusNode,
-                                onChanged: (_) {
-                                  _overlayEntry?.markNeedsBuild();
-                                  if (mounted) {
-                                    setState(() {});
-                                  }
-                                },
-                                decoration: const InputDecoration(
-                                  hintText: 'Search barangay...',
-                                ),
-                              ),
-                            ),
-                            const Divider(
-                              height: 1,
-                              thickness: 1,
-                              color: Color(0xFFE4E7EC),
-                            ),
-                            if (showNoMatchState)
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: bottomOuterPadding),
+                      child: Container(
+                        width: size.width,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE4E7EC)),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxHeight: resolvedMaxHeight),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
                               Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 12,
-                                ),
-                                child: Text(
-                                  'No matching barangays',
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: const Color(0xFF667085),
-                                        height: 1.15,
-                                      ),
-                                ),
-                              )
-                            else
-                              Flexible(
-                                child: ListView.builder(
-                                  padding: EdgeInsets.zero,
-                                  shrinkWrap: true,
-                                  itemCount: matches.length,
-                                  itemBuilder: (context, index) {
-                                    return MousePressable(
-                                      onTap: () async {
-                                        widget.controller.text = matches[index];
-                                        widget.controller.selection =
-                                            TextSelection.collapsed(
-                                              offset:
-                                                  widget.controller.text.length,
-                                            );
-                                        _removeOverlay();
-                                        await widget.onChanged();
-                                      },
-                                      borderRadius: BorderRadius.circular(0),
-                                      child: Container(
-                                        width: double.infinity,
-                                        padding: EdgeInsets.fromLTRB(
-                                          14,
-                                          10,
-                                          14,
-                                          10,
-                                        ),
-                                        constraints: const BoxConstraints(
-                                          minHeight: 44,
-                                        ),
-                                        alignment: Alignment.centerLeft,
-                                        decoration: BoxDecoration(
-                                          border: index == matches.length - 1
-                                              ? null
-                                              : const Border(
-                                                  bottom: BorderSide(
-                                                    color: Color(0xFFE4E7EC),
-                                                  ),
-                                                ),
-                                        ),
-                                        child: Text(
-                                          matches[index],
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyLarge
-                                              ?.copyWith(
-                                                height: 1.15,
-                                                color: const Color(0xFF101828),
-                                              ),
-                                        ),
-                                      ),
-                                    );
+                                padding: const EdgeInsets.all(12),
+                                child: TextField(
+                                  controller: _searchController,
+                                  focusNode: _searchFocusNode,
+                                  onChanged: (_) {
+                                    _overlayEntry?.markNeedsBuild();
+                                    if (mounted) {
+                                      setState(() {});
+                                    }
                                   },
+                                  decoration: const InputDecoration(
+                                    hintText: 'Search barangay...',
+                                  ),
                                 ),
                               ),
-                          ],
+                              const Divider(
+                                height: 1,
+                                thickness: 1,
+                                color: Color(0xFFE4E7EC),
+                              ),
+                              if (showNoMatchState)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
+                                  child: Text(
+                                    'No matching barangays',
+                                    style: Theme.of(context).textTheme.bodyMedium
+                                        ?.copyWith(
+                                          color: const Color(0xFF667085),
+                                          height: 1.15,
+                                        ),
+                                  ),
+                                )
+                              else
+                                Flexible(
+                                  child: ListView.builder(
+                                    padding: EdgeInsets.zero,
+                                    shrinkWrap: true,
+                                    itemCount: matches.length,
+                                    itemBuilder: (context, index) {
+                                      return MousePressable(
+                                        onTap: () async {
+                                          widget.controller.text = matches[index];
+                                          widget.controller.selection =
+                                              TextSelection.collapsed(
+                                                offset:
+                                                    widget.controller.text.length,
+                                              );
+                                          _removeOverlay();
+                                          await widget.onChanged();
+                                        },
+                                        borderRadius: BorderRadius.circular(0),
+                                        child: Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.fromLTRB(
+                                            14,
+                                            10,
+                                            14,
+                                            10,
+                                          ),
+                                          constraints: const BoxConstraints(
+                                            minHeight: 44,
+                                          ),
+                                          alignment: Alignment.centerLeft,
+                                          decoration: BoxDecoration(
+                                            border: index == matches.length - 1
+                                                ? null
+                                                : const Border(
+                                                    bottom: BorderSide(
+                                                      color: Color(0xFFE4E7EC),
+                                                    ),
+                                                  ),
+                                          ),
+                                          child: Text(
+                                            matches[index],
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.copyWith(
+                                                  height: 1.15,
+                                                  color: const Color(0xFF101828),
+                                                ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
