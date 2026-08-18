@@ -216,7 +216,10 @@ class AppController extends Notifier<AppState> {
     _productsSubscription ??= _firestoreCatalog.watchProducts(
       includeInactive: includeInactive,
     ).listen((products) async {
-      state = state.copyWith(products: products);
+      state = state.copyWith(
+        products: products,
+        cart: _syncCartWithProducts(products: products),
+      );
       await _persist();
     }, onError: _handleRealtimeSyncError);
     _settingsSubscription ??= _firestoreCatalog.watchSettings().listen((
@@ -294,6 +297,10 @@ class AppController extends Notifier<AppState> {
   }
 
   void _applyPersistedState(PersistedData persisted) {
+    final syncedCart = _syncCartWithProducts(
+      products: persisted.products,
+      cart: persisted.cart,
+    );
     state = state.copyWith(
       initialized: true,
       categories: persisted.categories,
@@ -305,7 +312,7 @@ class AppController extends Notifier<AppState> {
       products: persisted.products,
       orders: persisted.orders,
       settings: _normalizeSettings(persisted.settings),
-      cart: persisted.cart,
+      cart: syncedCart,
       customerDraft: _resolveAutofillDraft(
         currentDraft: persisted.customerDraft,
         orders: persisted.orders,
@@ -344,9 +351,8 @@ class AppController extends Notifier<AppState> {
               )
             : state.barangays,
         banners: snapshot.banners.isNotEmpty ? snapshot.banners : state.banners,
-        products: snapshot.products.isNotEmpty
-            ? snapshot.products
-            : state.products,
+        products: snapshot.products,
+        cart: _syncCartWithProducts(products: snapshot.products),
         settings: snapshot.settings == null
             ? state.settings
             : _normalizeSettings(snapshot.settings!),
@@ -466,6 +472,32 @@ class AppController extends Notifier<AppState> {
 
   List<Category> get publicCategories =>
       state.categories.where((item) => item.isActive).toList();
+
+  List<CartItem> _syncCartWithProducts({
+    required List<Product> products,
+    List<CartItem>? cart,
+  }) {
+    final sourceCart = cart ?? state.cart;
+    if (sourceCart.isEmpty) {
+      return sourceCart;
+    }
+    final productsById = {for (final product in products) product.id: product};
+    return sourceCart
+        .map((item) {
+          final product = productsById[item.productId];
+          if (product == null) {
+            return null;
+          }
+          return item.copyWith(
+            productName: product.name,
+            unit: product.displayUnit,
+            referenceUnitPriceCentavos: product.referencePriceCentavos,
+            photoUrl: product.photoUrl,
+          );
+        })
+        .nonNulls
+        .toList();
+  }
 
   List<Product> publicProductsFor({
     required String categoryId,

@@ -375,12 +375,24 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                             final orderId = await ref
                                 .read(appControllerProvider.notifier)
                                 .submitOrder();
-                            if (!mounted || orderId == null) {
+                            if (!mounted) {
+                              return;
+                            }
+                            if (orderId == null) {
+                              final submitError = ref
+                                      .read(appControllerProvider)
+                                      .errorMessage ??
+                                  'Unable to submit your order right now.';
+                              messenger.clearSnackBars();
+                              messenger.showSnackBar(
+                                errorSnackBar(submitError),
+                              );
                               return;
                             }
                             _customerNameController.clear();
                             _customerMobileController.clear();
                             _customerBarangayController.clear();
+                            _customerStreetController.clear();
                             setSheetState(() {
                               localPreviousOrdersExpanded = false;
                               localSelectedThreadId = '$orderId';
@@ -1008,7 +1020,16 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                     final orderId = await ref
                         .read(appControllerProvider.notifier)
                         .submitOrder();
-                    if (!mounted || orderId == null) {
+                    if (!mounted) {
+                      return;
+                    }
+                    if (orderId == null) {
+                      final submitError = ref
+                              .read(appControllerProvider)
+                              .errorMessage ??
+                          'Unable to submit your order right now.';
+                      messenger.clearSnackBars();
+                      messenger.showSnackBar(errorSnackBar(submitError));
                       return;
                     }
                     _customerNameController.clear();

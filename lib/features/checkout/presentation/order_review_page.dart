@@ -118,10 +118,20 @@ class OrderReviewPage extends ConsumerWidget {
                 onPressed: state.submittingOrder
                     ? null
                     : () async {
+                        final messenger = ScaffoldMessenger.of(context);
                         final orderId = await ref
                             .read(appControllerProvider.notifier)
                             .submitOrder();
-                        if (!context.mounted || orderId == null) {
+                        if (!context.mounted) {
+                          return;
+                        }
+                        if (orderId == null) {
+                          final submitError = ref
+                                  .read(appControllerProvider)
+                                  .errorMessage ??
+                              'Unable to submit your order right now.';
+                          messenger.clearSnackBars();
+                          messenger.showSnackBar(errorSnackBar(submitError));
                           return;
                         }
                         context.go('/order-success/$orderId');
