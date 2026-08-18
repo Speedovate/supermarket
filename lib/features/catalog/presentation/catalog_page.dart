@@ -1441,13 +1441,15 @@ class _CartButton extends StatelessWidget {
     final badgePadding = showLabel
         ? const EdgeInsets.only(right: 10)
         : const EdgeInsets.only(top: 4, right: 12);
+    final buttonSize = showLabel ? null : 48.0;
     return MousePressable(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: SizedBox(
+        width: buttonSize,
         height: 48,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: EdgeInsets.symmetric(horizontal: showLabel ? 12 : 6),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -2694,7 +2696,10 @@ class _DesktopCartPanel extends ConsumerWidget {
                       child: SizedBox(
                         height: 48,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          padding: const EdgeInsets.only(
+                            left: 6,
+                            right: 12,
+                          ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
