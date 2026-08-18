@@ -2542,6 +2542,9 @@ class _DesktopCartPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final keyboardInset = isBottomSheet
+        ? MediaQuery.of(context).viewInsets.bottom
+        : 0.0;
     final selectedOrder = selectedThreadId == 'current'
         ? null
         : matchingOrders.cast<OrderRequest?>().firstWhere(
@@ -2566,188 +2569,151 @@ class _DesktopCartPanel extends ConsumerWidget {
 
     return SafeArea(
       left: false,
-      child: Container(
-        width: width,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: isBottomSheet
-              ? null
-              : const Border(left: BorderSide(color: Color(0xFFE4E7EC))),
-          borderRadius: isBottomSheet
-              ? const BorderRadius.vertical(top: Radius.circular(28))
-              : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (isBottomSheet) ...[
-              const SizedBox(height: 12),
-              Center(
-                child: Container(
-                  width: 48,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD0D5DD),
-                    borderRadius: BorderRadius.circular(999),
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: Container(
+          width: width,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: isBottomSheet
+                ? null
+                : const Border(left: BorderSide(color: Color(0xFFE4E7EC))),
+            borderRadius: isBottomSheet
+                ? const BorderRadius.vertical(top: Radius.circular(28))
+                : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isBottomSheet) ...[
+                const SizedBox(height: 12),
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD0D5DD),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            Padding(
-              padding: EdgeInsets.fromLTRB(24, isBottomSheet ? 16 : 24, 24, 0),
-              child: Row(
-                children: [
-                  MousePressable(
-                    onTap: isCurrentSelection
-                        ? null
-                        : () => onThreadSelected('current'),
-                    borderRadius: BorderRadius.circular(16),
-                    hoverOverlayAlpha: isCurrentSelection
-                        ? 0
-                        : AppColors.neutralHoverOverlayAlpha,
-                    pressedOverlayAlpha: isCurrentSelection
-                        ? 0
-                        : AppColors.neutralPressedOverlayAlpha,
-                    child: SizedBox(
-                      height: 48,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Badge(
-                              isLabelVisible: finalCartCount > 0,
-                              label: Text(
-                                formatCompactCount(finalCartCount),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1,
+                const SizedBox(height: 8),
+              ],
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  isBottomSheet ? 16 : 24,
+                  24,
+                  0,
+                ),
+                child: Row(
+                  children: [
+                    MousePressable(
+                      onTap: isCurrentSelection
+                          ? null
+                          : () => onThreadSelected('current'),
+                      borderRadius: BorderRadius.circular(16),
+                      hoverOverlayAlpha: isCurrentSelection
+                          ? 0
+                          : AppColors.neutralHoverOverlayAlpha,
+                      pressedOverlayAlpha: isCurrentSelection
+                          ? 0
+                          : AppColors.neutralPressedOverlayAlpha,
+                      child: SizedBox(
+                        height: 48,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Badge(
+                                isLabelVisible: finalCartCount > 0,
+                                label: Text(
+                                  formatCompactCount(finalCartCount),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.shopping_cart_outlined,
+                                  size: 28,
                                 ),
                               ),
-                              child: const Icon(
-                                Icons.shopping_cart_outlined,
-                                size: 28,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Cart',
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.15,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  MousePressable(
-                    onTap: onClose,
-                    borderRadius: BorderRadius.circular(12),
-                    child: const SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: Icon(Icons.close_rounded),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            Expanded(
-              child: SingleChildScrollView(
-                controller: scrollController,
-                padding: EdgeInsets.fromLTRB(
-                  isBottomSheet ? 0 : 24,
-                  0,
-                  isBottomSheet ? 0 : 24,
-                  24,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (matchingOrders.isNotEmpty) ...[
-                      Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isBottomSheet ? 24 : 0,
-                        ),
-                        child: _DesktopCartThreadsCard(
-                          matchingOrders: matchingOrders,
-                          selectedThreadId: selectedThreadId,
-                          customerDraft: customerDraft,
-                          currentCartCount: finalCartCount,
-                          previousOrdersExpanded: previousOrdersExpanded,
-                          onSelected: onThreadSelected,
-                          onPreviousOrdersExpandedChanged:
-                              onPreviousOrdersExpandedChanged,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isBottomSheet ? 24 : 0,
-                      ),
-                      child: _DesktopCartCustomerCard(
-                        settings: settings,
-                        serviceableBarangays: serviceableBarangays,
-                        draft: customerDraft,
-                        controllers: customerControllers,
-                        selectedOrder: selectedOrder,
-                        onContactUs: onContactUs,
-                        onDraftChanged: onDraftChanged,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isBottomSheet ? 24 : 0,
-                      ),
-                      child: _DesktopCartThreadDetailCard(
-                        selectedOrder: selectedOrder,
-                        previousOrdersExpanded: previousOrdersExpanded,
-                        currentCartCount: finalCartCount,
-                        cart: cart,
-                        totalCentavos: totalCentavos,
-                        onContactUs: onContactUs,
-                        onBackToCart: () => onThreadSelected('current'),
-                        onContinueShopping: onClose,
-                      ),
-                    ),
-                    if (showPrimaryAction) ...[
-                      const SizedBox(height: 16),
-                      Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isBottomSheet ? 24 : 0,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '$selectedItemCount item${selectedItemCount == 1 ? '' : 's'}',
-                                style: Theme.of(context).textTheme.titleMedium
+                              const SizedBox(width: 10),
+                              Text(
+                                'Cart',
+                                style: Theme.of(context).textTheme.headlineSmall
                                     ?.copyWith(
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w800,
                                       height: 1.15,
                                     ),
                               ),
-                            ),
-                            Text(
-                              formatPesos(selectedTotalCentavos),
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(
-                                    color: AppColors.logoBlue,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.15,
-                                  ),
-                            ),
-                          ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    MousePressable(
+                      onTap: onClose,
+                      borderRadius: BorderRadius.circular(12),
+                      child: const SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: Icon(Icons.close_rounded),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: EdgeInsets.fromLTRB(
+                    isBottomSheet ? 0 : 24,
+                    0,
+                    isBottomSheet ? 0 : 24,
+                    24,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (matchingOrders.isNotEmpty) ...[
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isBottomSheet ? 24 : 0,
+                          ),
+                          child: _DesktopCartThreadsCard(
+                            matchingOrders: matchingOrders,
+                            selectedThreadId: selectedThreadId,
+                            customerDraft: customerDraft,
+                            currentCartCount: finalCartCount,
+                            previousOrdersExpanded: previousOrdersExpanded,
+                            onSelected: onThreadSelected,
+                            onPreviousOrdersExpandedChanged:
+                                onPreviousOrdersExpandedChanged,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isBottomSheet ? 24 : 0,
+                        ),
+                        child: _DesktopCartCustomerCard(
+                          settings: settings,
+                          serviceableBarangays: serviceableBarangays,
+                          draft: customerDraft,
+                          controllers: customerControllers,
+                          selectedOrder: selectedOrder,
+                          onContactUs: onContactUs,
+                          onDraftChanged: onDraftChanged,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -2755,43 +2721,91 @@ class _DesktopCartPanel extends ConsumerWidget {
                         padding: EdgeInsets.symmetric(
                           horizontal: isBottomSheet ? 24 : 0,
                         ),
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 44,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              shape: const StadiumBorder(),
-                            ),
-                            onPressed: submitting
-                                ? null
-                                : isCurrentSelection
-                                ? onReviewOrder
-                                : () => onOrderAgain(selectedOrder),
-                            child: submitting
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white,
-                                      ),
-                                    ),
-                                  )
-                                : Text(
-                                    isCurrentSelection
-                                        ? 'Place Order'
-                                        : 'Order Again',
-                                  ),
-                          ),
+                        child: _DesktopCartThreadDetailCard(
+                          selectedOrder: selectedOrder,
+                          previousOrdersExpanded: previousOrdersExpanded,
+                          currentCartCount: finalCartCount,
+                          cart: cart,
+                          totalCentavos: totalCentavos,
+                          onContactUs: onContactUs,
+                          onBackToCart: () => onThreadSelected('current'),
+                          onContinueShopping: onClose,
                         ),
                       ),
+                      if (showPrimaryAction) ...[
+                        const SizedBox(height: 16),
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isBottomSheet ? 24 : 0,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '$selectedItemCount item${selectedItemCount == 1 ? '' : 's'}',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        height: 1.15,
+                                      ),
+                                ),
+                              ),
+                              Text(
+                                formatPesos(selectedTotalCentavos),
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      color: AppColors.logoBlue,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.15,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isBottomSheet ? 24 : 0,
+                          ),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 44,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                shape: const StadiumBorder(),
+                              ),
+                              onPressed: submitting
+                                  ? null
+                                  : isCurrentSelection
+                                  ? onReviewOrder
+                                  : () => onOrderAgain(selectedOrder),
+                              child: submitting
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                      ),
+                                    )
+                                  : Text(
+                                      isCurrentSelection
+                                          ? 'Place Order'
+                                          : 'Order Again',
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

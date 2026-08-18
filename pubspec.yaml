@@ -62,3 +62,17 @@ flutter:
   assets:
     - assets/data/
     - assets/branding/
+    - assets/google_fonts/
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/google_fonts/Poppins-Regular.ttf
+          weight: 400
+        - asset: assets/google_fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/google_fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/google_fonts/Poppins-Bold.ttf
+          weight: 700
+        - asset: assets/google_fonts/Poppins-ExtraBold.ttf
+          weight: 800

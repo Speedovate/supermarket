@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../core/constants/app_colors.dart';
 
 ThemeData buildAppTheme() {
@@ -60,9 +58,13 @@ ThemeData buildAppTheme() {
     highlightColor: Colors.transparent,
     splashColor: Colors.transparent,
     hoverColor: Colors.transparent,
-    textTheme: GoogleFonts.poppinsTextTheme(
-      base.textTheme,
-    ).apply(bodyColor: text, displayColor: text),
+    textTheme: base.textTheme
+        .apply(
+          fontFamily: 'Poppins',
+          bodyColor: text,
+          displayColor: text,
+        )
+        .copyWith(),
     cardTheme: CardThemeData(
       color: Colors.white,
       elevation: 0,

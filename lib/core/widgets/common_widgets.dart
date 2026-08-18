@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../constants/app_colors.dart';
 import '../models/app_models.dart';
@@ -158,15 +157,15 @@ class BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mainStyle = GoogleFonts.inter(
-      textStyle: Theme.of(context).textTheme.titleLarge,
+    final mainStyle = Theme.of(context).textTheme.titleLarge?.copyWith(
+      fontFamily: 'Poppins',
       fontWeight: FontWeight.w800,
       color: onDark ? Colors.white : AppColors.logoBlue,
       height: 1,
       fontSize: compact ? 20 : 24,
     );
-    final subStyle = GoogleFonts.inter(
-      textStyle: Theme.of(context).textTheme.titleMedium,
+    final subStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+      fontFamily: 'Poppins',
       fontWeight: FontWeight.w800,
       color: onDark ? const Color(0xFFFFB9BD) : const Color(0xFFE31E24),
       height: 1,
