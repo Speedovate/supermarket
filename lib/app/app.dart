@@ -24,7 +24,7 @@ class _AndrewsSupermarketAppState
     super.initState();
     _appLifecycleListener = AppLifecycleListener(
       onResume: () {
-        ref.read(appControllerProvider.notifier).reloadFromStore();
+        ref.read(appControllerProvider.notifier).refreshFromFirebase();
       },
     );
   }

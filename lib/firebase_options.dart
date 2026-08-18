@@ -61,4 +61,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'andrews-supermarket.firebasestorage.app',
     measurementId: 'G-4SY69G4Y5K',
   );
+
 }

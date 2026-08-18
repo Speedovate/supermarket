@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/sample_data.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
 
@@ -16,8 +15,9 @@ class AdminLoginPage extends ConsumerStatefulWidget {
 
 class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: demoAdminEmail);
-  final _passwordController = TextEditingController(text: demoAdminPassword);
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _passwordVisible = false;
 
   void _redirectIfLoggedIn() {
     final state = ref.read(appControllerProvider);
@@ -90,9 +90,21 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
                       const SizedBox(height: 14),
                       TextFormField(
                         controller: _passwordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
+                        obscureText: !_passwordVisible,
+                        decoration: InputDecoration(
                           labelText: 'Password',
+                          suffixIcon: IconButton(
+                            onPressed: () {
+                              setState(
+                                () => _passwordVisible = !_passwordVisible,
+                              );
+                            },
+                            icon: Icon(
+                              _passwordVisible
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                            ),
+                          ),
                         ),
                         validator: (value) {
                           if ((value?.trim() ?? '').isEmpty) {
@@ -129,9 +141,18 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
                                     context.go('/admin/dashboard');
                                   }
                                 },
-                          child: Text(
-                            state.adminLoading ? 'Signing in...' : 'Login',
-                          ),
+                          child: state.adminLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.4,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Text('Login'),
                         ),
                       ),
                     ],

@@ -620,6 +620,11 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         }.contains(_selectedCartThreadId)
         ? _selectedCartThreadId
         : 'current';
+    final showCatalogLoading =
+        appState.loading &&
+        vm.categories.isEmpty &&
+        appState.products.isEmpty &&
+        activeBanners.isEmpty;
 
     final mainPane = MediaQuery(
       data: media.copyWith(size: Size(mainContentWidth, media.size.height)),
@@ -640,6 +645,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                     });
                   },
                   cartCount: vm.cartCount,
+                  loading: showCatalogLoading,
                   categories: vm.categories,
                   selectedId: _categoryId,
                   onSelected: (value) => setState(() => _categoryId = value),
@@ -653,6 +659,17 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                 color: AppColors.homeScrollableBackground,
                 child: CustomScrollView(
                   slivers: [
+                    if (showCatalogLoading)
+                      SliverToBoxAdapter(
+                        child: _CatalogLoadingSections(
+                          horizontalPadding: gridPadding,
+                          cardHeight: resolvedCardHeight,
+                          columns: columns,
+                          cardAspectRatio: gridAspectRatio,
+                          bottomPadding: bottomScrollPadding,
+                        ),
+                      )
+                    else ...[
                     if (activeBanners.isNotEmpty)
                       SliverToBoxAdapter(
                         child: Padding(
@@ -861,6 +878,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                           ),
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -1281,6 +1299,7 @@ class _TopBar extends StatelessWidget {
     required this.query,
     required this.onSearchChanged,
     required this.cartCount,
+    required this.loading,
     required this.categories,
     required this.selectedId,
     required this.onSelected,
@@ -1292,6 +1311,7 @@ class _TopBar extends StatelessWidget {
   final String query;
   final ValueChanged<String> onSearchChanged;
   final int cartCount;
+  final bool loading;
   final List<Category> categories;
   final String selectedId;
   final ValueChanged<String> onSelected;
@@ -1317,11 +1337,14 @@ class _TopBar extends StatelessWidget {
               onCartTap: onCartTap,
             ),
             const Divider(height: 1, thickness: 1, color: Color(0xFFE4E7EC)),
-            _CategoryStrip(
-              categories: categories,
-              selectedId: selectedId,
-              onSelected: onSelected,
-            ),
+            if (loading)
+              const _CategoryStripLoading()
+            else
+              _CategoryStrip(
+                categories: categories,
+                selectedId: selectedId,
+                onSelected: onSelected,
+              ),
             const Divider(height: 1, thickness: 1, color: Color(0xFFE4E7EC)),
           ],
         ),
@@ -1462,6 +1485,281 @@ class _CategoryStrip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CategoryStripLoading extends StatelessWidget {
+  const _CategoryStripLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    final edgeInset = _outerHorizontalPaddingForWidth(
+      MediaQuery.of(context).size.width,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        child: Row(
+          children: [
+            SizedBox(width: edgeInset),
+            for (final width in const [74.0, 96.0, 92.0, 110.0, 88.0]) ...[
+              _ShimmerSurface(
+                child: Container(
+                  width: width,
+                  height: _controlExtentForWidth(
+                    MediaQuery.of(context).size.width,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF2F4F7),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0xFFE4E7EC)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            SizedBox(width: edgeInset),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CatalogLoadingSections extends StatelessWidget {
+  const _CatalogLoadingSections({
+    required this.horizontalPadding,
+    required this.cardHeight,
+    required this.columns,
+    required this.cardAspectRatio,
+    required this.bottomPadding,
+  });
+
+  final double horizontalPadding;
+  final double cardHeight;
+  final int columns;
+  final double cardAspectRatio;
+  final double bottomPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        horizontalPadding,
+        18,
+        horizontalPadding,
+        bottomPadding,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _CatalogLoadingHeader(),
+          const SizedBox(height: 18),
+          SizedBox(
+            height: cardHeight,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: 4,
+              separatorBuilder: (context, index) => const SizedBox(width: 16),
+              itemBuilder: (context, index) => SizedBox(
+                width: cardHeight * cardAspectRatio,
+                child: const _CatalogLoadingProductCard(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const _CatalogLoadingHeader(),
+          const SizedBox(height: 18),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: columns * 2,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: cardAspectRatio,
+            ),
+            itemBuilder: (context, index) => const _CatalogLoadingProductCard(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CatalogLoadingHeader extends StatelessWidget {
+  const _CatalogLoadingHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _ShimmerSurface(
+          child: Container(
+            width: 28,
+            height: 28,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF2F4F7),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        _ShimmerSurface(
+          child: Container(
+            width: 148,
+            height: 24,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF2F4F7),
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CatalogLoadingProductCard extends StatelessWidget {
+  const _CatalogLoadingProductCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 10,
+            child: _ShimmerSurface(
+              child: Container(
+                color: const Color(0xFFF2F4F7),
+              ),
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE4E7EC)),
+          Expanded(
+            flex: 7,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ShimmerSurface(
+                    child: Container(
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF2F4F7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _ShimmerSurface(
+                    child: Container(
+                      width: 84,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF2F4F7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ShimmerSurface(
+                          child: Container(
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF2F4F7),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _ShimmerSurface(
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF2F4F7),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShimmerSurface extends StatefulWidget {
+  const _ShimmerSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ShimmerSurface> createState() => _ShimmerSurfaceState();
+}
+
+class _ShimmerSurfaceState extends State<_ShimmerSurface>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1350),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      child: widget.child,
+      builder: (context, child) {
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) {
+            final width = bounds.width <= 0 ? 1.0 : bounds.width;
+            return LinearGradient(
+              begin: Alignment(-1.6 + (_controller.value * 2.8), 0),
+              end: Alignment(-0.6 + (_controller.value * 2.8), 0),
+              colors: const [
+                Color(0xFFF2F4F7),
+                Color(0xFFFFFFFF),
+                Color(0xFFF2F4F7),
+              ],
+              stops: const [0.15, 0.5, 0.85],
+            ).createShader(Rect.fromLTWH(0, 0, width, bounds.height));
+          },
+          child: child,
+        );
+      },
     );
   }
 }

@@ -9,6 +9,7 @@ A responsive Flutter Web MVP for Andrew's Supermarket, designed for sari-sari st
 - MVVM-oriented Flutter structure using Riverpod
 - Material 3 UI based on the blue, red, white, and navy brand direction from the provided reference
 - Firestore, Storage, and Hosting configuration files for Firebase deployment
+- Firebase Core, Cloud Firestore, and Firebase Storage runtime setup for Flutter
 - Sample seed data and documented Firestore model expectations
 
 ## Architecture
@@ -97,7 +98,13 @@ firebase use --add
 
 ## FlutterFire configuration
 
-This repo does not yet include generated FlutterFire runtime files. Before switching from demo mode to live Firebase mode:
+This repo now includes the generated FlutterFire runtime file for web and initializes Firebase at app startup. The current runtime behavior is:
+
+- Public catalog data can be hydrated from Firestore when the collections are populated
+- Product images can upload to Firebase Storage when the signed-in Firebase user satisfies the included Storage rules
+- Local demo persistence remains the fallback so the app does not break when Firebase is empty or unavailable
+
+Before switching all mutations from demo mode to live Firebase mode:
 
 1. Install FlutterFire CLI
 2. Run:
@@ -106,13 +113,10 @@ This repo does not yet include generated FlutterFire runtime files. Before switc
 flutterfire configure
 ```
 
-3. Add the generated `firebase_options.dart`
-4. Replace the local persistence implementation in [lib/features/app_state/app_controller.dart](/Users/adrycallencatapang/StudioProjects/supermarket/lib/features/app_state/app_controller.dart:1) with Firebase repositories for:
+3. Regenerate `firebase_options.dart` if you add more platforms
+4. Replace the remaining local mutation paths in [lib/features/app_state/app_controller.dart](/Users/adrycallencatapang/StudioProjects/supermarket/lib/features/app_state/app_controller.dart:1) with Firebase repositories for:
    - auth
-   - categories
-   - products
    - orders
-   - settings
 5. Keep the existing view models and views, so the MVVM boundary remains stable
 
 ## Running locally
@@ -167,12 +171,9 @@ flutter test
 
 ## Known MVP limitations
 
-- Runtime data is still local-first and not yet connected to live Firebase collections
+- Runtime data is still local-first for writes and admin-only flows
 - Admin login is demo-only until FlutterFire auth is wired in
-- Product photo upload UI is not yet connected to Firebase Storage
-- The admin dashboard uses compact operational tables rather than a fully custom mobile card system for every dataset
-- Public product images currently use branded placeholders instead of uploaded image assets
-- Order submission currently writes to local persisted state, not Firestore
+- Order submission still writes to local persisted state, not Firestore
 
 ## Suggested next production steps
 

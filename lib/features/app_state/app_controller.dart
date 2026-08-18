@@ -1,11 +1,15 @@
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/constants/barangays.dart';
 import '../../core/constants/sample_data.dart';
 import '../../core/models/app_models.dart';
+import '../../core/services/firebase_auth_service.dart';
+import '../../core/services/firebase_firestore_service.dart';
+import '../../core/services/firebase_storage_service.dart';
 import '../../core/services/local_store_service.dart';
 import '../../core/utils/formatters.dart';
 
@@ -114,6 +118,15 @@ class AppState {
 
 class AppController extends Notifier<AppState> {
   late final LocalStoreService _store;
+  late final FirebaseAdminAuthService _auth;
+  late final FirestoreCatalogService _firestoreCatalog;
+  late final FirebaseProductImageStorageService _productImageStorage;
+  StreamSubscription<List<Category>>? _categoriesSubscription;
+  StreamSubscription<List<Barangay>>? _barangaysSubscription;
+  StreamSubscription<List<AppBanner>>? _bannersSubscription;
+  StreamSubscription<List<Product>>? _productsSubscription;
+  StreamSubscription<AppSettings?>? _settingsSubscription;
+  StreamSubscription<List<OrderRequest>>? _ordersSubscription;
   static const _defaultStoreContactNumber = '09064493206';
   static const _defaultFacebookMessengerUrl =
       'https://www.facebook.com/andrew.s.supermarket.2024';
@@ -121,6 +134,9 @@ class AppController extends Notifier<AppState> {
   @override
   AppState build() {
     _store = ref.read(localStoreServiceProvider);
+    _auth = ref.read(firebaseAdminAuthServiceProvider);
+    _firestoreCatalog = ref.read(firestoreCatalogServiceProvider);
+    _productImageStorage = ref.read(firebaseProductImageStorageServiceProvider);
     Future<void>.microtask(_initialize);
     return const AppState();
   }
@@ -130,15 +146,20 @@ class AppController extends Notifier<AppState> {
       final persisted = await _store.load();
       if (persisted == null) {
         _applyDefaultState();
-        await _persist();
-        return;
+      } else {
+        _applyPersistedState(persisted);
       }
 
-      _applyPersistedState(persisted);
+      await _syncAdminSessionFromFirebase();
+      unawaited(_hydratePublicDataFromFirebase());
+      _startRealtimeSync();
+      unawaited(_refreshOrdersFromFirebase());
     } catch (_) {
-      await _store.clear();
       _applyDefaultState();
-      await _persist();
+      await _syncAdminSessionFromFirebase();
+      unawaited(_hydratePublicDataFromFirebase());
+      _startRealtimeSync();
+      unawaited(_refreshOrdersFromFirebase());
     }
   }
 
@@ -149,18 +170,107 @@ class AppController extends Notifier<AppState> {
         return;
       }
       _applyPersistedState(persisted);
+      await _syncAdminSessionFromFirebase();
+      unawaited(_hydratePublicDataFromFirebase());
+      _startRealtimeSync();
+      unawaited(_refreshOrdersFromFirebase());
     } catch (_) {
       // Keep the current in-memory state if refresh fails.
     }
   }
 
+  Future<void> refreshFromFirebase() async {
+    state = state.copyWith(loading: true);
+    await _syncAdminSessionFromFirebase();
+    await _hydratePublicDataFromFirebase();
+    _startRealtimeSync();
+    await _refreshOrdersFromFirebase();
+  }
+
+  void _startRealtimeSync() {
+    final includeInactive = state.adminSession != null;
+    _categoriesSubscription ??= _firestoreCatalog.watchCategories(
+      includeInactive: includeInactive,
+    ).listen((categories) async {
+      state = state.copyWith(categories: categories);
+      await _persist();
+    }, onError: _handleRealtimeSyncError);
+    _barangaysSubscription ??= _firestoreCatalog.watchBarangays(
+      includeInactive: includeInactive,
+    ).listen((barangays) async {
+      state = state.copyWith(
+        barangays: _normalizeBarangays(barangays, settings: state.settings),
+      );
+      await _persist();
+    }, onError: _handleRealtimeSyncError);
+    _bannersSubscription ??= _firestoreCatalog.watchBanners(
+      includeInactive: includeInactive,
+    ).listen((banners) async {
+      state = state.copyWith(banners: banners);
+      await _persist();
+    }, onError: _handleRealtimeSyncError);
+    _productsSubscription ??= _firestoreCatalog.watchProducts(
+      includeInactive: includeInactive,
+    ).listen((products) async {
+      state = state.copyWith(products: products);
+      await _persist();
+    }, onError: _handleRealtimeSyncError);
+    _settingsSubscription ??= _firestoreCatalog.watchSettings().listen((
+      settings,
+    ) async {
+      if (settings == null) {
+        return;
+      }
+      state = state.copyWith(settings: _normalizeSettings(settings));
+      await _persist();
+    }, onError: _handleRealtimeSyncError);
+    _restartOrdersRealtimeSync();
+    ref.onDispose(() {
+      unawaited(_categoriesSubscription?.cancel());
+      unawaited(_barangaysSubscription?.cancel());
+      unawaited(_bannersSubscription?.cancel());
+      unawaited(_productsSubscription?.cancel());
+      unawaited(_settingsSubscription?.cancel());
+      unawaited(_ordersSubscription?.cancel());
+    });
+  }
+
+  void _restartOrdersRealtimeSync() {
+    unawaited(_ordersSubscription?.cancel());
+    final adminSession = state.adminSession;
+    final stream = adminSession != null
+        ? _firestoreCatalog.watchOrders()
+        : _firestoreCatalog.watchOrdersForNormalizedPhones(
+            _customerLookupPhones(),
+          );
+    _ordersSubscription = stream.listen((orders) async {
+      state = state.copyWith(orders: orders);
+      await _persist();
+    }, onError: _handleRealtimeSyncError);
+  }
+
+  void _handleRealtimeSyncError(Object error, StackTrace stackTrace) {
+    if (error is FirebaseException && error.code == 'permission-denied') {
+      state = state.copyWith(loading: false);
+      return;
+    }
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'app_state_realtime_sync',
+        context: ErrorDescription('while listening to Firestore realtime data'),
+      ),
+    );
+  }
+
   void _applyDefaultState() {
     state = state.copyWith(
       initialized: true,
-      categories: sampleCategories,
-      barangays: sampleBarangays,
-      banners: sampleBanners,
-      products: sampleProducts,
+      categories: const [],
+      barangays: const [],
+      banners: const [],
+      products: const [],
       orders: const [],
       settings: const AppSettings(),
       cart: const [],
@@ -188,6 +298,73 @@ class AppController extends Notifier<AppState> {
       ),
       adminSession: persisted.adminSession,
     );
+  }
+
+  Future<void> _hydratePublicDataFromFirebase() async {
+    state = state.copyWith(loading: true);
+    try {
+      var snapshot = await _firestoreCatalog.loadPublicSnapshot();
+      if (snapshot == null) {
+        await _firestoreCatalog.seedInitialData(
+          categories: sampleCategories,
+          barangays: sampleBarangays,
+          banners: sampleBanners,
+          products: sampleProducts,
+          settings: const AppSettings(),
+        );
+        snapshot = await _firestoreCatalog.loadPublicSnapshot();
+      }
+      if (snapshot == null) {
+        return;
+      }
+
+      state = state.copyWith(
+        categories: snapshot.categories.isNotEmpty
+            ? snapshot.categories
+            : state.categories,
+        barangays: snapshot.barangays.isNotEmpty
+            ? _normalizeBarangays(
+                snapshot.barangays,
+                settings: snapshot.settings ?? state.settings,
+              )
+            : state.barangays,
+        banners: snapshot.banners.isNotEmpty ? snapshot.banners : state.banners,
+        products: snapshot.products.isNotEmpty
+            ? snapshot.products
+            : state.products,
+        settings: snapshot.settings == null
+            ? state.settings
+            : _normalizeSettings(snapshot.settings!),
+      );
+      await _persist();
+    } catch (_) {
+      // Keep current local session data if Firebase fetch fails.
+    } finally {
+      state = state.copyWith(loading: false);
+    }
+  }
+
+  Future<void> _syncAdminSessionFromFirebase() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      state = state.copyWith(adminSession: null, initialized: true);
+      await _persist();
+      return;
+    }
+
+    final firestoreSession = await _firestoreCatalog.loadAdminSession(user.uid);
+    final session =
+        firestoreSession ??
+        AdminSession(
+          uid: user.uid,
+          email: user.email ?? '',
+          displayName: user.displayName ?? (user.email ?? 'Admin'),
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+    state = state.copyWith(adminSession: session, initialized: true);
+    await _persist();
+    _restartOrdersRealtimeSync();
   }
 
   AppSettings _normalizeSettings(AppSettings settings) {
@@ -230,31 +407,20 @@ class AppController extends Notifier<AppState> {
         return sanitized;
       }
     }
-
-    final fallbackNames = settings.serviceableBarangays.isNotEmpty
-        ? settings.serviceableBarangays
-        : puertoPrincesaBarangays;
-    final baseDate = DateTime(2026, 8, 1);
-    return List<Barangay>.generate(fallbackNames.length, (index) {
-      final name = formatBarangayName(fallbackNames[index]);
-      final matchedSample = sampleBarangays.cast<Barangay?>().firstWhere(
-        (item) => item?.name.toLowerCase() == name.toLowerCase(),
-        orElse: () => null,
-      );
-      if (matchedSample != null) {
-        return matchedSample;
-      }
-      final seededDate = baseDate.add(Duration(days: index));
-      return Barangay(
-        id: index + 1,
-        name: name,
-        isActive: true,
-        cutoffWeekday: DateTime.monday,
-        cutoffMinutes: 5 * 60,
-        createdAt: seededDate,
-        updatedAt: seededDate,
-      );
-    });
+    return settings.serviceableBarangays
+        .where((item) => item.trim().isNotEmpty)
+        .map(
+          (item) => Barangay(
+            id: item.hashCode,
+            name: formatBarangayName(item),
+            isActive: true,
+            cutoffWeekday: DateTime.monday,
+            cutoffMinutes: 5 * 60,
+            createdAt: DateTime(2026, 8, 18),
+            updatedAt: DateTime(2026, 8, 18),
+          ),
+        )
+        .toList();
   }
 
   CustomerDraft _resolveAutofillDraft({
@@ -565,11 +731,14 @@ class AppController extends Notifier<AppState> {
     final now = DateTime.now();
     state = state.copyWith(
       customerDraft: draft.copyWith(
+        normalizedMobileNumber: normalizePhoneNumber(draft.mobileNumber),
         createdAt: draft.createdAt ?? state.customerDraft.createdAt ?? now,
         updatedAt: now,
       ),
     );
     await _persist();
+    _restartOrdersRealtimeSync();
+    unawaited(_refreshOrdersFromFirebase());
   }
 
   String? validateCheckoutDraft(CustomerDraft draft) {
@@ -616,11 +785,7 @@ class AppController extends Notifier<AppState> {
 
     state = state.copyWith(submittingOrder: true, errorMessage: null);
     final now = DateTime.now();
-    final orderId =
-        (state.orders.map((item) => item.id).fold<int>(0, (max, value) {
-          return value > max ? value : max;
-        })) +
-        1;
+    final orderId = DateTime.now().microsecondsSinceEpoch;
     final normalizedCustomer = state.customerDraft.copyWith(
       normalizedMobileNumber: normalizePhoneNumber(
         state.customerDraft.mobileNumber,
@@ -661,7 +826,6 @@ class AppController extends Notifier<AppState> {
     );
 
     state = state.copyWith(
-      submittingOrder: false,
       orders: [order, ...state.orders],
       cart: const [],
       lastSubmittedOrderId: orderId,
@@ -670,8 +834,20 @@ class AppController extends Notifier<AppState> {
         updatedAt: now,
       ),
     );
-    await _persist();
-    return orderId;
+    try {
+      await _firestoreCatalog.saveOrder(order);
+      await _refreshOrdersFromFirebase();
+      state = state.copyWith(submittingOrder: false);
+      await _persist();
+      return orderId;
+    } catch (_) {
+      state = state.copyWith(
+        submittingOrder: false,
+        errorMessage: 'Unable to submit your order right now.',
+      );
+      await _persist();
+      return null;
+    }
   }
 
   Future<bool> loginAdmin({
@@ -679,48 +855,82 @@ class AppController extends Notifier<AppState> {
     required String password,
   }) async {
     state = state.copyWith(adminLoading: true, errorMessage: null);
-    final success =
-        email.trim().toLowerCase() == demoAdminEmail &&
-        password == demoAdminPassword;
-
-    if (!success) {
+    try {
+      final credential = await _auth.signIn(email: email, password: password);
+      final user = credential.user;
+      if (user == null) {
+        state = state.copyWith(
+          adminLoading: false,
+          errorMessage: 'Unable to sign in.',
+        );
+        return false;
+      }
+      final adminSession = await _firestoreCatalog.loadAdminSession(user.uid);
+      if (adminSession == null) {
+        await _auth.signOut();
+        state = state.copyWith(
+          adminLoading: false,
+          errorMessage: 'This account is not an admin.',
+          adminSession: null,
+        );
+        await _persist();
+        return false;
+      }
       state = state.copyWith(
         adminLoading: false,
-        errorMessage: 'Invalid admin credentials.',
+        adminSession: adminSession,
+        errorMessage: null,
+      );
+      await _persist();
+      _restartOrdersRealtimeSync();
+      await _refreshOrdersFromFirebase();
+      return true;
+    } on FirebaseAuthException catch (error) {
+      state = state.copyWith(
+        adminLoading: false,
+        errorMessage: _mapAdminLoginError(error),
+      );
+      return false;
+    } on FirebaseException catch (error) {
+      state = state.copyWith(
+        adminLoading: false,
+        errorMessage: _mapFirebaseOperationError(error),
+      );
+      return false;
+    } catch (_) {
+      state = state.copyWith(
+        adminLoading: false,
+        errorMessage: 'Unable to sign in right now.',
       );
       return false;
     }
-
-    state = state.copyWith(
-      adminLoading: false,
-      adminSession: AdminSession(
-        uid: 'demo-admin',
-        email: demoAdminEmail,
-        displayName: 'Arjie Lim',
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ),
-    );
-    await _persist();
-    return true;
   }
 
   Future<void> logoutAdmin() async {
+    await _auth.signOut();
     state = state.copyWith(adminSession: null);
     await _persist();
+    _restartOrdersRealtimeSync();
+    await _refreshOrdersFromFirebase();
   }
 
   Future<void> saveProduct(Product product) async {
     final now = DateTime.now();
+    final normalizedPhotoUrl = product.photoUrl?.trim();
+    final normalizedPhotoStoragePath = product.photoStoragePath?.trim();
+    final previousProduct = state.products
+        .where((item) => item.id == product.id)
+        .firstOrNull;
+    final resolvedPhoto = await _resolveProductPhoto(
+      productId: product.id,
+      photoUrl: normalizedPhotoUrl,
+      photoStoragePath: normalizedPhotoStoragePath,
+    );
     final updated = product.copyWith(
       name: product.name.trim(),
       details: product.details.trim(),
-      photoUrl: product.photoUrl?.trim().isEmpty ?? true
-          ? null
-          : product.photoUrl?.trim(),
-      photoStoragePath: product.photoStoragePath?.trim().isEmpty ?? true
-          ? null
-          : product.photoStoragePath?.trim(),
+      photoUrl: resolvedPhoto.photoUrl,
+      photoStoragePath: resolvedPhoto.photoStoragePath,
       createdAt: product.createdAt,
       updatedAt: now,
     );
@@ -745,7 +955,15 @@ class AppController extends Notifier<AppState> {
         )
         .toList();
     state = state.copyWith(products: next, cart: nextCart, errorMessage: null);
+    await _firestoreCatalog.saveProduct(updated);
     await _persist();
+    if (previousProduct?.photoStoragePath != null &&
+        previousProduct!.photoStoragePath != updated.photoStoragePath &&
+        updated.photoStoragePath != null) {
+      unawaited(
+        _productImageStorage.deleteByPath(previousProduct.photoStoragePath),
+      );
+    }
   }
 
   Future<void> saveBanner(AppBanner banner) async {
@@ -766,6 +984,7 @@ class AppController extends Notifier<AppState> {
       next[index] = updated;
     }
     state = state.copyWith(banners: next, errorMessage: null);
+    await _firestoreCatalog.saveBanner(updated);
     await _persist();
   }
 
@@ -774,16 +993,22 @@ class AppController extends Notifier<AppState> {
       banners: state.banners.where((item) => item.id != bannerId).toList(),
       errorMessage: null,
     );
+    await _firestoreCatalog.deleteBanner(bannerId);
     await _persist();
   }
 
   Future<void> deleteProduct(int productId) async {
+    final removedProduct = state.products
+        .where((item) => item.id == productId)
+        .firstOrNull;
     state = state.copyWith(
       products: state.products.where((item) => item.id != productId).toList(),
       cart: state.cart.where((item) => item.productId != productId).toList(),
       errorMessage: null,
     );
+    await _firestoreCatalog.deleteProduct(productId);
     await _persist();
+    unawaited(_productImageStorage.deleteByPath(removedProduct?.photoStoragePath));
   }
 
   Future<void> saveCategory(Category category) async {
@@ -795,6 +1020,7 @@ class AppController extends Notifier<AppState> {
       next[index] = category;
     }
     state = state.copyWith(categories: next, errorMessage: null);
+    await _firestoreCatalog.saveCategory(category, sortOrder: next.indexWhere((item) => item.id == category.id));
     await _persist();
   }
 
@@ -814,6 +1040,10 @@ class AppController extends Notifier<AppState> {
       products: nextProducts,
       errorMessage: null,
     );
+    await _firestoreCatalog.deleteCategory(categoryId);
+    for (final product in nextProducts.where((item) => item.category == 8)) {
+      await _firestoreCatalog.saveProduct(product);
+    }
     await _persist();
   }
 
@@ -833,6 +1063,9 @@ class AppController extends Notifier<AppState> {
     final moved = next.removeAt(oldIndex);
     next.insert(newIndex, moved);
     state = state.copyWith(categories: next, errorMessage: null);
+    for (var index = 0; index < next.length; index++) {
+      await _firestoreCatalog.saveCategory(next[index], sortOrder: index);
+    }
     await _persist();
   }
 
@@ -852,6 +1085,10 @@ class AppController extends Notifier<AppState> {
       categories: [...ordered, ...remaining],
       errorMessage: null,
     );
+    final next = [...ordered, ...remaining];
+    for (var index = 0; index < next.length; index++) {
+      await _firestoreCatalog.saveCategory(next[index], sortOrder: index);
+    }
     await _persist();
   }
 
@@ -863,6 +1100,7 @@ class AppController extends Notifier<AppState> {
         updatedAt: now,
       ),
     );
+    await _firestoreCatalog.saveSettings(state.settings);
     await _persist();
   }
 
@@ -882,6 +1120,7 @@ class AppController extends Notifier<AppState> {
     }
     next.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     state = state.copyWith(barangays: next, errorMessage: null);
+    await _firestoreCatalog.saveBarangay(updated);
     await _persist();
   }
 
@@ -889,6 +1128,7 @@ class AppController extends Notifier<AppState> {
     final next = state.barangays.where((item) => item.id != barangayId).toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     state = state.copyWith(barangays: next, errorMessage: null);
+    await _firestoreCatalog.deleteBarangay(barangayId);
     await _persist();
   }
 
@@ -911,6 +1151,10 @@ class AppController extends Notifier<AppState> {
         updatedAt: now,
       ),
     );
+    if (state.adminSession != null) {
+      await _firestoreCatalog.saveAdminSession(state.adminSession!);
+    }
+    await _firestoreCatalog.saveSettings(state.settings);
     await _persist();
   }
 
@@ -953,7 +1197,77 @@ class AppController extends Notifier<AppState> {
         .toList();
 
     state = state.copyWith(orders: updatedOrders, products: nextProducts);
+    await _firestoreCatalog.saveOrder(nextOrder);
+    for (final product in nextProducts) {
+      if (state.products.any((item) => item.id == product.id)) {
+        continue;
+      }
+    }
+    for (final product in nextProducts.where((item) {
+      final previous = state.products.where((product) => product.id == item.id).firstOrNull;
+      return previous?.sold != item.sold;
+    })) {
+      await _firestoreCatalog.saveProduct(product);
+    }
     await _persist();
+  }
+
+  Future<void> _refreshOrdersFromFirebase() async {
+    try {
+      final adminSession = state.adminSession;
+      final remoteOrders = adminSession != null
+          ? await _firestoreCatalog.loadOrders()
+          : await _firestoreCatalog.loadOrdersForNormalizedPhones(
+              _customerLookupPhones(),
+            );
+      state = state.copyWith(orders: remoteOrders);
+      await _persist();
+    } catch (_) {
+      // Keep local cached orders when the network fetch fails.
+    }
+  }
+
+  Set<String> _customerLookupPhones() {
+    final phones = <String>{};
+    final normalizedDraft = normalizePhoneNumber(state.customerDraft.mobileNumber);
+    if (normalizedDraft.isNotEmpty) {
+      phones.add(normalizedDraft);
+    }
+    for (final order in state.orders) {
+      final normalized = normalizePhoneNumber(order.phone);
+      if (normalized.isNotEmpty) {
+        phones.add(normalized);
+      }
+    }
+    return phones;
+  }
+
+  String _mapAdminLoginError(FirebaseAuthException error) {
+    return switch (error.code) {
+      'invalid-email' => 'Enter a valid email address.',
+      'user-disabled' => 'This admin account has been disabled.',
+      'user-not-found' => 'No admin account found for this email.',
+      'wrong-password' || 'invalid-credential' => 'Incorrect email or password.',
+      'too-many-requests' =>
+        'Too many attempts. Please try again in a moment.',
+      'network-request-failed' =>
+        'Network error. Please check your connection and try again.',
+      _ => (error.message?.trim().isNotEmpty ?? false)
+          ? error.message!.trim()
+          : 'Unable to sign in right now.',
+    };
+  }
+
+  String _mapFirebaseOperationError(FirebaseException error) {
+    return switch (error.code) {
+      'permission-denied' =>
+        'Firebase denied access. Check your Firestore admin document and rules.',
+      'unavailable' =>
+        'Firebase is temporarily unavailable. Please try again.',
+      _ => (error.message?.trim().isNotEmpty ?? false)
+          ? error.message!.trim()
+          : 'Unable to sign in right now.',
+    };
   }
 
   Map<int, int> _orderQuantityTotalsByProductId(OrderRequest order) {
@@ -991,6 +1305,40 @@ class AppController extends Notifier<AppState> {
       state = state.copyWith(
         errorMessage:
             'Unable to save the latest local changes. Try a smaller product image.',
+      );
+    }
+  }
+
+  Future<({String? photoUrl, String? photoStoragePath})> _resolveProductPhoto({
+    required int productId,
+    required String? photoUrl,
+    required String? photoStoragePath,
+  }) async {
+    final trimmedPhotoUrl = photoUrl?.trim() ?? '';
+    final trimmedStoragePath = photoStoragePath?.trim() ?? '';
+    if (trimmedPhotoUrl.isEmpty) {
+      return (photoUrl: null, photoStoragePath: null);
+    }
+    if (!trimmedPhotoUrl.startsWith('data:image/')) {
+      return (
+        photoUrl: trimmedPhotoUrl,
+        photoStoragePath: trimmedStoragePath.isEmpty ? null : trimmedStoragePath,
+      );
+    }
+
+    try {
+      final upload = await _productImageStorage.uploadProductImageDataUrl(
+        productId: productId,
+        dataUrl: trimmedPhotoUrl,
+      );
+      return (
+        photoUrl: upload.downloadUrl,
+        photoStoragePath: upload.storagePath,
+      );
+    } catch (_) {
+      return (
+        photoUrl: trimmedPhotoUrl,
+        photoStoragePath: trimmedStoragePath.isEmpty ? null : trimmedStoragePath,
       );
     }
   }

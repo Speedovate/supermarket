@@ -1220,9 +1220,9 @@ class AdminSession {
     'id': id,
     'uid': uid,
     'email': email,
-    'displayName': displayName,
-    'createdAt': createdAt?.toIso8601String(),
-    'updatedAt': updatedAt?.toIso8601String(),
+    'name': displayName,
+    'created_at': createdAt?.toIso8601String(),
+    'updated_at': updatedAt?.toIso8601String(),
   };
 
   factory AdminSession.fromMap(Map<String, dynamic> map) {
@@ -1232,13 +1232,16 @@ class AdminSession {
           : int.tryParse('${map['id']}') ?? 1,
       uid: map['uid'] as String,
       email: map['email'] as String,
-      displayName: map['displayName'] as String,
-      createdAt: map['createdAt'] == null
+      displayName:
+          (map['name'] as String?) ??
+          (map['displayName'] as String?) ??
+          '',
+      createdAt: (map['created_at'] ?? map['createdAt']) == null
           ? null
-          : DateTime.parse(map['createdAt'] as String),
-      updatedAt: map['updatedAt'] == null
+          : DateTime.parse('${map['created_at'] ?? map['createdAt']}'),
+      updatedAt: (map['updated_at'] ?? map['updatedAt']) == null
           ? null
-          : DateTime.parse(map['updatedAt'] as String),
+          : DateTime.parse('${map['updated_at'] ?? map['updatedAt']}'),
     );
   }
 }
