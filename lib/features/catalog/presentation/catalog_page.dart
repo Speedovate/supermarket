@@ -279,164 +279,170 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                     ? localSelectedThreadId
                     : 'current';
 
-                return SafeArea(
-                  top: false,
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: FractionallySizedBox(
-                      heightFactor: 0.92,
-                      widthFactor: 1,
-                      child: DecoratedBox(
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(28),
-                          ),
-                        ),
-                        child: _DesktopCartPanel(
-                          width: MediaQuery.of(sheetContext).size.width,
-                          isBottomSheet: true,
-                          scrollController: _desktopCartScrollController,
-                          customerDraft: appState.customerDraft,
-                          customerControllers: _customerControllers,
-                          cart: appState.cart,
-                          matchingOrders: matchingOrders,
-                          selectedThreadId: selectedThreadId,
-                          previousOrdersExpanded: localPreviousOrdersExpanded,
-                          totalCentavos: appState.cartTotalCentavos,
-                          submitting: appState.submittingOrder,
-                          onClose: () => Navigator.of(sheetContext).pop(),
-                          onContactUs: () => _showContactUsDialog(
-                            sheetContext,
-                            appState.settings,
-                          ),
-                          settings: appState.settings,
-                          serviceableBarangays: ref
-                              .read(appControllerProvider.notifier)
-                              .serviceableBarangays,
-                          onThreadSelected: (value) {
-                            setSheetState(() {
-                              localSelectedThreadId = value;
-                              localPreviousOrdersExpanded = false;
-                            });
-                            if (mounted) {
-                              setState(() {
-                                _selectedCartThreadId = value;
-                                _previousOrdersExpanded = false;
-                              });
-                            }
-                          },
-                          onPreviousOrdersExpandedChanged: (value) {
-                            setSheetState(() {
-                              localPreviousOrdersExpanded = value;
-                            });
-                            if (mounted) {
-                              setState(() => _previousOrdersExpanded = value);
-                            }
-                          },
-                          onDraftChanged: _persistCustomerDraft,
-                          onReviewOrder: () async {
-                            final messenger = ScaffoldMessenger.of(
-                              sheetContext,
-                            );
-                            await _persistCustomerDraft();
-                            if (!mounted) {
-                              return;
-                            }
-                            final nextDraft = ref
-                                .read(appControllerProvider)
-                                .customerDraft;
-                            final error = ref
-                                .read(appControllerProvider.notifier)
-                                .validateCheckoutDraft(nextDraft);
-                            if (error != null) {
-                              messenger.clearSnackBars();
-                              messenger.showSnackBar(errorSnackBar(error));
-                              return;
-                            }
-                            final itemCount = ref
-                                .read(appControllerProvider)
-                                .cart
-                                .fold<int>(
-                                  0,
-                                  (sum, item) => sum + item.quantity,
-                                );
-                            if (!sheetContext.mounted) {
-                              return;
-                            }
-                            final shouldPlaceOrder =
-                                await _showPlaceOrderConfirmationDialog(
+                return ScaffoldMessenger(
+                  child: Scaffold(
+                    backgroundColor: Colors.transparent,
+                    resizeToAvoidBottomInset: false,
+                    body: SafeArea(
+                      top: false,
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: FractionallySizedBox(
+                          heightFactor: 0.92,
+                          widthFactor: 1,
+                          child: DecoratedBox(
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(28),
+                              ),
+                            ),
+                            child: _DesktopCartPanel(
+                              width: MediaQuery.of(sheetContext).size.width,
+                              isBottomSheet: true,
+                              scrollController: _desktopCartScrollController,
+                              customerDraft: appState.customerDraft,
+                              customerControllers: _customerControllers,
+                              cart: appState.cart,
+                              matchingOrders: matchingOrders,
+                              selectedThreadId: selectedThreadId,
+                              previousOrdersExpanded: localPreviousOrdersExpanded,
+                              totalCentavos: appState.cartTotalCentavos,
+                              submitting: appState.submittingOrder,
+                              onClose: () => Navigator.of(sheetContext).pop(),
+                              onContactUs: () => _showContactUsDialog(
+                                sheetContext,
+                                appState.settings,
+                              ),
+                              settings: appState.settings,
+                              serviceableBarangays: ref
+                                  .read(appControllerProvider.notifier)
+                                  .serviceableBarangays,
+                              onThreadSelected: (value) {
+                                setSheetState(() {
+                                  localSelectedThreadId = value;
+                                  localPreviousOrdersExpanded = false;
+                                });
+                                if (mounted) {
+                                  setState(() {
+                                    _selectedCartThreadId = value;
+                                    _previousOrdersExpanded = false;
+                                  });
+                                }
+                              },
+                              onPreviousOrdersExpandedChanged: (value) {
+                                setSheetState(() {
+                                  localPreviousOrdersExpanded = value;
+                                });
+                                if (mounted) {
+                                  setState(() => _previousOrdersExpanded = value);
+                                }
+                              },
+                              onDraftChanged: _persistCustomerDraft,
+                              onReviewOrder: () async {
+                                final messenger = ScaffoldMessenger.of(
                                   sheetContext,
-                                  itemCount: itemCount,
                                 );
-                            if (!mounted || shouldPlaceOrder != true) {
-                              return;
-                            }
-                            final orderId = await ref
-                                .read(appControllerProvider.notifier)
-                                .submitOrder();
-                            if (!mounted) {
-                              return;
-                            }
-                            if (orderId == null) {
-                              final submitError = ref
-                                      .read(appControllerProvider)
-                                      .errorMessage ??
-                                  'Unable to submit your order right now.';
-                              messenger.clearSnackBars();
-                              messenger.showSnackBar(
-                                errorSnackBar(submitError),
-                              );
-                              return;
-                            }
-                            _customerNameController.clear();
-                            _customerMobileController.clear();
-                            _customerBarangayController.clear();
-                            _customerStreetController.clear();
-                            setSheetState(() {
-                              localPreviousOrdersExpanded = false;
-                              localSelectedThreadId = '$orderId';
-                            });
-                            setState(() {
-                              _previousOrdersExpanded = false;
-                              _selectedCartThreadId = '$orderId';
-                            });
-                            await _scrollClientCartPanelToTop();
-                            if (!sheetContext.mounted) {
-                              return;
-                            }
-                            await _showOrderPlacedDialog(sheetContext);
-                          },
-                          onOrderAgain: (order) async {
-                            final shouldOrderAgain =
-                                await _showOrderAgainDialog(sheetContext);
-                            if (!mounted || shouldOrderAgain != true) {
-                              return;
-                            }
-                            await ref
-                                .read(appControllerProvider.notifier)
-                                .addOrderToCart(order);
-                            if (!mounted) {
-                              return;
-                            }
-                            final nextDraft = ref
-                                .read(appControllerProvider)
-                                .customerDraft;
-                            _customerNameController.text = nextDraft.name;
-                            _customerMobileController.text =
-                                nextDraft.mobileNumber;
-                            _customerBarangayController.text =
-                                nextDraft.barangay;
-                            setSheetState(() {
-                              localSelectedThreadId = 'current';
-                              localPreviousOrdersExpanded = false;
-                            });
-                            setState(() {
-                              _selectedCartThreadId = 'current';
-                              _previousOrdersExpanded = false;
-                            });
-                            await _scrollClientCartPanelToTop();
-                          },
+                                await _persistCustomerDraft();
+                                if (!mounted) {
+                                  return;
+                                }
+                                final nextDraft = ref
+                                    .read(appControllerProvider)
+                                    .customerDraft;
+                                final error = ref
+                                    .read(appControllerProvider.notifier)
+                                    .validateCheckoutDraft(nextDraft);
+                                if (error != null) {
+                                  messenger.clearSnackBars();
+                                  messenger.showSnackBar(errorSnackBar(error));
+                                  return;
+                                }
+                                final itemCount = ref
+                                    .read(appControllerProvider)
+                                    .cart
+                                    .fold<int>(
+                                      0,
+                                      (sum, item) => sum + item.quantity,
+                                    );
+                                if (!sheetContext.mounted) {
+                                  return;
+                                }
+                                final shouldPlaceOrder =
+                                    await _showPlaceOrderConfirmationDialog(
+                                      sheetContext,
+                                      itemCount: itemCount,
+                                    );
+                                if (!mounted || shouldPlaceOrder != true) {
+                                  return;
+                                }
+                                final orderId = await ref
+                                    .read(appControllerProvider.notifier)
+                                    .submitOrder();
+                                if (!mounted) {
+                                  return;
+                                }
+                                if (orderId == null) {
+                                  final submitError = ref
+                                          .read(appControllerProvider)
+                                          .errorMessage ??
+                                      'Unable to submit your order right now.';
+                                  messenger.clearSnackBars();
+                                  messenger.showSnackBar(
+                                    errorSnackBar(submitError),
+                                  );
+                                  return;
+                                }
+                                _customerNameController.clear();
+                                _customerMobileController.clear();
+                                _customerBarangayController.clear();
+                                _customerStreetController.clear();
+                                setSheetState(() {
+                                  localPreviousOrdersExpanded = false;
+                                  localSelectedThreadId = '$orderId';
+                                });
+                                setState(() {
+                                  _previousOrdersExpanded = false;
+                                  _selectedCartThreadId = '$orderId';
+                                });
+                                await _scrollClientCartPanelToTop();
+                                if (!sheetContext.mounted) {
+                                  return;
+                                }
+                                await _showOrderPlacedDialog(sheetContext);
+                              },
+                              onOrderAgain: (order) async {
+                                final shouldOrderAgain =
+                                    await _showOrderAgainDialog(sheetContext);
+                                if (!mounted || shouldOrderAgain != true) {
+                                  return;
+                                }
+                                await ref
+                                    .read(appControllerProvider.notifier)
+                                    .addOrderToCart(order);
+                                if (!mounted) {
+                                  return;
+                                }
+                                final nextDraft = ref
+                                    .read(appControllerProvider)
+                                    .customerDraft;
+                                _customerNameController.text = nextDraft.name;
+                                _customerMobileController.text =
+                                    nextDraft.mobileNumber;
+                                _customerBarangayController.text =
+                                    nextDraft.barangay;
+                                setSheetState(() {
+                                  localSelectedThreadId = 'current';
+                                  localPreviousOrdersExpanded = false;
+                                });
+                                setState(() {
+                                  _selectedCartThreadId = 'current';
+                                  _previousOrdersExpanded = false;
+                                });
+                                await _scrollClientCartPanelToTop();
+                              },
+                            ),
+                          ),
                         ),
                       ),
                     ),

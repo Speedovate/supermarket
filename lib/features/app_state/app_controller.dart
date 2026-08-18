@@ -838,7 +838,15 @@ class AppController extends Notifier<AppState> {
       final currentOrders = [...state.orders];
       final currentCartTotalCentavos = state.cartTotalCentavos;
       final now = DateTime.now();
-      final orderId = await _firestoreCatalog.reserveNextOrderId();
+      final fallbackNextOrderId =
+          currentOrders.fold<int>(
+            0,
+            (maxId, order) => math.max(maxId, order.id),
+          ) +
+          1;
+      final orderId = await _firestoreCatalog.reserveNextOrderId(
+        fallbackNextOrderId: fallbackNextOrderId,
+      );
       final normalizedCustomer = state.customerDraft.copyWith(
         normalizedMobileNumber: normalizePhoneNumber(
           state.customerDraft.mobileNumber,

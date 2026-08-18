@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -435,15 +436,7 @@ class FirestoreCatalogService {
     );
   }
 
-  Future<int> reserveNextOrderId() async {
-    final latestOrderSnapshot = await _firestore
-        .collection(FirebasePaths.orders)
-        .orderBy('id', descending: true)
-        .limit(1)
-        .get();
-    final initialOrderId = latestOrderSnapshot.docs.isEmpty
-        ? 1
-        : (_coerceInt(latestOrderSnapshot.docs.first.data()['id']) + 1);
+  Future<int> reserveNextOrderId({int fallbackNextOrderId = 1}) async {
     final counterRef = _firestore
         .collection(FirebasePaths.system)
         .doc(FirebasePaths.ordersCounterDocumentId);
@@ -456,7 +449,7 @@ class FirestoreCatalogService {
           : _coerceInt(data['nextOrderId']);
       final reservedOrderId = currentNextOrderId > 0
           ? currentNextOrderId
-          : initialOrderId;
+          : math.max(1, fallbackNextOrderId);
 
       transaction.set(counterRef, {
         'nextOrderId': reservedOrderId + 1,
