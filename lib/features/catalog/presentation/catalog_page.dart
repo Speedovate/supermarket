@@ -3774,6 +3774,11 @@ class _CurrentCartItemCard extends ConsumerWidget {
   final CartItem item;
   final double width;
 
+  Future<bool> _confirmRemoval(BuildContext context) async {
+    final shouldRemove = await _showRemoveProductDialog(context);
+    return shouldRemove == true;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final product = ref.watch(
@@ -3788,117 +3793,152 @@ class _CurrentCartItemCard extends ConsumerWidget {
     const unitFontSize = 12.0;
     const priceFontSize = 14.0;
     const contentHeight = 72.0;
-    return MousePressable(
-      onTap: product == null
-          ? null
-          : () => _showProductDetailsModal(context, product),
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
+    return Dismissible(
+      key: ValueKey('cart-item-${item.productId}'),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) => _confirmRemoval(context),
+      onDismissed: (_) {
+        ref.read(appControllerProvider.notifier).removeFromCart(item.productId);
+      },
+      background: Container(
         width: width,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFE31E24),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE4E7EC)),
         ),
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 72,
-              height: 72,
-              child: Container(
-                padding: const EdgeInsets.all(1),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: const Color(0xFFE4E7EC)),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: ProductPlaceholder(
-                  label: 'Product',
-                  height: 72,
-                  fullRounded: true,
-                  imageUrl: item.photoUrl ?? product?.photoUrl,
-                ),
-              ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+      ),
+      child: GestureDetector(
+        onLongPress: () async {
+          if (!await _confirmRemoval(context)) {
+            return;
+          }
+          await ref
+              .read(appControllerProvider.notifier)
+              .removeFromCart(item.productId);
+        },
+        child: MousePressable(
+          onTap: product == null
+              ? null
+              : () => _showProductDetailsModal(context, product),
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            width: width,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE4E7EC)),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: SizedBox(
-                height: contentHeight,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.productName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontSize: titleFontSize,
-                        fontWeight: FontWeight.w800,
-                        height: 1.15,
-                      ),
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: Container(
+                    padding: const EdgeInsets.all(1),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: const Color(0xFFE4E7EC)),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.unit,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF667085),
-                        height: 1.15,
-                        fontSize: unitFontSize,
-                      ),
+                    child: ProductPlaceholder(
+                      label: 'Product',
+                      height: 72,
+                      fullRounded: true,
+                      imageUrl: item.photoUrl ?? product?.photoUrl,
                     ),
-                    const Spacer(),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: contentHeight,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.end,
-                            spacing: 4,
-                            runSpacing: 4,
-                            children: [
-                              Text(
-                                formatPesos(item.referenceUnitPriceCentavos),
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(
-                                      fontSize: priceFontSize,
-                                      color: AppColors.logoBlue,
-                                      fontWeight: FontWeight.w800,
-                                      height: 1.15,
-                                    ),
-                              ),
-                              if (product != null)
-                                Text(
-                                  'as of ${formatAsOfDate(product.priceUpdatedAt)}',
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: const Color(0xFF667085),
-                                        height: 1.15,
-                                        fontSize: unitFontSize,
-                                      ),
-                                ),
-                            ],
+                        Text(
+                          item.productName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleMedium?.copyWith(
+                            fontSize: titleFontSize,
+                            fontWeight: FontWeight.w800,
+                            height: 1.15,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(height: 4),
                         Text(
-                          'x${item.quantity}',
-                          style: Theme.of(context).textTheme.titleLarge
+                          item.unit,
+                          style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
-                                fontSize: priceFontSize,
-                                color: AppColors.logoBlue,
-                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF667085),
                                 height: 1.15,
+                                fontSize: unitFontSize,
                               ),
+                        ),
+                        const Spacer(),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.end,
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: [
+                                  Text(
+                                    formatPesos(item.referenceUnitPriceCentavos),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(
+                                          fontSize: priceFontSize,
+                                          color: AppColors.logoBlue,
+                                          fontWeight: FontWeight.w800,
+                                          height: 1.15,
+                                        ),
+                                  ),
+                                  if (product != null)
+                                    Text(
+                                      'as of ${formatAsOfDate(product.priceUpdatedAt)}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: const Color(0xFF667085),
+                                            height: 1.15,
+                                            fontSize: unitFontSize,
+                                          ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'x${item.quantity}',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    fontSize: priceFontSize,
+                                    color: AppColors.logoBlue,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.15,
+                                  ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -5798,9 +5838,15 @@ class _QuantityInputDialogState extends State<_QuantityInputDialog> {
     if (_isSubmitting) {
       return;
     }
+    final trimmed = _controller.text.trim();
+    if (trimmed.isEmpty) {
+      _isSubmitting = true;
+      Navigator.of(context).pop(0);
+      return;
+    }
     if (_formKey.currentState?.validate() ?? false) {
       _isSubmitting = true;
-      Navigator.of(context).pop(int.parse(_controller.text));
+      Navigator.of(context).pop(int.parse(trimmed));
     }
   }
 
@@ -5838,9 +5884,13 @@ class _QuantityInputDialogState extends State<_QuantityInputDialog> {
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: const InputDecoration(hintText: 'Enter Quantity'),
                   validator: (value) {
-                    final parsed = int.tryParse(value ?? '');
+                    final trimmed = value?.trim() ?? '';
+                    if (trimmed.isEmpty) {
+                      return null;
+                    }
+                    final parsed = int.tryParse(trimmed);
                     if (parsed == null || parsed < 0) {
-                      return 'Enter 0 or more';
+                      return 'Enter a valid quantity';
                     }
                     return null;
                   },

@@ -1964,8 +1964,14 @@ Future<int?> _showModalQuantityInputDialog(
         if (isSubmitting) {
           return;
         }
-        final parsed = int.tryParse(controller.text.trim());
-        if (parsed == null || parsed <= 0) {
+        final trimmed = controller.text.trim();
+        if (trimmed.isEmpty) {
+          isSubmitting = true;
+          Navigator.of(dialogContext).pop(0);
+          return;
+        }
+        final parsed = int.tryParse(trimmed);
+        if (parsed == null || parsed < 0) {
           final messenger = ScaffoldMessenger.of(dialogContext);
           messenger.clearSnackBars();
           messenger.showSnackBar(
