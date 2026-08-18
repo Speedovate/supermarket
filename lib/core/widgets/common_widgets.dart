@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -284,6 +285,8 @@ class ProductPlaceholder extends StatelessWidget {
           fit: imageFit,
           width: double.infinity,
           height: double.infinity,
+          cacheWidth: 500,
+          cacheHeight: 500,
           webHtmlElementStrategy: kIsWeb
               ? WebHtmlElementStrategy.prefer
               : WebHtmlElementStrategy.never,
@@ -605,32 +608,58 @@ class AppModalBodyText extends StatelessWidget {
   }
 }
 
-class AppModalButton extends StatelessWidget {
+class AppModalButton extends StatefulWidget {
   const AppModalButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.isPrimary = false,
     this.expanded = true,
+    this.isLoading = false,
   });
 
   final String label;
-  final VoidCallback? onPressed;
+  final FutureOr<void> Function()? onPressed;
   final bool isPrimary;
   final bool expanded;
+  final bool isLoading;
+
+  @override
+  State<AppModalButton> createState() => _AppModalButtonState();
+}
+
+class _AppModalButtonState extends State<AppModalButton> {
+  bool _internalLoading = false;
+
+  Future<void> _handlePressed() async {
+    if (_internalLoading || widget.isLoading || widget.onPressed == null) {
+      return;
+    }
+    setState(() => _internalLoading = true);
+    try {
+      await Future<void>.sync(widget.onPressed!);
+    } finally {
+      if (mounted) {
+        setState(() => _internalLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final showLoading = widget.isLoading || _internalLoading;
     final button = SizedBox(
       height: AppModalFrame.actionHeight,
-      width: expanded ? double.infinity : null,
+      width: widget.expanded ? double.infinity : null,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          backgroundColor: isPrimary
-              ? AppColors.logoBlue.withValues(alpha: 0.10)
+          backgroundColor: widget.isPrimary
+              ? (showLoading
+                    ? AppColors.logoBlue
+                    : AppColors.logoBlue.withValues(alpha: 0.10))
               : const Color(0x1AE31E24),
-          foregroundColor: isPrimary
-              ? AppColors.logoBlue
+          foregroundColor: widget.isPrimary
+              ? (showLoading ? Colors.white : AppColors.logoBlue)
               : const Color(0xFFE31E24),
           textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w700,
@@ -638,7 +667,7 @@ class AppModalButton extends StatelessWidget {
           ),
           minimumSize: const Size(0, AppModalFrame.actionHeight),
           maximumSize: const Size(double.infinity, AppModalFrame.actionHeight),
-          fixedSize: expanded
+          fixedSize: widget.expanded
               ? const Size(double.infinity, AppModalFrame.actionHeight)
               : null,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -647,12 +676,23 @@ class AppModalButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
           ),
         ).copyWith(overlayColor: WidgetStateProperty.all(Colors.transparent)),
-        onPressed: onPressed,
-        child: Text(label),
+        onPressed: showLoading ? null : _handlePressed,
+        child: showLoading
+            ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    widget.isPrimary ? Colors.white : const Color(0xFFE31E24),
+                  ),
+                ),
+              )
+            : Text(widget.label),
       ),
     );
 
-    return expanded ? Expanded(child: button) : button;
+    return widget.expanded ? Expanded(child: button) : button;
   }
 }
 

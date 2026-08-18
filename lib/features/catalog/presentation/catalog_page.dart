@@ -1750,9 +1750,9 @@ class _ShimmerSurfaceState extends State<_ShimmerSurface>
               begin: Alignment(-1.6 + (_controller.value * 2.8), 0),
               end: Alignment(-0.6 + (_controller.value * 2.8), 0),
               colors: const [
-                Color(0xFFF2F4F7),
-                Color(0xFFFFFFFF),
-                Color(0xFFF2F4F7),
+                Color(0xFFE5E7EB),
+                Color(0xFFD1D5DB),
+                Color(0xFFE5E7EB),
               ],
               stops: const [0.15, 0.5, 0.85],
             ).createShader(Rect.fromLTWH(0, 0, width, bounds.height));
@@ -2347,6 +2347,8 @@ class _BannerImage extends StatelessWidget {
     return Image.network(
       _resolvedImageUrl,
       fit: BoxFit.cover,
+      cacheWidth: 500,
+      cacheHeight: 500,
       webHtmlElementStrategy: kIsWeb
           ? WebHtmlElementStrategy.prefer
           : WebHtmlElementStrategy.never,

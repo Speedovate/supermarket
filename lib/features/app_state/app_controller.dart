@@ -244,7 +244,14 @@ class AppController extends Notifier<AppState> {
             _customerLookupPhones(),
           );
     _ordersSubscription = stream.listen((orders) async {
-      state = state.copyWith(orders: orders);
+      state = state.copyWith(
+        orders: adminSession != null
+            ? orders
+            : _mergeOrdersPreservingLocal(
+                existing: state.orders,
+                incoming: orders,
+              ),
+      );
       await _persist();
     }, onError: _handleRealtimeSyncError);
   }
@@ -1222,7 +1229,14 @@ class AppController extends Notifier<AppState> {
           : await _firestoreCatalog.loadOrdersForNormalizedPhones(
               _customerLookupPhones(),
             );
-      state = state.copyWith(orders: remoteOrders);
+      state = state.copyWith(
+        orders: adminSession != null
+            ? remoteOrders
+            : _mergeOrdersPreservingLocal(
+                existing: state.orders,
+                incoming: remoteOrders,
+              ),
+      );
       await _persist();
     } catch (_) {
       // Keep local cached orders when the network fetch fails.
@@ -1250,6 +1264,36 @@ class AppController extends Notifier<AppState> {
       return 1;
     }
     return existingIds.reduce(math.max) + 1;
+  }
+
+  List<OrderRequest> _mergeOrdersPreservingLocal({
+    required List<OrderRequest> existing,
+    required List<OrderRequest> incoming,
+  }) {
+    final mergedById = <int, OrderRequest>{
+      for (final order in existing) order.id: order,
+    };
+
+    for (final order in incoming) {
+      final previous = mergedById[order.id];
+      if (previous == null || order.updatedAt.isAfter(previous.updatedAt)) {
+        mergedById[order.id] = order;
+      }
+    }
+
+    final merged = mergedById.values.toList()
+      ..sort((a, b) {
+        final updatedCompare = b.updatedAt.compareTo(a.updatedAt);
+        if (updatedCompare != 0) {
+          return updatedCompare;
+        }
+        final createdCompare = b.createdAt.compareTo(a.createdAt);
+        if (createdCompare != 0) {
+          return createdCompare;
+        }
+        return b.id.compareTo(a.id);
+      });
+    return merged;
   }
 
   String _mapAdminLoginError(FirebaseAuthException error) {
