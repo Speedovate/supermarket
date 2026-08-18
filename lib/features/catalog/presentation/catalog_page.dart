@@ -2347,8 +2347,8 @@ class _BannerImage extends StatelessWidget {
     return Image.network(
       _resolvedImageUrl,
       fit: BoxFit.cover,
-      cacheWidth: 500,
-      cacheHeight: 500,
+      cacheWidth: 400,
+      cacheHeight: 400,
       webHtmlElementStrategy: kIsWeb
           ? WebHtmlElementStrategy.prefer
           : WebHtmlElementStrategy.never,

@@ -34,12 +34,9 @@ Future<Product?> showAdminProductDialog(
         : _formatEditablePrice(initial.referencePriceCentavos),
   );
   final soldController = TextEditingController(
-    text: initial == null ? '' : '${initial.sold}',
+    text: '${initial?.sold ?? 0}',
   );
-  int? selectedCategory = initial?.categoryId;
-  if (selectedCategory == null && categories.isNotEmpty) {
-    selectedCategory = categories.first.id;
-  }
+  int? selectedCategory = initial?.categoryId == 0 ? null : initial?.categoryId;
   var isActive = initial?.isActive ?? true;
   var isSubmitting = false;
   var isPickingImage = false;
@@ -68,7 +65,7 @@ Future<Product?> showAdminProductDialog(
                     .fold<int>(0, (max, value) => value > max ? value : max)) +
                 1),
         name: nameController.text.trim(),
-        category: selectedCategory!,
+        category: selectedCategory ?? 0,
         details: detailsController.text.trim(),
         price: parsedPrice.round(),
         sold: parsedSold,
@@ -217,25 +214,23 @@ Future<Product?> showAdminProductDialog(
                       },
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<int>(
+                    DropdownButtonFormField<int?>(
                       initialValue: selectedCategory,
                       decoration: const InputDecoration(labelText: 'Category'),
-                      items: categories
-                          .map(
-                            (item) => DropdownMenuItem(
-                              value: item.id,
-                              child: Text(item.name),
-                            ),
-                          )
-                          .toList(),
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('No Category'),
+                        ),
+                        ...categories.map(
+                          (item) => DropdownMenuItem<int?>(
+                            value: item.id,
+                            child: Text(item.name),
+                          ),
+                        ),
+                      ],
                       onChanged: (value) =>
                           setState(() => selectedCategory = value),
-                      validator: (value) {
-                        if (value == null) {
-                          return 'Category is required.';
-                        }
-                        return null;
-                      },
                     ),
                     const SizedBox(height: 12),
                     TextFormField(

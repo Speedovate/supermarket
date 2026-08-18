@@ -285,8 +285,8 @@ class ProductPlaceholder extends StatelessWidget {
           fit: imageFit,
           width: double.infinity,
           height: double.infinity,
-          cacheWidth: 500,
-          cacheHeight: 500,
+          cacheWidth: 400,
+          cacheHeight: 400,
           webHtmlElementStrategy: kIsWeb
               ? WebHtmlElementStrategy.prefer
               : WebHtmlElementStrategy.never,
