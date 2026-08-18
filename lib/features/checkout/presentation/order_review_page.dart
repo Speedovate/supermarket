@@ -77,7 +77,14 @@ class OrderReviewPage extends ConsumerWidget {
                     contentPadding: EdgeInsets.zero,
                     title: Text(item.productName),
                     subtitle: Text('${item.quantity} × ${item.unit}'),
-                    trailing: Text(formatPesos(item.estimatedSubtotalCentavos)),
+                    trailing: Text(
+                      formatPesos(item.estimatedSubtotalCentavos),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF172033),
+                        fontWeight: FontWeight.w400,
+                        height: 1.15,
+                      ),
+                    ),
                   ),
                   const Divider(),
                 ],
@@ -86,13 +93,15 @@ class OrderReviewPage extends ConsumerWidget {
                     const Expanded(
                       child: Text(
                         'Estimated total',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                        style: TextStyle(fontWeight: FontWeight.w400),
                       ),
                     ),
                     Text(
                       formatPesos(state.cartTotalCentavos),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF172033),
+                        fontWeight: FontWeight.w400,
+                        height: 1.15,
                       ),
                     ),
                   ],

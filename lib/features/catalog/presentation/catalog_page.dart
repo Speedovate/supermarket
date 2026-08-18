@@ -1131,6 +1131,32 @@ TextStyle _cartPanelActionTextStyle({
   );
 }
 
+TextStyle? _clientNumberTextStyle(
+  BuildContext context, {
+  double? fontSize,
+  Color color = const Color(0xFF172033),
+}) {
+  return Theme.of(context).textTheme.bodyMedium?.copyWith(
+    fontSize: fontSize,
+    fontWeight: FontWeight.w400,
+    color: color,
+    height: 1.15,
+  );
+}
+
+TextStyle? _clientPriceTextStyle(
+  BuildContext context, {
+  double? fontSize,
+  Color color = AppColors.logoBlue,
+}) {
+  return Theme.of(context).textTheme.bodyMedium?.copyWith(
+    fontSize: fontSize,
+    fontWeight: FontWeight.w400,
+    color: color,
+    height: 1.15,
+  );
+}
+
 class _InlineCartCountBadge extends StatelessWidget {
   const _InlineCartCountBadge({required this.count});
 
@@ -1152,7 +1178,7 @@ class _InlineCartCountBadge extends StatelessWidget {
         style: const TextStyle(
           color: Colors.white,
           fontSize: 10,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w400,
           height: 1,
         ),
       ),
@@ -1468,7 +1494,7 @@ class _CartButton extends StatelessWidget {
     const badgeTextStyle = TextStyle(
       color: Colors.white,
       fontSize: 10,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w400,
       height: 1,
     );
     final badgeLabel = formatCompactCount(cartCount);
@@ -2748,7 +2774,7 @@ class _DesktopCartPanel extends ConsumerWidget {
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 10,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w400,
                                       height: 1,
                                     ),
                                   ),
@@ -2858,21 +2884,12 @@ class _DesktopCartPanel extends ConsumerWidget {
                               Expanded(
                                 child: Text(
                                   '$selectedItemCount item${selectedItemCount == 1 ? '' : 's'}',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        height: 1.15,
-                                      ),
+                                  style: _clientNumberTextStyle(context),
                                 ),
                               ),
                               Text(
                                 formatPesos(selectedTotalCentavos),
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      color: AppColors.logoBlue,
-                                      fontWeight: FontWeight.w800,
-                                      height: 1.15,
-                                    ),
+                                style: _clientPriceTextStyle(context),
                               ),
                             ],
                           ),
@@ -4021,15 +4038,10 @@ class _CurrentCartItemCard extends ConsumerWidget {
                                 children: [
                                   Text(
                                     formatPesos(item.referenceUnitPriceCentavos),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge
-                                        ?.copyWith(
-                                          fontSize: priceFontSize,
-                                          color: AppColors.logoBlue,
-                                          fontWeight: FontWeight.w800,
-                                          height: 1.15,
-                                        ),
+                                    style: _clientPriceTextStyle(
+                                      context,
+                                      fontSize: priceFontSize,
+                                    ),
                                   ),
                                   if (product != null)
                                     Text(
@@ -4049,13 +4061,11 @@ class _CurrentCartItemCard extends ConsumerWidget {
                             const SizedBox(width: 8),
                             Text(
                               'x${item.quantity}',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    fontSize: priceFontSize,
-                                    color: AppColors.logoBlue,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.15,
-                                  ),
+                              style: _clientNumberTextStyle(
+                                context,
+                                fontSize: priceFontSize,
+                                color: AppColors.logoBlue,
+                              ),
                             ),
                           ],
                         ),
@@ -4164,13 +4174,10 @@ class _PreviousOrderItemCard extends ConsumerWidget {
                             children: [
                               Text(
                                 formatPesos(item.referenceUnitPriceCentavos),
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(
-                                      fontSize: priceFontSize,
-                                      color: AppColors.logoBlue,
-                                      fontWeight: FontWeight.w800,
-                                      height: 1.15,
-                                    ),
+                                style: _clientPriceTextStyle(
+                                  context,
+                                  fontSize: priceFontSize,
+                                ),
                               ),
                               if (product != null)
                                 Text(
@@ -4188,13 +4195,11 @@ class _PreviousOrderItemCard extends ConsumerWidget {
                         const SizedBox(width: 8),
                         Text(
                           'x${item.requestedQuantity}',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                fontSize: priceFontSize,
-                                color: AppColors.logoBlue,
-                                fontWeight: FontWeight.w800,
-                                height: 1.15,
-                              ),
+                          style: _clientNumberTextStyle(
+                            context,
+                            fontSize: priceFontSize,
+                            color: AppColors.logoBlue,
+                          ),
                         ),
                       ],
                     ),
@@ -4477,15 +4482,10 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                                   if (tightHeightFactor >= 0.55) ...[
                                     Text(
                                       formatPesos(displayPriceCentavos),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge
-                                          ?.copyWith(
-                                            color: AppColors.logoBlue,
-                                            fontWeight: FontWeight.w800,
-                                            height: 1.15,
-                                            fontSize: resolvedPriceFontSize,
-                                          ),
+                                      style: _clientPriceTextStyle(
+                                        context,
+                                        fontSize: resolvedPriceFontSize,
+                                      ),
                                     ),
                                     Text(
                                       'as of ${formatAsOfDate(displayPriceUpdatedAt)}',
@@ -4508,15 +4508,10 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                                       children: [
                                         Text(
                                           formatPesos(displayPriceCentavos),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleLarge
-                                              ?.copyWith(
-                                                color: AppColors.logoBlue,
-                                                fontWeight: FontWeight.w800,
-                                                height: 1.15,
-                                                fontSize: resolvedPriceFontSize,
-                                              ),
+                                          style: _clientPriceTextStyle(
+                                            context,
+                                            fontSize: resolvedPriceFontSize,
+                                          ),
                                         ),
                                         Text(
                                           'as of ${formatAsOfDate(displayPriceUpdatedAt)}',
@@ -4850,10 +4845,10 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
       height: 1.15,
       fontSize: 12,
     );
-    final priceStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(
+    final priceStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
       fontSize: 16,
       color: AppColors.logoBlue,
-      fontWeight: FontWeight.w800,
+      fontWeight: FontWeight.w400,
       height: 1.15,
     );
     final asOfStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
