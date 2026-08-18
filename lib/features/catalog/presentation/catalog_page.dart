@@ -1230,11 +1230,8 @@ int _catalogColumnsForWidth(double width) {
 
 double _outerHorizontalPaddingForWidth(double width) {
   final columns = _catalogColumnsForWidth(width);
-  if (columns == 1) {
+  if (columns <= 2) {
     return 24.0;
-  }
-  if (columns == 2) {
-    return 32.0;
   }
   return 40.0;
 }
