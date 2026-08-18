@@ -80,7 +80,7 @@ class OrderReviewPage extends ConsumerWidget {
                       '${item.quantity} × ${item.unit}',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: const Color(0xFF667085),
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.w600,
                         height: 1.15,
                       ),
                     ),
@@ -88,7 +88,7 @@ class OrderReviewPage extends ConsumerWidget {
                       formatPesos(item.estimatedSubtotalCentavos),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: const Color(0xFF172033),
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.w600,
                         height: 1.15,
                       ),
                     ),
@@ -100,14 +100,14 @@ class OrderReviewPage extends ConsumerWidget {
                     const Expanded(
                       child: Text(
                         'Estimated total',
-                        style: TextStyle(fontWeight: FontWeight.w400),
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                     Text(
                       formatPesos(state.cartTotalCentavos),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: const Color(0xFF172033),
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.w600,
                         height: 1.15,
                       ),
                     ),

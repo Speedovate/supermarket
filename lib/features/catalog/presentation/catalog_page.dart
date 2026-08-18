@@ -1138,7 +1138,7 @@ TextStyle? _clientNumberTextStyle(
 }) {
   return Theme.of(context).textTheme.bodyMedium?.copyWith(
     fontSize: fontSize,
-    fontWeight: FontWeight.w400,
+    fontWeight: FontWeight.w600,
     color: color,
     height: 1.15,
   );
@@ -1151,7 +1151,7 @@ TextStyle? _clientPriceTextStyle(
 }) {
   return Theme.of(context).textTheme.bodyMedium?.copyWith(
     fontSize: fontSize,
-    fontWeight: FontWeight.w400,
+    fontWeight: FontWeight.w600,
     color: color,
     height: 1.15,
   );
@@ -1178,7 +1178,7 @@ class _InlineCartCountBadge extends StatelessWidget {
         style: const TextStyle(
           color: Colors.white,
           fontSize: 10,
-          fontWeight: FontWeight.w400,
+          fontWeight: FontWeight.w600,
           height: 1,
         ),
       ),
@@ -1494,7 +1494,7 @@ class _CartButton extends StatelessWidget {
     const badgeTextStyle = TextStyle(
       color: Colors.white,
       fontSize: 10,
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.w600,
       height: 1,
     );
     final badgeLabel = formatCompactCount(cartCount);
@@ -2774,7 +2774,7 @@ class _DesktopCartPanel extends ConsumerWidget {
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 10,
-                                      fontWeight: FontWeight.w400,
+                                      fontWeight: FontWeight.w600,
                                       height: 1,
                                     ),
                                   ),
@@ -4848,7 +4848,7 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
     final priceStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
       fontSize: 16,
       color: AppColors.logoBlue,
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.w600,
       height: 1.15,
     );
     final asOfStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -5385,7 +5385,7 @@ class _CartQuantityControl extends StatelessWidget {
                     '$quantity',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.white,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.w600,
                       height: 1.15,
                     ),
                   ),
