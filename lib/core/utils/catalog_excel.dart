@@ -196,7 +196,7 @@ String _resolveProductsSheetPath({
   required XmlDocument workbook,
   required XmlDocument workbookRels,
 }) {
-  final sheets = workbook.findAllElements('sheet');
+  final sheets = _findElementsByLocalName(workbook, 'sheet');
   XmlElement? targetSheet;
   for (final sheet in sheets) {
     if ((sheet.getAttribute('name') ?? '').trim() == _productsSheetName) {
@@ -218,7 +218,10 @@ String _resolveProductsSheetPath({
       'The Products sheet is missing a worksheet relationship id.',
     );
   }
-  for (final relationship in workbookRels.findAllElements('Relationship')) {
+  for (final relationship in _findElementsByLocalName(
+    workbookRels,
+    'Relationship',
+  )) {
     if ((relationship.getAttribute('Id') ?? '').trim() != relationshipId) {
       continue;
     }
@@ -240,23 +243,45 @@ String _resolveProductsSheetPath({
 
 List<List<_SheetCell>> _sheetRows(XmlDocument sheetDocument) {
   final rows = <List<_SheetCell>>[];
-  for (final row in sheetDocument.findAllElements('row')) {
+  for (final row in _findElementsByLocalName(sheetDocument, 'row')) {
     final cells = <_SheetCell>[];
-    for (final cell in row.findElements('c')) {
+    for (final cell in _childElementsByLocalName(row, 'c')) {
       final reference = cell.getAttribute('r') ?? '';
       final columnIndex = _columnIndexFromCellReference(reference);
       final cellType = cell.getAttribute('t') ?? '';
       String value = '';
       if (cellType == 'inlineStr') {
-        value = cell.findAllElements('t').map((item) => item.innerText).join().trim();
+        value = _findElementsByLocalName(cell, 't')
+            .map((item) => item.innerText)
+            .join()
+            .trim();
       } else {
-        value = (cell.getElement('v')?.innerText ?? '').trim();
+        value = (_firstChildByLocalName(cell, 'v')?.innerText ?? '').trim();
       }
       cells.add(_SheetCell(columnIndex: columnIndex, value: value));
     }
     rows.add(cells);
   }
   return rows;
+}
+
+Iterable<XmlElement> _findElementsByLocalName(XmlNode node, String localName) {
+  return node.descendants.whereType<XmlElement>().where(
+    (element) => element.name.local == localName,
+  );
+}
+
+Iterable<XmlElement> _childElementsByLocalName(XmlElement node, String localName) {
+  return node.childElements.where((element) => element.name.local == localName);
+}
+
+XmlElement? _firstChildByLocalName(XmlElement node, String localName) {
+  for (final child in node.childElements) {
+    if (child.name.local == localName) {
+      return child;
+    }
+  }
+  return null;
 }
 
 int _columnIndexFromCellReference(String reference) {
