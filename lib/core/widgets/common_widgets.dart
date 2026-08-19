@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 
 import '../constants/app_colors.dart';
 import '../models/app_models.dart';
-import '../utils/browser_text_selection.dart';
 import '../utils/formatters.dart';
 
 const _snackbarSuccessColor = Color(0xFF2E7D32);
@@ -90,9 +89,7 @@ class _MousePressableState extends State<MousePressable> {
     _activePointer = event.pointer;
     _pointerDownPosition = event.position;
     _pointerMovedTooFar = false;
-    if (!kIsWeb) {
-      setState(() => _pressed = widget.enabled);
-    }
+    setState(() => _pressed = widget.enabled);
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
@@ -131,9 +128,7 @@ class _MousePressableState extends State<MousePressable> {
       setState(() => _pressed = false);
     }
     _handlePointerEnd(event.pointer);
-    final shouldSuppressTapForSelection =
-        kIsWeb && movedTooFar && hasBrowserTextSelection();
-    if (shouldTap && !shouldSuppressTapForSelection) {
+    if (shouldTap) {
       widget.onTap!.call();
     }
   }
