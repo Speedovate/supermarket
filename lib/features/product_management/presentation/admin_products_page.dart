@@ -417,8 +417,43 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
               products: resolvedImport.products,
             );
       } else {
+        final currentState = ref.read(appControllerProvider);
         final existingCategoryIds =
-            ref.read(appControllerProvider).categories.map((item) => item.id).toSet();
+            currentState.categories.map((item) => item.id).toSet();
+        final existingProductKeys = currentState.products
+            .map(
+              (item) =>
+                  '${item.name.trim().toLowerCase()}|||${item.details.trim().toLowerCase()}',
+            )
+            .toSet();
+        final duplicateImportedKeys = <String>{};
+        final seenImportedKeys = <String>{};
+        final duplicateExistingLabels = <String>{};
+        for (final product in resolvedImport.products) {
+          final key =
+              '${product.name.trim().toLowerCase()}|||${product.details.trim().toLowerCase()}';
+          if (!seenImportedKeys.add(key)) {
+            duplicateImportedKeys.add(
+              '${product.name.trim()} | ${product.details.trim()}',
+            );
+          }
+          if (existingProductKeys.contains(key)) {
+            duplicateExistingLabels.add(
+              '${product.name.trim()} | ${product.details.trim()}',
+            );
+          }
+        }
+        if (duplicateImportedKeys.isNotEmpty || duplicateExistingLabels.isNotEmpty) {
+          final parts = <String>[
+            if (duplicateImportedKeys.isNotEmpty)
+              'duplicate imported product${duplicateImportedKeys.length == 1 ? '' : 's'}: ${duplicateImportedKeys.join(', ')}',
+            if (duplicateExistingLabels.isNotEmpty)
+              'existing product duplicate${duplicateExistingLabels.length == 1 ? '' : 's'}: ${duplicateExistingLabels.join(', ')}',
+          ];
+          throw CatalogWorkbookException(
+            'Additional import prevents duplicate name + details combinations. Found ${parts.join(' and ')}.',
+          );
+        }
         for (final category in resolvedImport.categories) {
           if (existingCategoryIds.contains(category.id)) {
             continue;
