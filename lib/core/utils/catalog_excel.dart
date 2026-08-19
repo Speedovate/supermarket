@@ -18,7 +18,6 @@ class ImportedCatalogProductRow {
     required this.details,
     required this.categoryName,
     required this.priceCentavos,
-    required this.sold,
     this.createdAt,
     this.updatedAt,
   });
@@ -27,7 +26,6 @@ class ImportedCatalogProductRow {
   final String details;
   final String categoryName;
   final int priceCentavos;
-  final int sold;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 }
@@ -133,7 +131,6 @@ ImportedCatalogWorkbook parseCatalogWorkbook(Uint8List bytes) {
       'details',
       'category',
       'price',
-      'sold',
       'created at',
       'updated at',
     ]);
@@ -147,7 +144,6 @@ ImportedCatalogWorkbook parseCatalogWorkbook(Uint8List bytes) {
       }
       final name = _requiredText(row, header, 'name', rowIndex);
       final details = _requiredText(row, header, 'details', rowIndex);
-      final sold = _requiredInt(row, header, 'sold', rowIndex);
       final createdAt =
           _optionalDateTime(row, header, 'created at') ?? now;
       final updatedAt =
@@ -158,7 +154,6 @@ ImportedCatalogWorkbook parseCatalogWorkbook(Uint8List bytes) {
           details: details,
           categoryName: (_optionalText(row, header, 'category') ?? '').trim(),
           priceCentavos: _requiredPriceCentavos(row, header, rowIndex),
-          sold: sold,
           createdAt: createdAt,
           updatedAt: updatedAt,
         ),
@@ -383,22 +378,6 @@ String? _optionalText(
       .firstWhere((_) => true, orElse: () => '')
       .trim();
   return value.isEmpty ? null : value;
-}
-
-int _requiredInt(
-  List<_SheetCell> row,
-  Map<String, int> headers,
-  String column,
-  int rowIndex,
-) {
-  final raw = _optionalText(row, headers, column);
-  final value = int.tryParse(raw ?? '');
-  if (value == null) {
-    throw CatalogWorkbookException(
-      'Products row ${rowIndex + 1}: $column must be a whole number.',
-    );
-  }
-  return value;
 }
 
 int _requiredPriceCentavos(

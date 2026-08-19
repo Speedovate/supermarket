@@ -33,9 +33,6 @@ Future<Product?> showAdminProductDialog(
         ? ''
         : _formatEditablePrice(initial.referencePriceCentavos),
   );
-  final soldController = TextEditingController(
-    text: '${initial?.sold ?? 0}',
-  );
   int? selectedCategory = initial?.categoryId == 0 ? null : initial?.categoryId;
   var isActive = initial?.isActive ?? true;
   var isSubmitting = false;
@@ -53,7 +50,6 @@ Future<Product?> showAdminProductDialog(
     try {
       final parsedPrice =
           (double.tryParse(priceController.text.trim()) ?? 0) * 100;
-      final parsedSold = int.tryParse(soldController.text.trim()) ?? 0;
       final product = Product(
         active: isActive,
         createdAt: initial?.createdAt ?? DateTime.now(),
@@ -68,7 +64,7 @@ Future<Product?> showAdminProductDialog(
         category: selectedCategory ?? 0,
         details: detailsController.text.trim(),
         price: parsedPrice.round(),
-        sold: parsedSold,
+        sold: initial?.sold ?? 0,
         photoUrl: photoUrl,
         photoStoragePath: initial?.photoStoragePath,
       );
@@ -279,30 +275,6 @@ Future<Product?> showAdminProductDialog(
                       },
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(
-                      controller: soldController,
-                      onFieldSubmitted: (_) => submit(dialogContext),
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Sold',
-                        hintText: '0',
-                      ),
-                      validator: (value) {
-                        final text = value?.trim() ?? '';
-                        if (text.isEmpty) {
-                          return 'Sold is required.';
-                        }
-                        final parsed = int.tryParse(text);
-                        if (parsed == null) {
-                          return 'Enter a valid sold value.';
-                        }
-                        if (parsed < 0) {
-                          return 'Sold cannot be negative.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
                     SwitchListTile(
                       dense: true,
                       visualDensity: const VisualDensity(vertical: -4),
@@ -337,7 +309,6 @@ Future<Product?> showAdminProductDialog(
     nameController.dispose();
     detailsController.dispose();
     priceController.dispose();
-    soldController.dispose();
   });
 
   return result;

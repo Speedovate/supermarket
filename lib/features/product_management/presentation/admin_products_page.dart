@@ -90,7 +90,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                 : (categoryIdByNormalizedName[normalizedCategory] ?? 0),
             details: row.details.trim(),
             price: row.priceCentavos,
-            sold: row.sold,
+            sold: 0,
           ),
         );
       }
@@ -149,7 +149,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
               : (categoryIdByNormalizedName[normalizedCategory] ?? 0),
           details: row.details.trim(),
           price: row.priceCentavos,
-          sold: row.sold,
+          sold: 0,
         ),
       );
     }
