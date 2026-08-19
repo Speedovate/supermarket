@@ -680,12 +680,12 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         }.contains(_selectedCartThreadId)
         ? _selectedCartThreadId
         : 'current';
+    final hasAnyCatalogContent =
+        vm.categories.isNotEmpty ||
+        appState.products.isNotEmpty ||
+        activeBanners.isNotEmpty;
     final showCatalogLoading =
-        appState.loading &&
-        !appState.catalogHydrated &&
-        vm.categories.isEmpty &&
-        appState.products.isEmpty &&
-        activeBanners.isEmpty;
+        !appState.catalogHydrated && !hasAnyCatalogContent;
 
     final mainPane = MediaQuery(
       data: media.copyWith(size: Size(mainContentWidth, media.size.height)),
