@@ -70,8 +70,10 @@ class _AndrewsSupermarketAppState
         final initialized = ref.watch(
           appControllerProvider.select((state) => state.initialized),
         );
+        final currentPath = router.routeInformationProvider.value.uri.path;
+        final showingAdminRoute = currentPath.startsWith('/admin');
 
-        if (!initialized) {
+        if (!initialized && showingAdminRoute) {
           return Scaffold(
             backgroundColor: Color(0xFF2F3DBF),
             body: SafeArea(
