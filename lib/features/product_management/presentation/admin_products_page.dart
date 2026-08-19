@@ -613,7 +613,15 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(appControllerProvider);
     final categories = [...state.categories]
-      ..sort((a, b) => b.id.compareTo(a.id));
+      ..sort((a, b) {
+        final nameCompare = a.name.toLowerCase().compareTo(
+          b.name.toLowerCase(),
+        );
+        if (nameCompare != 0) {
+          return nameCompare;
+        }
+        return a.id.compareTo(b.id);
+      });
     final categoryById = {
       for (final category in categories) category.id: category.name,
     };

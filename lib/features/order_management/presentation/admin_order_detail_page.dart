@@ -505,7 +505,15 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
     };
     final activeCategories = [
       ...state.categories.where((item) => item.isActive),
-    ]..sort((a, b) => a.id.compareTo(b.id));
+    ]..sort((a, b) {
+      final nameCompare = a.name.toLowerCase().compareTo(
+        b.name.toLowerCase(),
+      );
+      if (nameCompare != 0) {
+        return nameCompare;
+      }
+      return a.id.compareTo(b.id);
+    });
     final activeProducts = [...state.products.where((item) => item.isActive)]
       ..sort((a, b) {
         final createdAtCompare = b.createdAt.compareTo(a.createdAt);

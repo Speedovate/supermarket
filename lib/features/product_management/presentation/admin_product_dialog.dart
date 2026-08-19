@@ -24,7 +24,16 @@ Future<Product?> showAdminProductDialog(
   Product? initial,
 }) async {
   final state = ref.read(appControllerProvider);
-  final categories = state.categories.toList();
+  final categories = state.categories.toList()
+    ..sort((a, b) {
+      final nameCompare = a.name.toLowerCase().compareTo(
+        b.name.toLowerCase(),
+      );
+      if (nameCompare != 0) {
+        return nameCompare;
+      }
+      return a.id.compareTo(b.id);
+    });
   final formKey = GlobalKey<FormState>();
   final nameController = TextEditingController(text: initial?.name ?? '');
   final detailsController = TextEditingController(text: initial?.details ?? '');
