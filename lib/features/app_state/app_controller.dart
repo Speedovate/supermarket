@@ -131,6 +131,7 @@ class AppController extends Notifier<AppState> {
   StreamSubscription<List<Product>>? _productsSubscription;
   StreamSubscription<AppSettings?>? _settingsSubscription;
   StreamSubscription<List<OrderRequest>>? _ordersSubscription;
+  bool _realtimeSyncScheduled = false;
   static const _defaultStoreContactNumber = '09064493206';
   static const _defaultFacebookMessengerUrl =
       'https://www.facebook.com/andrew.s.supermarket.2024';
@@ -156,13 +157,13 @@ class AppController extends Notifier<AppState> {
 
       await _syncAdminSessionFromFirebase();
       unawaited(_hydratePublicDataFromFirebase());
-      _startRealtimeSync();
+      _scheduleRealtimeSync();
       unawaited(_refreshOrdersFromFirebase());
     } catch (_) {
       _applyDefaultState();
       await _syncAdminSessionFromFirebase();
       unawaited(_hydratePublicDataFromFirebase());
-      _startRealtimeSync();
+      _scheduleRealtimeSync();
       unawaited(_refreshOrdersFromFirebase());
     }
   }
@@ -176,7 +177,7 @@ class AppController extends Notifier<AppState> {
       _applyPersistedState(persisted);
       await _syncAdminSessionFromFirebase();
       unawaited(_hydratePublicDataFromFirebase());
-      _startRealtimeSync();
+      _scheduleRealtimeSync();
       unawaited(_refreshOrdersFromFirebase());
     } catch (_) {
       // Keep the current in-memory state if refresh fails.
@@ -192,6 +193,7 @@ class AppController extends Notifier<AppState> {
   }
 
   void _startRealtimeSync() {
+    _realtimeSyncScheduled = false;
     final includeInactive = state.adminSession != null;
     _categoriesSubscription ??= _firestoreCatalog.watchCategories(
       includeInactive: includeInactive,
@@ -240,6 +242,18 @@ class AppController extends Notifier<AppState> {
       unawaited(_settingsSubscription?.cancel());
       unawaited(_ordersSubscription?.cancel());
     });
+  }
+
+  void _scheduleRealtimeSync() {
+    if (_realtimeSyncScheduled) {
+      return;
+    }
+    _realtimeSyncScheduled = true;
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 900), () async {
+        _startRealtimeSync();
+      }),
+    );
   }
 
   void _restartOrdersRealtimeSync() {
@@ -323,8 +337,18 @@ class AppController extends Notifier<AppState> {
   }
 
   Future<void> _hydratePublicDataFromFirebase() async {
-    state = state.copyWith(loading: true);
+    final shouldManageLoading = state.loading || !state.catalogHydrated;
+    if (shouldManageLoading) {
+      state = state.copyWith(loading: true);
+    }
     try {
+      final catalogMeta = await _firestoreCatalog.loadCatalogMeta();
+      if (catalogMeta != null &&
+          state.catalogHydrated &&
+          !_isPublicCatalogStale(catalogMeta)) {
+        return;
+      }
+
       var snapshot = await _firestoreCatalog.loadPublicSnapshot();
       if (snapshot == null) {
         await _firestoreCatalog.seedInitialData(
@@ -362,8 +386,82 @@ class AppController extends Notifier<AppState> {
     } catch (_) {
       // Keep current local session data if Firebase fetch fails.
     } finally {
-      state = state.copyWith(loading: false);
+      if (shouldManageLoading) {
+        state = state.copyWith(loading: false);
+      }
     }
+  }
+
+  bool _isPublicCatalogStale(CatalogMetaSnapshot meta) {
+    return _isRemoteCollectionNewer(
+          remote: meta.categoriesUpdatedAt,
+          local: _latestCategoryUpdatedAt(state.categories),
+        ) ||
+        _isRemoteCollectionNewer(
+          remote: meta.barangaysUpdatedAt,
+          local: _latestBarangayUpdatedAt(state.barangays),
+        ) ||
+        _isRemoteCollectionNewer(
+          remote: meta.bannersUpdatedAt,
+          local: _latestBannerUpdatedAt(state.banners),
+        ) ||
+        _isRemoteCollectionNewer(
+          remote: meta.productsUpdatedAt,
+          local: _latestProductUpdatedAt(state.products),
+        ) ||
+        _isRemoteCollectionNewer(
+          remote: meta.settingsUpdatedAt,
+          local: state.settings.updatedAt ?? state.settings.createdAt,
+        );
+  }
+
+  bool _isRemoteCollectionNewer({
+    required DateTime? remote,
+    required DateTime? local,
+  }) {
+    if (remote == null) {
+      return false;
+    }
+    if (local == null) {
+      return true;
+    }
+    return remote.isAfter(local);
+  }
+
+  DateTime? _latestCategoryUpdatedAt(List<Category> items) {
+    if (items.isEmpty) {
+      return null;
+    }
+    return items
+        .map((item) => item.updatedAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+  }
+
+  DateTime? _latestBarangayUpdatedAt(List<Barangay> items) {
+    if (items.isEmpty) {
+      return null;
+    }
+    return items
+        .map((item) => item.updatedAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+  }
+
+  DateTime? _latestBannerUpdatedAt(List<AppBanner> items) {
+    if (items.isEmpty) {
+      return null;
+    }
+    return items
+        .map((item) => item.updatedAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+  }
+
+  DateTime? _latestProductUpdatedAt(List<Product> items) {
+    if (items.isEmpty) {
+      return null;
+    }
+    return items
+        .map((item) => item.updatedAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
   }
 
   Future<void> _syncAdminSessionFromFirebase() async {

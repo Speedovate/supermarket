@@ -11,5 +11,6 @@ class FirebasePaths {
   static const appSettings = 'app_settings';
   static const defaultSettingsDocumentId = 'default';
   static const ordersCounterDocumentId = 'orders_counter';
+  static const catalogMetaDocumentId = 'catalog_meta';
   static const productImages = 'product_images';
 }

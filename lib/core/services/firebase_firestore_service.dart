@@ -39,10 +39,37 @@ class FirestoreCatalogSnapshot {
       settings != null;
 }
 
+class CatalogMetaSnapshot {
+  const CatalogMetaSnapshot({
+    this.categoriesUpdatedAt,
+    this.barangaysUpdatedAt,
+    this.bannersUpdatedAt,
+    this.productsUpdatedAt,
+    this.settingsUpdatedAt,
+  });
+
+  final DateTime? categoriesUpdatedAt;
+  final DateTime? barangaysUpdatedAt;
+  final DateTime? bannersUpdatedAt;
+  final DateTime? productsUpdatedAt;
+  final DateTime? settingsUpdatedAt;
+
+  bool get hasAnyData =>
+      categoriesUpdatedAt != null ||
+      barangaysUpdatedAt != null ||
+      bannersUpdatedAt != null ||
+      productsUpdatedAt != null ||
+      settingsUpdatedAt != null;
+}
+
 class FirestoreCatalogService {
   FirestoreCatalogService(this._firestore);
 
   final FirebaseFirestore _firestore;
+
+  DocumentReference<Map<String, dynamic>> get _catalogMetaRef => _firestore
+      .collection(FirebasePaths.system)
+      .doc(FirebasePaths.catalogMetaDocumentId);
 
   Future<FirestoreCatalogSnapshot?> loadPublicSnapshot() async {
     final results = await Future.wait<Object?>([
@@ -62,6 +89,23 @@ class FirestoreCatalogService {
     );
 
     return snapshot.hasAnyData ? snapshot : null;
+  }
+
+  Future<CatalogMetaSnapshot?> loadCatalogMeta() async {
+    final snapshot = await _catalogMetaRef.get();
+    final data = snapshot.data();
+    if (data == null) {
+      return null;
+    }
+    final normalized = _normalizeFirestoreMap(data);
+    final meta = CatalogMetaSnapshot(
+      categoriesUpdatedAt: _parseMetaDate(normalized['categoriesUpdatedAt']),
+      barangaysUpdatedAt: _parseMetaDate(normalized['barangaysUpdatedAt']),
+      bannersUpdatedAt: _parseMetaDate(normalized['bannersUpdatedAt']),
+      productsUpdatedAt: _parseMetaDate(normalized['productsUpdatedAt']),
+      settingsUpdatedAt: _parseMetaDate(normalized['settingsUpdatedAt']),
+    );
+    return meta.hasAnyData ? meta : null;
   }
 
   Future<List<Category>> loadCategories({bool includeInactive = true}) async {
@@ -370,6 +414,17 @@ class FirestoreCatalogService {
         .collection(FirebasePaths.appSettings)
         .doc(FirebasePaths.defaultSettingsDocumentId);
     batch.set(settingsRef, _settingsData(settings));
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(
+        categories: true,
+        barangays: true,
+        banners: true,
+        products: true,
+        settings: true,
+      ),
+      SetOptions(merge: true),
+    );
 
     await batch.commit();
   }
@@ -379,16 +434,19 @@ class FirestoreCatalogService {
         .collection(FirebasePaths.products)
         .doc('${product.id}')
         .set(_productData(product));
+    await _touchCatalogMeta(products: true);
   }
 
   Future<void> deleteProduct(int productId) async {
     await _firestore.collection(FirebasePaths.products).doc('$productId').delete();
+    await _touchCatalogMeta(products: true);
   }
 
   Future<void> saveCategory(Category category, {int? sortOrder}) async {
     await _firestore.collection(FirebasePaths.categories).doc('${category.id}').set(
       _categoryData(category, sortOrder: sortOrder ?? category.id),
     );
+    await _touchCatalogMeta(categories: true);
   }
 
   Future<void> deleteCategory(int categoryId) async {
@@ -396,6 +454,7 @@ class FirestoreCatalogService {
         .collection(FirebasePaths.categories)
         .doc('$categoryId')
         .delete();
+    await _touchCatalogMeta(categories: true);
   }
 
   Future<void> replaceCategoriesAndProducts({
@@ -435,6 +494,7 @@ class FirestoreCatalogService {
       }
       await batch.commit();
     }
+    await _touchCatalogMeta(categories: true, products: true);
   }
 
   Future<void> saveBarangay(Barangay barangay) async {
@@ -442,6 +502,7 @@ class FirestoreCatalogService {
         .collection(FirebasePaths.barangays)
         .doc('${barangay.id}')
         .set(_barangayData(barangay));
+    await _touchCatalogMeta(barangays: true);
   }
 
   Future<void> deleteBarangay(int barangayId) async {
@@ -449,6 +510,7 @@ class FirestoreCatalogService {
         .collection(FirebasePaths.barangays)
         .doc('$barangayId')
         .delete();
+    await _touchCatalogMeta(barangays: true);
   }
 
   Future<void> saveBanner(AppBanner banner) async {
@@ -456,10 +518,12 @@ class FirestoreCatalogService {
         .collection(FirebasePaths.banners)
         .doc('${banner.id}')
         .set(_bannerData(banner));
+    await _touchCatalogMeta(banners: true);
   }
 
   Future<void> deleteBanner(int bannerId) async {
     await _firestore.collection(FirebasePaths.banners).doc('$bannerId').delete();
+    await _touchCatalogMeta(banners: true);
   }
 
   Future<void> saveSettings(AppSettings settings) async {
@@ -467,6 +531,7 @@ class FirestoreCatalogService {
         .collection(FirebasePaths.appSettings)
         .doc(FirebasePaths.defaultSettingsDocumentId)
         .set(_settingsData(settings));
+    await _touchCatalogMeta(settings: true);
   }
 
   Future<void> saveOrder(OrderRequest order) async {
@@ -504,6 +569,63 @@ class FirestoreCatalogService {
       return value;
     }
     return int.tryParse('$value') ?? 0;
+  }
+
+  Future<void> _touchCatalogMeta({
+    bool categories = false,
+    bool barangays = false,
+    bool banners = false,
+    bool products = false,
+    bool settings = false,
+  }) async {
+    await _catalogMetaRef.set(
+      _catalogMetaData(
+        categories: categories,
+        barangays: barangays,
+        banners: banners,
+        products: products,
+        settings: settings,
+      ),
+      SetOptions(merge: true),
+    );
+  }
+
+  Map<String, dynamic> _catalogMetaData({
+    bool categories = false,
+    bool barangays = false,
+    bool banners = false,
+    bool products = false,
+    bool settings = false,
+  }) {
+    final now = DateTime.now().toIso8601String();
+    final data = <String, dynamic>{'updatedAt': now};
+    if (categories) {
+      data['categoriesUpdatedAt'] = now;
+    }
+    if (barangays) {
+      data['barangaysUpdatedAt'] = now;
+    }
+    if (banners) {
+      data['bannersUpdatedAt'] = now;
+    }
+    if (products) {
+      data['productsUpdatedAt'] = now;
+    }
+    if (settings) {
+      data['settingsUpdatedAt'] = now;
+    }
+    return data;
+  }
+
+  DateTime? _parseMetaDate(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    final raw = '$value'.trim();
+    if (raw.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(raw);
   }
 
   Future<AdminSession?> loadAdminSession(String uid) async {
