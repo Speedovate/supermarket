@@ -85,16 +85,6 @@
       image-rendering: auto;
     }
 
-    #app-startup-splash__spinner {
-      width: 28px;
-      height: 28px;
-      margin-top: 24px;
-      border-radius: 50%;
-      border: 2.6px solid rgba(255, 255, 255, 0.28);
-      border-top-color: #ffffff;
-      animation: app-startup-spin 0.85s linear infinite;
-    }
-
     #app-startup-splash__footer {
       position: absolute;
       left: 20px;
@@ -110,16 +100,6 @@
       height: auto;
       display: block;
     }
-
-    @keyframes app-startup-spin {
-      from {
-        transform: rotate(0deg);
-      }
-
-      to {
-        transform: rotate(360deg);
-      }
-    }
   </style>
 </head>
 <body>
@@ -127,12 +107,11 @@
     <div id="app-startup-splash__content">
       <img
         id="app-startup-splash__logo"
-        src="assets/branding/as_logo_lite.png"
+        src="assets/assets/branding/as_logo_lite.png"
         alt="Andrew's Supermarket"
       >
-      <div id="app-startup-splash__spinner" aria-hidden="true"></div>
       <div id="app-startup-splash__footer" aria-hidden="true">
-        <img src="assets/branding/sdv_footer_lite.png" alt="">
+        <img src="assets/assets/branding/sdv_footer_lite.png" alt="">
       </div>
     </div>
   </div>

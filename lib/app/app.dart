@@ -93,17 +93,6 @@ class _AndrewsSupermarketAppState
                               width: logoWidth,
                               filterQuality: FilterQuality.high,
                             ),
-                            const SizedBox(height: 24),
-                            const SizedBox(
-                              width: 28,
-                              height: 28,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.6,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       ),
