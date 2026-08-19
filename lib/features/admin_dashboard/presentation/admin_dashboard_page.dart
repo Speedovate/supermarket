@@ -354,7 +354,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                                     '${startDateFilter == null ? 'Any' : formatAsOfDate(startDateFilter!)} - ${endDateFilter == null ? 'Any' : formatAsOfDate(endDateFilter!)}',
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
-                                      color: Color(0xFF667085),
+                                      color: AppColors.logoBlue,
                                       fontWeight: FontWeight.w600,
                                       height: 1.15,
                                     ),
@@ -386,7 +386,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                                             '${startDateFilter == null ? 'Any' : formatAsOfDate(startDateFilter!)} - ${endDateFilter == null ? 'Any' : formatAsOfDate(endDateFilter!)}',
                                             textAlign: TextAlign.center,
                                             style: const TextStyle(
-                                              color: Color(0xFF667085),
+                                              color: AppColors.logoBlue,
                                               fontWeight: FontWeight.w600,
                                               height: 1.15,
                                             ),
