@@ -369,6 +369,8 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                 gap +
                 widths.status +
                 gap +
+                widths.items +
+                gap +
                 widths.total +
                 gap +
                 widths.createdAt +
