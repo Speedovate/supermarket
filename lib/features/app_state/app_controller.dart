@@ -266,16 +266,26 @@ class AppController extends Notifier<AppState> {
             trackedPhones,
           );
     _ordersSubscription = stream.listen((orders) async {
+      final nextOrders = adminSession != null
+          ? orders
+          : _mergeOrdersPreservingLocal(
+              existing: state.orders,
+              incoming: orders,
+              trackedPhones: trackedPhones,
+            );
+      final soldSync = _reconcileProductSoldWithOrders(
+        products: state.products,
+        orders: nextOrders,
+        shouldPersistRemotely: adminSession != null,
+      );
       state = state.copyWith(
-        orders: adminSession != null
-            ? orders
-            : _mergeOrdersPreservingLocal(
-                existing: state.orders,
-                incoming: orders,
-                trackedPhones: trackedPhones,
-              ),
+        orders: nextOrders,
+        products: soldSync.products,
       );
       await _persist();
+      if (soldSync.changedProducts.isNotEmpty && adminSession != null) {
+        await _firestoreCatalog.saveProducts(soldSync.changedProducts);
+      }
     }, onError: _handleRealtimeSyncError);
   }
 
@@ -1429,16 +1439,26 @@ class AppController extends Notifier<AppState> {
           : await _firestoreCatalog.loadOrdersForNormalizedPhones(
               trackedPhones,
             );
+      final nextOrders = adminSession != null
+          ? remoteOrders
+          : _mergeOrdersPreservingLocal(
+              existing: state.orders,
+              incoming: remoteOrders,
+              trackedPhones: trackedPhones,
+            );
+      final soldSync = _reconcileProductSoldWithOrders(
+        products: state.products,
+        orders: nextOrders,
+        shouldPersistRemotely: adminSession != null,
+      );
       state = state.copyWith(
-        orders: adminSession != null
-            ? remoteOrders
-            : _mergeOrdersPreservingLocal(
-                existing: state.orders,
-                incoming: remoteOrders,
-                trackedPhones: trackedPhones,
-              ),
+        orders: nextOrders,
+        products: soldSync.products,
       );
       await _persist();
+      if (soldSync.changedProducts.isNotEmpty && adminSession != null) {
+        await _firestoreCatalog.saveProducts(soldSync.changedProducts);
+      }
     } catch (_) {
       // Keep local cached orders when the network fetch fails.
     }
@@ -1552,6 +1572,47 @@ class AppController extends Notifier<AppState> {
       );
     }
     return totals;
+  }
+
+  ({List<Product> products, List<Product> changedProducts})
+  _reconcileProductSoldWithOrders({
+    required List<Product> products,
+    required List<OrderRequest> orders,
+    required bool shouldPersistRemotely,
+  }) {
+    if (products.isEmpty) {
+      return (products: products, changedProducts: const []);
+    }
+
+    final totalsByProductId = <int, int>{};
+    for (final order in orders) {
+      if (order.status != OrderStatus.completed) {
+        continue;
+      }
+      for (final item in order.items) {
+        totalsByProductId.update(
+          item.productId,
+          (value) => value + item.requestedQuantity,
+          ifAbsent: () => item.requestedQuantity,
+        );
+      }
+    }
+
+    final changedProducts = <Product>[];
+    final reconciledProducts = products.map((product) {
+      final resolvedSold = totalsByProductId[product.id] ?? 0;
+      if (product.sold == resolvedSold) {
+        return product;
+      }
+      final updated = product.copyWith(
+        sold: resolvedSold,
+        updatedAt: shouldPersistRemotely ? DateTime.now() : product.updatedAt,
+      );
+      changedProducts.add(updated);
+      return updated;
+    }).toList();
+
+    return (products: reconciledProducts, changedProducts: changedProducts);
   }
 
   Future<void> _persist() async {

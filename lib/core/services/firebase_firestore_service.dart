@@ -437,6 +437,26 @@ class FirestoreCatalogService {
     await _touchCatalogMeta(products: true);
   }
 
+  Future<void> saveProducts(Iterable<Product> products) async {
+    final items = products.toList();
+    if (items.isEmpty) {
+      return;
+    }
+    final batch = _firestore.batch();
+    for (final product in items) {
+      batch.set(
+        _firestore.collection(FirebasePaths.products).doc('${product.id}'),
+        _productData(product),
+      );
+    }
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(products: true),
+      SetOptions(merge: true),
+    );
+    await batch.commit();
+  }
+
   Future<void> deleteProduct(int productId) async {
     await _firestore.collection(FirebasePaths.products).doc('$productId').delete();
     await _touchCatalogMeta(products: true);
