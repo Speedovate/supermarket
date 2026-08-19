@@ -23,7 +23,7 @@
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   >
   <meta name="description" content="Shop groceries for pickup or delivery from Andrew's Supermarket.">
-  <meta name="theme-color" content="#FFFFFF">
+  <meta name="theme-color" content="#2F3DBF">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Andrew's Supermarket | Grocery Pickup & Delivery">
   <meta property="og:description" content="Shop groceries for pickup or delivery from Andrew's Supermarket.">
@@ -162,9 +162,14 @@
   <script src="flutter_bootstrap.js" async></script>
   <script>
     (function () {
+      const splashThemeColor = '#2F3DBF';
       const adminThemeColor = '#2F3DBF';
       const clientThemeColor = '#FFFFFF';
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+
+      function isSplashVisible() {
+        return Boolean(document.getElementById('app-startup-splash'));
+      }
 
       function syncThemeColor() {
         if (!themeColorMeta) {
@@ -173,9 +178,13 @@
         const isAdmin = window.location.pathname.startsWith('/admin');
         themeColorMeta.setAttribute(
           'content',
-          isAdmin ? adminThemeColor : clientThemeColor,
+          isSplashVisible()
+            ? splashThemeColor
+            : (isAdmin ? adminThemeColor : clientThemeColor),
         );
       }
+
+      window.__syncThemeColor = syncThemeColor;
 
       const originalPushState = history.pushState;
       history.pushState = function () {

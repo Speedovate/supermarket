@@ -13,7 +13,12 @@ function removeSplashWhenFirstFrameIsLikelyReady() {
   const remove = () => {
     splash.style.opacity = '0';
     splash.style.transition = 'opacity 120ms ease-out';
-    window.setTimeout(() => splash.remove(), 120);
+    window.setTimeout(() => {
+      splash.remove();
+      if (typeof window.__syncThemeColor === 'function') {
+        window.__syncThemeColor();
+      }
+    }, 120);
   };
 
   window.requestAnimationFrame(() => {
