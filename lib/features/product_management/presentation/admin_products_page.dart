@@ -2031,37 +2031,45 @@ class _ProductHeaderRow extends StatelessWidget {
       children: [
         SizedBox(
           width: widths.id,
-          child: Text('ID', style: labelStyle, maxLines: 1),
+          child: _SelectableCellText('ID', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.name,
-          child: Text('Name', style: labelStyle, maxLines: 1),
+          child: _SelectableCellText('Name', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.details,
-          child: Text('Details', style: labelStyle, maxLines: 1),
+          child: _SelectableCellText(
+            'Details',
+            style: labelStyle,
+            maxLines: 1,
+          ),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.category,
-          child: Text('Category', style: labelStyle, maxLines: 1),
+          child: _SelectableCellText(
+            'Category',
+            style: labelStyle,
+            maxLines: 1,
+          ),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.price,
-          child: Text('Price', style: labelStyle, maxLines: 1),
+          child: _SelectableCellText('Price', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.sold,
-          child: Text('Sold', style: labelStyle, maxLines: 1),
+          child: _SelectableCellText('Sold', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.createdAt,
-          child: Text(
+          child: _SelectableCellText(
             'Created at',
             style: labelStyle,
             maxLines: 1,
@@ -2071,7 +2079,7 @@ class _ProductHeaderRow extends StatelessWidget {
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.updatedAt,
-          child: Text(
+          child: _SelectableCellText(
             'Updated at',
             style: labelStyle,
             maxLines: 1,
@@ -2084,7 +2092,7 @@ class _ProductHeaderRow extends StatelessWidget {
           width: _AdminProductsPageState._actionsWidth,
           child: Align(
             alignment: Alignment.centerRight,
-            child: Text(
+            child: _SelectableCellText(
               'Actions',
               style: labelStyle,
               maxLines: 1,
@@ -2148,17 +2156,17 @@ class _ProductRow extends StatelessWidget {
           children: [
             SizedBox(
               width: widths.id,
-              child: Text('${product.id}', style: bodyStyle),
+              child: _SelectableCellText('${product.id}', style: bodyStyle),
             ),
             SizedBox(width: widths.gap),
             SizedBox(
               width: widths.name,
-              child: Text(product.name, style: bodyStyle),
+              child: _SelectableCellText(product.name, style: bodyStyle),
             ),
             SizedBox(width: widths.gap),
             SizedBox(
               width: widths.details,
-              child: Text(
+              child: _SelectableCellText(
                 product.details,
                 style: bodyStyle,
                 maxLines: 1,
@@ -2169,7 +2177,7 @@ class _ProductRow extends StatelessWidget {
             SizedBox(width: widths.gap),
             SizedBox(
               width: widths.category,
-              child: Text(
+              child: _SelectableCellText(
                 categoryName,
                 style: bodyStyle,
                 maxLines: 1,
@@ -2180,7 +2188,7 @@ class _ProductRow extends StatelessWidget {
             SizedBox(width: widths.gap),
             SizedBox(
               width: widths.price,
-              child: Text(
+              child: _SelectableCellText(
                 formatPesos(product.referencePriceCentavos),
                 style: bodyStyle,
                 maxLines: 1,
@@ -2190,7 +2198,7 @@ class _ProductRow extends StatelessWidget {
             SizedBox(width: widths.gap),
             SizedBox(
               width: widths.sold,
-              child: Text(
+              child: _SelectableCellText(
                 '${product.sold}',
                 style: bodyStyle,
                 maxLines: 1,
@@ -2200,7 +2208,7 @@ class _ProductRow extends StatelessWidget {
             SizedBox(width: widths.gap),
             SizedBox(
               width: widths.createdAt,
-              child: Text(
+              child: _SelectableCellText(
                 '${formatOrderDate(createdAt)}\n${formatOrderTimeWithSeconds(createdAt)}',
                 style: bodyStyle,
                 maxLines: 2,
@@ -2210,7 +2218,7 @@ class _ProductRow extends StatelessWidget {
             SizedBox(width: widths.gap),
             SizedBox(
               width: widths.updatedAt,
-              child: Text(
+              child: _SelectableCellText(
                 '${formatOrderDate(updatedAt)}\n${formatOrderTimeWithSeconds(updatedAt)}',
                 style: bodyStyle,
                 maxLines: 2,
@@ -2280,6 +2288,35 @@ class _ProductRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SelectableCellText extends StatelessWidget {
+  const _SelectableCellText(
+    this.text, {
+    required this.style,
+    this.maxLines,
+    this.overflow,
+    this.softWrap,
+    this.textAlign,
+  });
+
+  final String text;
+  final TextStyle style;
+  final int? maxLines;
+  final TextOverflow? overflow;
+  final bool? softWrap;
+  final TextAlign? textAlign;
+
+  @override
+  Widget build(BuildContext context) {
+    return SelectableText(
+      text,
+      style: style,
+      maxLines: maxLines,
+      textAlign: textAlign,
+      enableInteractiveSelection: true,
     );
   }
 }
