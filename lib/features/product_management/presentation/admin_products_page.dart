@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +9,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
 import '../../../core/utils/catalog_excel.dart';
 import '../../../core/utils/download_bytes.dart';
+import '../../../core/utils/pick_excel_file.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
@@ -160,7 +160,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
   Future<void> _showProductFileActionsDialog(BuildContext context) async {
     var selected = _ProductFileAction.importProducts;
     var importMode = _ProductImportMode.additional;
-    PlatformFile? selectedFile;
+    String? selectedFileName;
     Uint8List? selectedBytes;
     String? inlineError;
     final result = await showDialog<_ProductFileActionResult>(
@@ -169,25 +169,13 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
         return StatefulBuilder(
           builder: (context, setState) {
             Future<void> pickWorkbook() async {
-              final picked = await FilePicker.platform.pickFiles(
-                dialogTitle: 'Select Products Excel File',
-                type: FileType.custom,
-                allowedExtensions: const [
-                  'xlsx',
-                  'xls',
-                  'xlsm',
-                  'xltx',
-                  'xltm',
-                ],
-                withData: true,
-              );
-              final file = picked?.files.singleOrNull;
-              if (file == null || file.bytes == null) {
+              final picked = await pickExcelFile();
+              if (picked == null) {
                 return;
               }
               setState(() {
-                selectedFile = file;
-                selectedBytes = file.bytes!;
+                selectedFileName = picked.name;
+                selectedBytes = Uint8List.fromList(picked.bytes);
                 inlineError = null;
               });
             }
@@ -214,7 +202,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                     Navigator.of(dialogContext).pop(
                       _ProductFileActionResult(
                         action: selected,
-                        fileName: selectedFile?.name,
+                        fileName: selectedFileName,
                         bytes: selectedBytes,
                         importMode: importMode,
                       ),
@@ -278,7 +266,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                           ),
                         ),
                         child: Text(
-                          selectedFile?.name ?? 'Upload Excel File',
+                          selectedFileName ?? 'Upload Excel File',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: const Color(0xFF172033),
