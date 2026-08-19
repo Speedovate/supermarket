@@ -19,6 +19,7 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Shop groceries for pickup or delivery from Andrew's Supermarket.">
+  <meta name="theme-color" content="#FFFFFF">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Andrew's Supermarket | Grocery Pickup & Delivery">
   <meta property="og:description" content="Shop groceries for pickup or delivery from Andrew's Supermarket.">
@@ -139,5 +140,40 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    (function () {
+      const adminThemeColor = '#2F3DBF';
+      const clientThemeColor = '#FFFFFF';
+      const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+
+      function syncThemeColor() {
+        if (!themeColorMeta) {
+          return;
+        }
+        const isAdmin = window.location.pathname.startsWith('/admin');
+        themeColorMeta.setAttribute(
+          'content',
+          isAdmin ? adminThemeColor : clientThemeColor,
+        );
+      }
+
+      const originalPushState = history.pushState;
+      history.pushState = function () {
+        const result = originalPushState.apply(this, arguments);
+        syncThemeColor();
+        return result;
+      };
+
+      const originalReplaceState = history.replaceState;
+      history.replaceState = function () {
+        const result = originalReplaceState.apply(this, arguments);
+        syncThemeColor();
+        return result;
+      };
+
+      window.addEventListener('popstate', syncThemeColor);
+      syncThemeColor();
+    })();
+  </script>
 </body>
 </html>
