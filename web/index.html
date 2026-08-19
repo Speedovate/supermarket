@@ -43,6 +43,10 @@
   <title>Andrew's Supermarket</title>
   <link rel="manifest" href="manifest.json">
   <style>
+    :root {
+      --startup-logo-width: 88px;
+    }
+
     html, body {
       margin: 0;
       padding: 0;
@@ -75,7 +79,7 @@
     }
 
     #app-startup-splash__logo {
-      width: clamp(110px, 34vw, 160px);
+      width: var(--startup-logo-width);
       height: auto;
       display: block;
       image-rendering: auto;
@@ -103,7 +107,7 @@
     }
 
     #app-startup-splash__footer img {
-      width: min(180px, calc(50vw - 20px));
+      width: var(--startup-logo-width);
       height: auto;
       display: block;
     }
