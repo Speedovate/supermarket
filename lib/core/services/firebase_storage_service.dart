@@ -51,7 +51,7 @@ class FirebaseProductImageStorageService {
       decoded.bytes,
       SettableMetadata(
         contentType: decoded.mimeType,
-        cacheControl: 'public,max-age=3600',
+        cacheControl: 'public,max-age=31536000,immutable',
       ),
     );
 

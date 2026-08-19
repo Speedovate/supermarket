@@ -746,14 +746,21 @@ class _AdminScaffoldState extends ConsumerState<AdminScaffold> {
   }
 }
 
-class _NavList extends StatelessWidget {
+class _NavList extends ConsumerWidget {
   const _NavList({required this.selectedRoute});
 
   final String selectedRoute;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDesktop = MediaQuery.of(context).size.width >= 1024;
+    final waitingOrdersCount = ref.watch(
+      appControllerProvider.select(
+        (state) => state.orders
+            .where((item) => item.status == OrderStatus.waiting)
+            .length,
+      ),
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         final widthScale = constraints.maxWidth.isFinite
@@ -886,6 +893,36 @@ class _NavList extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (item.route == '/admin/orders' &&
+                            waitingOrdersCount > 0)
+                          Container(
+                            margin: EdgeInsets.only(left: 10 * scale),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: waitingOrdersCount >= 100
+                                  ? 7 * scale
+                                  : 8 * scale,
+                              vertical: 4 * scale,
+                            ),
+                            constraints: BoxConstraints(
+                              minWidth: 24 * scale,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE31E24),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '$waitingOrdersCount',
+                              maxLines: 1,
+                              overflow: TextOverflow.visible,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12 * scale,
+                                height: 1.15,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
