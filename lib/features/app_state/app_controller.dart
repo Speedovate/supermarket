@@ -478,16 +478,15 @@ class AppController extends Notifier<AppState> {
     }
 
     final firestoreSession = await _firestoreCatalog.loadAdminSession(user.uid);
-    final session =
-        firestoreSession ??
-        AdminSession(
-          uid: user.uid,
-          email: user.email ?? '',
-          displayName: user.displayName ?? (user.email ?? 'Admin'),
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
-    state = state.copyWith(adminSession: session, initialized: true);
+    if (firestoreSession == null) {
+      await _auth.signOut();
+      state = state.copyWith(adminSession: null, initialized: true);
+      await _persist();
+      _restartOrdersRealtimeSync();
+      return;
+    }
+
+    state = state.copyWith(adminSession: firestoreSession, initialized: true);
     await _persist();
     _restartOrdersRealtimeSync();
   }
