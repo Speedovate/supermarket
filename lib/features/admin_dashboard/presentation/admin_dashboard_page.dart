@@ -322,54 +322,92 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                       color: AppColors.logoBlue.withValues(alpha: 0.10),
                     ),
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Wrap(
-                            spacing: 16,
-                            runSpacing: 10,
-                            crossAxisAlignment: WrapCrossAlignment.center,
+                    child: isMobile
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Sales Graph',
-                                style: TextStyle(
-                                  color: AppColors.logoBlue,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.15,
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    formatPesos(vm.filteredSalesCentavos),
+                                    style: const TextStyle(
+                                      color: AppColors.logoBlue,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.15,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    salesOrdersLabel,
+                                    style: const TextStyle(
+                                      color: AppColors.logoBlue,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.15,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              Text(
-                                formatPesos(vm.filteredSalesCentavos),
-                                style: const TextStyle(
-                                  color: AppColors.logoBlue,
-                                  fontWeight: FontWeight.w800,
-                                  height: 1.15,
-                                ),
-                              ),
-                              if (startDateFilter != null || endDateFilter != null)
-                                Text(
-                                  '${startDateFilter == null ? 'Any' : formatAsOfDate(startDateFilter!)} - ${endDateFilter == null ? 'Any' : formatAsOfDate(endDateFilter!)}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF667085),
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.15,
+                              if (startDateFilter != null || endDateFilter != null) ...[
+                                const SizedBox(height: 10),
+                                Center(
+                                  child: Text(
+                                    '${startDateFilter == null ? 'Any' : formatAsOfDate(startDateFilter!)} - ${endDateFilter == null ? 'Any' : formatAsOfDate(endDateFilter!)}',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Color(0xFF667085),
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.15,
+                                    ),
                                   ),
                                 ),
+                              ],
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    formatPesos(vm.filteredSalesCentavos),
+                                    style: const TextStyle(
+                                      color: AppColors.logoBlue,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.15,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child:
+                                    (startDateFilter != null ||
+                                            endDateFilter != null)
+                                        ? Text(
+                                            '${startDateFilter == null ? 'Any' : formatAsOfDate(startDateFilter!)} - ${endDateFilter == null ? 'Any' : formatAsOfDate(endDateFilter!)}',
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              color: Color(0xFF667085),
+                                              fontWeight: FontWeight.w600,
+                                              height: 1.15,
+                                            ),
+                                          )
+                                        : const SizedBox.shrink(),
+                              ),
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    salesOrdersLabel,
+                                    style: const TextStyle(
+                                      color: AppColors.logoBlue,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.15,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          salesOrdersLabel,
-                          style: const TextStyle(
-                            color: AppColors.logoBlue,
-                            fontWeight: FontWeight.w600,
-                            height: 1.15,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                   const Divider(
                     height: 0,
