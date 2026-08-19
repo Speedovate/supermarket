@@ -4793,6 +4793,7 @@ class _ProductModal extends ConsumerStatefulWidget {
 
 class _ProductModalState extends ConsumerState<_ProductModal> {
   int? _draftQuantity;
+  int? _lastObservedCartQuantity;
   String? _liveDisplayName;
   String? _liveDisplayUnit;
   int? _liveDisplayPriceCentavos;
@@ -4821,6 +4822,19 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
       ),
     );
     final cartQuantity = cartItem?.quantity ?? 0;
+    final previousCartQuantity = _lastObservedCartQuantity ?? cartQuantity;
+    if (!widget.adminReadOnly &&
+        cartQuantity <= 0 &&
+        previousCartQuantity > 0 &&
+        (_draftQuantity ?? 0) > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() => _draftQuantity = 0);
+      });
+    }
+    _lastObservedCartQuantity = cartQuantity;
     final resolvedInitialQuantity = widget.adminReadOnly
         ? (widget.initialAdminQuantity ?? 0)
         : cartQuantity;
