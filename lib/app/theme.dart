@@ -9,6 +9,7 @@ ThemeData buildAppTheme() {
   const text = Color(0xFF172033);
   const secondary = Color(0xFF667085);
   const border = Color(0xFFE4E7EC);
+  const selection = Color(0xFFBFD7FF);
 
   final base = ThemeData(
     useMaterial3: true,
@@ -58,6 +59,11 @@ ThemeData buildAppTheme() {
     highlightColor: Colors.transparent,
     splashColor: Colors.transparent,
     hoverColor: Colors.transparent,
+    textSelectionTheme: const TextSelectionThemeData(
+      selectionColor: selection,
+      cursorColor: primaryDark,
+      selectionHandleColor: primaryDark,
+    ),
     textTheme: base.textTheme
         .apply(
           fontFamily: 'Poppins',

@@ -120,17 +120,20 @@ class _MousePressableState extends State<MousePressable> {
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    final movedTooFar = _pointerMovedTooFar;
     final shouldTap =
         widget.enabled &&
         widget.onTap != null &&
         _activePointer == event.pointer &&
-        !_pointerMovedTooFar &&
+        !movedTooFar &&
         _isWithinBounds(event.position);
     if (_pressed) {
       setState(() => _pressed = false);
     }
     _handlePointerEnd(event.pointer);
-    if (shouldTap && !hasBrowserTextSelection()) {
+    final shouldSuppressTapForSelection =
+        kIsWeb && movedTooFar && hasBrowserTextSelection();
+    if (shouldTap && !shouldSuppressTapForSelection) {
       widget.onTap!.call();
     }
   }
