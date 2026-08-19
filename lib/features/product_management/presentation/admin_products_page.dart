@@ -76,7 +76,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
             }
 
             return AppModalFrame(
-              title: selected.label,
+              title: '${selected.label}?',
               actions: [
                 AppModalButton(
                   label: 'Close',
@@ -84,7 +84,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                 ),
                 const SizedBox(width: 10),
                 AppModalButton(
-                  label: selected.label,
+                  label: selected.actionLabel,
                   isPrimary: true,
                   onPressed: () {
                     if (selected == _ProductFileAction.importProducts &&
@@ -1639,6 +1639,8 @@ enum _ProductFileAction {
   const _ProductFileAction(this.label);
 
   final String label;
+
+  String get actionLabel => label.split(' ').first;
 }
 
 class _ProductFileActionResult {
