@@ -1114,6 +1114,44 @@ class AppController extends Notifier<AppState> {
     await _persist();
   }
 
+  Future<void> replaceCategoriesAndProducts({
+    required List<Category> categories,
+    required List<Product> products,
+  }) async {
+    final normalizedCategories = [
+      for (final category in categories)
+        category.copyWith(
+          name: category.name.trim(),
+          normalizedName: category.name.trim().toLowerCase(),
+        ),
+    ];
+    final normalizedProducts = [
+      for (final product in products)
+        product.copyWith(
+          name: product.name.trim(),
+          details: product.details.trim(),
+          category: normalizedCategories.any((item) => item.id == product.categoryId)
+              ? product.categoryId
+              : 0,
+        ),
+    ];
+    final syncedCart = _syncCartWithProducts(
+      products: normalizedProducts,
+      cart: state.cart,
+    );
+    state = state.copyWith(
+      categories: normalizedCategories,
+      products: normalizedProducts,
+      cart: syncedCart,
+      errorMessage: null,
+    );
+    await _firestoreCatalog.replaceCategoriesAndProducts(
+      categories: normalizedCategories,
+      products: normalizedProducts,
+    );
+    await _persist();
+  }
+
   Future<void> reorderCategories(int oldIndex, int newIndex) async {
     final next = [...state.categories];
     if (oldIndex < 0 || oldIndex >= next.length) {

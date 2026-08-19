@@ -398,6 +398,45 @@ class FirestoreCatalogService {
         .delete();
   }
 
+  Future<void> replaceCategoriesAndProducts({
+    required List<Category> categories,
+    required List<Product> products,
+  }) async {
+    final categorySnapshot = await _firestore
+        .collection(FirebasePaths.categories)
+        .get();
+    final productSnapshot = await _firestore
+        .collection(FirebasePaths.products)
+        .get();
+
+    final operations = <void Function(WriteBatch)>[
+      for (final doc in categorySnapshot.docs)
+        (batch) => batch.delete(doc.reference),
+      for (final doc in productSnapshot.docs)
+        (batch) => batch.delete(doc.reference),
+      for (var index = 0; index < categories.length; index++)
+        (batch) => batch.set(
+              _firestore.collection(FirebasePaths.categories).doc('${categories[index].id}'),
+              _categoryData(categories[index], sortOrder: index),
+            ),
+      for (final product in products)
+        (batch) => batch.set(
+              _firestore.collection(FirebasePaths.products).doc('${product.id}'),
+              _productData(product),
+            ),
+    ];
+
+    const maxBatchOperations = 400;
+    for (var start = 0; start < operations.length; start += maxBatchOperations) {
+      final batch = _firestore.batch();
+      final end = math.min(start + maxBatchOperations, operations.length);
+      for (var index = start; index < end; index++) {
+        operations[index](batch);
+      }
+      await batch.commit();
+    }
+  }
+
   Future<void> saveBarangay(Barangay barangay) async {
     await _firestore
         .collection(FirebasePaths.barangays)

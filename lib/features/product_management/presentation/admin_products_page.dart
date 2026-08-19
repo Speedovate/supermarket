@@ -1,11 +1,15 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
+import '../../../core/utils/catalog_excel.dart';
+import '../../../core/utils/download_bytes.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
@@ -39,11 +43,38 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
 
   Future<void> _showProductFileActionsDialog(BuildContext context) async {
     var selected = _ProductFileAction.importProducts;
-    final result = await showDialog<_ProductFileAction>(
+    PlatformFile? selectedFile;
+    Uint8List? selectedBytes;
+    String? inlineError;
+    final result = await showDialog<_ProductFileActionResult>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
+            Future<void> pickWorkbook() async {
+              final picked = await FilePicker.platform.pickFiles(
+                dialogTitle: 'Select Products Excel File',
+                type: FileType.custom,
+                allowedExtensions: const [
+                  'xlsx',
+                  'xls',
+                  'xlsm',
+                  'xltx',
+                  'xltm',
+                ],
+                withData: true,
+              );
+              final file = picked?.files.singleOrNull;
+              if (file == null || file.bytes == null) {
+                return;
+              }
+              setState(() {
+                selectedFile = file;
+                selectedBytes = file.bytes!;
+                inlineError = null;
+              });
+            }
+
             return AppModalFrame(
               title: selected.label,
               actions: [
@@ -55,35 +86,106 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                 AppModalButton(
                   label: selected.label,
                   isPrimary: true,
-                  onPressed: () => Navigator.of(dialogContext).pop(selected),
+                  onPressed: () {
+                    if (selected == _ProductFileAction.importProducts &&
+                        selectedBytes == null) {
+                      setState(() {
+                        inlineError = 'Excel file is required.';
+                      });
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop(
+                      _ProductFileActionResult(
+                        action: selected,
+                        fileName: selectedFile?.name,
+                        bytes: selectedBytes,
+                      ),
+                    );
+                  },
                 ),
               ],
-              child: RadioGroup<_ProductFileAction>(
-                groupValue: selected,
-                onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() => selected = value);
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final action in _ProductFileAction.values)
-                      RadioListTile<_ProductFileAction>(
-                        value: action,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        materialTapTargetSize:
-                            MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: const VisualDensity(
-                          horizontal: -4,
-                          vertical: -4,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RadioGroup<_ProductFileAction>(
+                    groupValue: selected,
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        selected = value;
+                        inlineError = null;
+                      });
+                    },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final action in _ProductFileAction.values)
+                          RadioListTile<_ProductFileAction>(
+                            value: action,
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: const VisualDensity(
+                              horizontal: -4,
+                              vertical: -4,
+                            ),
+                            title: Text(action.label),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (selected == _ProductFileAction.importProducts) ...[
+                    const SizedBox(height: 12),
+                    MousePressable(
+                      onTap: pickWorkbook,
+                      borderRadius: BorderRadius.circular(16),
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: const Icon(
+                                  Icons.upload_rounded,
+                                  size: 18,
+                                  color: AppColors.logoBlue,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        title: Text(action.label),
+                        child: Text(
+                          selectedFile?.name ?? 'Upload Excel File',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: const Color(0xFF172033),
+                                height: 1.15,
+                              ),
+                        ),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    const AppModalBodyText(
+                      'Importing will override all current products and categories.',
+                    ),
+                    if (inlineError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        inlineError!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFFE31E24),
+                          fontWeight: FontWeight.w600,
+                          height: 1.15,
+                        ),
+                      ),
+                    ],
                   ],
-                ),
+                ],
               ),
             );
           },
@@ -95,8 +197,94 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     }
     final messenger = ScaffoldMessenger.of(this.context);
     messenger.clearSnackBars();
-    messenger.showSnackBar(
-      successSnackBar('${result.label} coming soon.'),
+    try {
+      if (result.action == _ProductFileAction.exportProducts) {
+        final state = ref.read(appControllerProvider);
+        final workbook = buildCatalogWorkbook(
+          categories: state.categories,
+          products: state.products,
+        );
+        final date = DateTime.now();
+        final fileName =
+            'products_${date.year}_${date.month.toString().padLeft(2, '0')}_${date.day.toString().padLeft(2, '0')}.xlsx';
+        await downloadBytes(
+          bytes: workbook,
+          fileName: fileName,
+          mimeType:
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        );
+        messenger.showSnackBar(successSnackBar('Products exported.'));
+        return;
+      }
+
+      final importBytes = result.bytes;
+      if (importBytes == null) {
+        messenger.showSnackBar(errorSnackBar('Excel file is required.'));
+        return;
+      }
+      final imported = parseCatalogWorkbook(importBytes);
+      final shouldImport = await _showImportProductsConfirmationDialog(
+        this.context,
+        categoryCount: imported.categories.length,
+        productCount: imported.products.length,
+      );
+      if (shouldImport != true || !mounted) {
+        return;
+      }
+      await ref.read(appControllerProvider.notifier).replaceCategoriesAndProducts(
+            categories: imported.categories,
+            products: imported.products,
+          );
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        successSnackBar(
+          'Imported ${imported.categories.length} categor${imported.categories.length == 1 ? 'y' : 'ies'} and ${imported.products.length} product${imported.products.length == 1 ? '' : 's'}.',
+        ),
+      );
+    } on CatalogWorkbookException catch (error) {
+      messenger.showSnackBar(errorSnackBar(error.message));
+    } on UnsupportedError catch (error) {
+      messenger.showSnackBar(errorSnackBar('$error'));
+    } catch (error) {
+      messenger.showSnackBar(
+        errorSnackBar(
+          '$error'
+              .replaceFirst('Exception: ', '')
+              .replaceFirst('Bad state: ', ''),
+        ),
+      );
+    }
+  }
+
+  Future<bool?> _showImportProductsConfirmationDialog(
+    BuildContext context, {
+    required int categoryCount,
+    required int productCount,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AppModalFrame(
+          title: 'Import Products?',
+          actions: [
+            AppModalButton(
+              label: 'Close',
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+            ),
+            const SizedBox(width: 10),
+            AppModalButton(
+              label: 'Import Products',
+              isPrimary: true,
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+            ),
+          ],
+          child: AppModalBodyText(
+            'This will override all current products and categories with $categoryCount categor${categoryCount == 1 ? 'y' : 'ies'} and $productCount product${productCount == 1 ? '' : 's'}.',
+          ),
+        );
+      },
     );
   }
 
@@ -1451,6 +1639,18 @@ enum _ProductFileAction {
   const _ProductFileAction(this.label);
 
   final String label;
+}
+
+class _ProductFileActionResult {
+  const _ProductFileActionResult({
+    required this.action,
+    this.fileName,
+    this.bytes,
+  });
+
+  final _ProductFileAction action;
+  final String? fileName;
+  final Uint8List? bytes;
 }
 
 class _FiltersSection extends StatelessWidget {
