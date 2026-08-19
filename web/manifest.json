@@ -3,7 +3,7 @@
     "short_name": "Andrew's Supermarket",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#2F3DBF",
+    "background_color": "#FFFFFF",
     "theme_color": "#2F3DBF",
     "description": "Andrew's Supermarket",
     "orientation": "portrait-primary",
