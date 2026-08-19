@@ -205,8 +205,10 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
           products: state.products,
         );
         final date = DateTime.now();
+        final hour = date.hour % 12 == 0 ? 12 : date.hour % 12;
+        final period = date.hour >= 12 ? 'PM' : 'AM';
         final fileName =
-            'products_${date.year}_${date.month.toString().padLeft(2, '0')}_${date.day.toString().padLeft(2, '0')}.xlsx';
+            'Products ${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}/${date.year} ${hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:$period.xlsx';
         await downloadBytes(
           bytes: workbook,
           fileName: fileName,
