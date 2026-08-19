@@ -136,13 +136,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
             );
 
     final orders = [...ref.watch(appControllerProvider).orders]
-      ..sort((a, b) {
-        final createdAtCompare = b.createdAt.compareTo(a.createdAt);
-        if (createdAtCompare != 0) {
-          return createdAtCompare;
-        }
-        return b.id.compareTo(a.id);
-      });
+      ..sort((a, b) => b.id.compareTo(a.id));
     final normalized = query.trim().toLowerCase();
     final filteredOrders = orders.where((order) {
       final matchesQuery =

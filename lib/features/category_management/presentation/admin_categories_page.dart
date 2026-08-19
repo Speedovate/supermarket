@@ -105,7 +105,8 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
     final isMobile = screenWidth < 700;
     final categoryColumnGap = _categoryColumnGapForWidth(screenWidth);
     final categoryTextScale = _categoryTextScaleForWidth(screenWidth);
-    final allCategories = [...appState.categories];
+    final allCategories = [...appState.categories]
+      ..sort((a, b) => b.id.compareTo(a.id));
     final headerTextStyle = TextStyle(
       fontWeight: FontWeight.w700,
       color: AppColors.logoBlue,
@@ -166,7 +167,7 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
           matchesCreatedAt &&
           matchesUpdatedAt &&
           matchesStatus;
-    }).toList();
+    }).toList()..sort((a, b) => b.id.compareTo(a.id));
     final columnWidths = _computeCategoryColumnWidths(
       screenWidth: screenWidth,
       categories: categories,

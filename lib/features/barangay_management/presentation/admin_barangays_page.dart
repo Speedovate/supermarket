@@ -107,8 +107,7 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
               height: 1.15,
             );
 
-    final barangays = [...state.barangays]
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final barangays = [...state.barangays]..sort((a, b) => b.id.compareTo(a.id));
     final normalizedQuery = query.trim().toLowerCase();
     final filteredBarangays = barangays.where((barangay) {
       final matchesQuery =

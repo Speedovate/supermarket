@@ -110,14 +110,7 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
             );
 
     final normalizedQuery = query.trim().toLowerCase();
-    final banners = [...state.banners]
-      ..sort((a, b) {
-        final createdAtCompare = b.createdAt.compareTo(a.createdAt);
-        if (createdAtCompare != 0) {
-          return createdAtCompare;
-        }
-        return b.id.compareTo(a.id);
-      });
+    final banners = [...state.banners]..sort((a, b) => b.id.compareTo(a.id));
     final filteredBanners = banners.where((banner) {
       final matchesQuery =
           normalizedQuery.isEmpty ||
