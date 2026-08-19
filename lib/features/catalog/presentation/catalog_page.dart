@@ -5389,7 +5389,7 @@ class _CartQuantityControl extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: GestureDetector(
+              child: MousePressable(
                 behavior: HitTestBehavior.opaque,
                 onTap: onEditQuantity,
                 child: Center(
