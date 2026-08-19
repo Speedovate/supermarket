@@ -315,6 +315,11 @@ class AppController extends Notifier<AppState> {
       products: persisted.products,
       cart: persisted.cart,
     );
+    final hasPersistedCatalogContent =
+        persisted.categories.isNotEmpty ||
+        persisted.barangays.isNotEmpty ||
+        persisted.banners.isNotEmpty ||
+        persisted.products.isNotEmpty;
     state = state.copyWith(
       initialized: true,
       categories: persisted.categories,
@@ -332,7 +337,7 @@ class AppController extends Notifier<AppState> {
         orders: persisted.orders,
       ),
       adminSession: persisted.adminSession,
-      catalogHydrated: true,
+      catalogHydrated: hasPersistedCatalogContent,
     );
   }
 
