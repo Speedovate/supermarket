@@ -37,6 +37,69 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
   String? nameSort;
   String? soldSort;
 
+  Future<void> _showProductFileActionsDialog(BuildContext context) async {
+    var selected = _ProductFileAction.importProducts;
+    final result = await showDialog<_ProductFileAction>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AppModalFrame(
+              title: selected.label,
+              actions: [
+                AppModalButton(
+                  label: 'Close',
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+                const SizedBox(width: 10),
+                AppModalButton(
+                  label: selected.label,
+                  isPrimary: true,
+                  onPressed: () => Navigator.of(dialogContext).pop(selected),
+                ),
+              ],
+              child: RadioGroup<_ProductFileAction>(
+                groupValue: selected,
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() => selected = value);
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final action in _ProductFileAction.values)
+                      RadioListTile<_ProductFileAction>(
+                        value: action,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        materialTapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: const VisualDensity(
+                          horizontal: -4,
+                          vertical: -4,
+                        ),
+                        title: Text(action.label),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(this.context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      successSnackBar('${result.label} coming soon.'),
+    );
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -407,6 +470,25 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                         ),
                       ],
                     ),
+            ),
+            SizedBox(width: isMobile ? 8 : 12),
+            MousePressable(
+              onTap: () => _showProductFileActionsDialog(context),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: isMobile ? toolbarActionSize : 48,
+                height: isMobile ? toolbarActionSize : 48,
+                decoration: BoxDecoration(
+                  color: AppColors.logoBlue,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.insert_drive_file_outlined,
+                  size: 18,
+                  color: Colors.white,
+                ),
+              ),
             ),
             SizedBox(width: isMobile ? 8 : 12),
             MousePressable(
@@ -1360,6 +1442,15 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
   }) async {
     await showAdminProductDialog(context, ref, initial: initial);
   }
+}
+
+enum _ProductFileAction {
+  importProducts('Import Products'),
+  exportProducts('Export Products');
+
+  const _ProductFileAction(this.label);
+
+  final String label;
 }
 
 class _FiltersSection extends StatelessWidget {
