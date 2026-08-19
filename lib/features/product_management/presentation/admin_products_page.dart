@@ -2311,12 +2311,13 @@ class _SelectableCellText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SelectableText(
+    return Text(
       text,
       style: style,
       maxLines: maxLines,
+      overflow: overflow,
+      softWrap: softWrap,
       textAlign: textAlign,
-      enableInteractiveSelection: true,
     );
   }
 }
