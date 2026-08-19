@@ -61,21 +61,30 @@ service cloud.firestore {
     }
 
     match /system/{documentId} {
-      allow get: if documentId == 'orders_counter' || isAdmin();
+      allow get: if
+        documentId == 'orders_counter' ||
+        documentId == 'catalog_meta' ||
+        isAdmin();
       allow list: if isAdmin();
 
       allow create, update: if
-        documentId == 'orders_counter' &&
-        request.resource.data.keys().hasOnly(['nextOrderId', 'updatedAt']) &&
-        request.resource.data.nextOrderId is int &&
-        request.resource.data.nextOrderId >= 2 &&
-        request.resource.data.updatedAt is string &&
         (
-          !exists(/databases/$(database)/documents/system/$(documentId)) ||
+          documentId == 'orders_counter' &&
+          request.resource.data.keys().hasOnly(['nextOrderId', 'updatedAt']) &&
+          request.resource.data.nextOrderId is int &&
+          request.resource.data.nextOrderId >= 2 &&
+          request.resource.data.updatedAt is string &&
           (
-            resource.data.nextOrderId is int &&
-            request.resource.data.nextOrderId == resource.data.nextOrderId + 1
+            !exists(/databases/$(database)/documents/system/$(documentId)) ||
+            (
+              resource.data.nextOrderId is int &&
+              request.resource.data.nextOrderId == resource.data.nextOrderId + 1
+            )
           )
+        ) ||
+        (
+          documentId == 'catalog_meta' &&
+          isAdmin()
         );
     }
 
