@@ -79,6 +79,75 @@ class MousePressable extends StatefulWidget {
 class _MousePressableState extends State<MousePressable> {
   bool _hovered = false;
   bool _pressed = false;
+  int? _activePointer;
+  Offset? _pointerDownPosition;
+  bool _pointerMovedTooFar = false;
+
+  static const double _tapSlop = 6;
+
+  void _handlePointerDown(PointerDownEvent event) {
+    _activePointer = event.pointer;
+    _pointerDownPosition = event.position;
+    _pointerMovedTooFar = false;
+    setState(() => _pressed = widget.enabled);
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (_activePointer != event.pointer || _pointerDownPosition == null) {
+      return;
+    }
+    if (_pointerMovedTooFar) {
+      return;
+    }
+    final delta = event.position - _pointerDownPosition!;
+    if (delta.distance > _tapSlop) {
+      _pointerMovedTooFar = true;
+      if (_pressed) {
+        setState(() => _pressed = false);
+      }
+    }
+  }
+
+  void _handlePointerEnd(int pointer) {
+    if (_activePointer == pointer) {
+      _activePointer = null;
+      _pointerDownPosition = null;
+      _pointerMovedTooFar = false;
+    }
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    final shouldTap =
+        widget.enabled &&
+        widget.onTap != null &&
+        _activePointer == event.pointer &&
+        !_pointerMovedTooFar &&
+        _isWithinBounds(event.position);
+    if (_pressed) {
+      setState(() => _pressed = false);
+    }
+    _handlePointerEnd(event.pointer);
+    if (shouldTap) {
+      widget.onTap!.call();
+    }
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    if (_pressed) {
+      setState(() => _pressed = false);
+    }
+    _handlePointerEnd(event.pointer);
+  }
+
+  bool _isWithinBounds(Offset globalPosition) {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return false;
+    }
+    final localPosition = renderObject.globalToLocal(globalPosition);
+    final rect = Offset.zero & renderObject.size;
+    return rect.contains(localPosition);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -136,10 +205,12 @@ class _MousePressableState extends State<MousePressable> {
         _pressed = false;
       }),
       child: Listener(
-        onPointerDown: (_) => setState(() => _pressed = widget.enabled),
-        onPointerUp: (_) => setState(() => _pressed = false),
-        onPointerCancel: (_) => setState(() => _pressed = false),
-        child: GestureDetector(
+        behavior: widget.behavior,
+        onPointerDown: _handlePointerDown,
+        onPointerMove: _handlePointerMove,
+        onPointerUp: _handlePointerUp,
+        onPointerCancel: _handlePointerCancel,
+        child: kIsWeb ? child : GestureDetector(
           behavior: widget.behavior,
           onTap: widget.enabled ? widget.onTap : null,
           child: child,
