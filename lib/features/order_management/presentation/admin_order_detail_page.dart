@@ -134,6 +134,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
       children: [
         _OrderSummaryTable(
           order: order,
+          onView: () => _showOrderPreviewDialog(context, order),
           onCopy: () => _copyOrderSummary(context, order),
           onEdit: () => _showEditOrderDialog(context, order),
           onAddProduct: () => _showAddProductDialog(context),
@@ -366,6 +367,95 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
     final messenger = ScaffoldMessenger.of(context);
     messenger.clearSnackBars();
     messenger.showSnackBar(successSnackBar('Order copied.'));
+  }
+
+  Future<void> _showOrderPreviewDialog(
+    BuildContext context,
+    OrderRequest order,
+  ) async {
+    final itemCount = order.products.fold<int>(
+      0,
+      (sum, item) => sum + item.requestedQuantity,
+    );
+    final bodyStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(height: 1.15);
+    final labelStyle = bodyStyle?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: const Color(0xFF101828),
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AppModalFrame(
+          title: 'Order #${order.id}',
+          actions: [
+            AppModalButton(
+              label: 'Close',
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+          ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Name', style: labelStyle),
+              Text(order.name, style: bodyStyle),
+              const SizedBox(height: 10),
+              Text('Phone', style: labelStyle),
+              Text(order.phone, style: bodyStyle),
+              const SizedBox(height: 10),
+              Text('Method', style: labelStyle),
+              Text(displayFulfillment(order.method), style: bodyStyle),
+              const SizedBox(height: 10),
+              Text('Barangay', style: labelStyle),
+              Text(
+                order.method == FulfillmentMethod.delivery &&
+                        order.place.trim().isNotEmpty
+                    ? order.place
+                    : '-',
+                style: bodyStyle,
+              ),
+              if (order.method == FulfillmentMethod.delivery) ...[
+                const SizedBox(height: 10),
+                Text('Street/Landmark', style: labelStyle),
+                Text(
+                  order.addressStreet.trim().isNotEmpty
+                      ? order.addressStreet
+                      : order.addressLandmark.trim().isNotEmpty
+                      ? order.addressLandmark
+                      : '-',
+                  style: bodyStyle,
+                ),
+              ],
+              const SizedBox(height: 10),
+              Text('Status', style: labelStyle),
+              Text(displayStatus(order.status), style: bodyStyle),
+              const SizedBox(height: 10),
+              Text('Total', style: labelStyle),
+              Text(formatPesos(order.total), style: bodyStyle),
+              const SizedBox(height: 10),
+              Text('Created at', style: labelStyle),
+              Text(
+                '${formatOrderDate(order.createdAt)} ${formatOrderTimeWithSeconds(order.createdAt)}',
+                style: bodyStyle,
+              ),
+              const SizedBox(height: 10),
+              Text('Updated at', style: labelStyle),
+              Text(
+                '${formatOrderDate(order.updatedAt)} ${formatOrderTimeWithSeconds(order.updatedAt)}',
+                style: bodyStyle,
+              ),
+              const SizedBox(height: 10),
+              Text('Items', style: labelStyle),
+              const SizedBox(height: 4),
+              Text('View $itemCount products', style: bodyStyle),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showAddProductDialog(BuildContext context) async {
@@ -1094,12 +1184,14 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
 class _OrderSummaryTable extends StatelessWidget {
   const _OrderSummaryTable({
     required this.order,
+    required this.onView,
     required this.onCopy,
     required this.onEdit,
     required this.onAddProduct,
   });
 
   final OrderRequest order;
+  final Future<void> Function() onView;
   final Future<void> Function() onCopy;
   final VoidCallback onEdit;
   final Future<void> Function() onAddProduct;
@@ -1171,6 +1263,7 @@ class _OrderSummaryTable extends StatelessWidget {
                             order: order,
                             widths: widths,
                             trailingSpace: trailingSpace,
+                            onView: onView,
                             onCopy: onCopy,
                             onEdit: onEdit,
                           ),
@@ -1335,7 +1428,7 @@ class _OrderSummaryWidths {
 const double _orderSummaryColumnWidthAllowance = 8;
 const double _orderSummaryActionHitSize = 34;
 const double _orderSummaryStatusBadgeHorizontalPadding = 24;
-double get _orderSummaryActionsWidth => _orderSummaryActionHitSize * 2;
+double get _orderSummaryActionsWidth => _orderSummaryActionHitSize * 3;
 
 _OrderSummaryWidths _computeOrderSummaryWidths({
   required BuildContext context,
@@ -1500,6 +1593,7 @@ class _OrderSummaryRow extends StatelessWidget {
     required this.order,
     required this.widths,
     required this.trailingSpace,
+    required this.onView,
     required this.onCopy,
     required this.onEdit,
   });
@@ -1507,6 +1601,7 @@ class _OrderSummaryRow extends StatelessWidget {
   final OrderRequest order;
   final _OrderSummaryWidths widths;
   final double trailingSpace;
+  final Future<void> Function() onView;
   final Future<void> Function() onCopy;
   final VoidCallback onEdit;
 
@@ -1618,6 +1713,20 @@ class _OrderSummaryRow extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  MousePressable(
+                    onTap: () {
+                      onView();
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.visibility_outlined,
+                        size: 18,
+                        color: AppColors.logoBlue,
+                      ),
+                    ),
+                  ),
                   MousePressable(
                     onTap: onEdit,
                     borderRadius: BorderRadius.circular(10),
