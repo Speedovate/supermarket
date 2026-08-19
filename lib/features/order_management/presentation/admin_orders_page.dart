@@ -79,6 +79,27 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
     }
   }
 
+  String _displayBarangayWithCutoff(OrderRequest order) {
+    if (order.method != FulfillmentMethod.delivery) {
+      return '-';
+    }
+    final place = order.place.trim();
+    if (place.isEmpty) {
+      return '-';
+    }
+    Barangay? barangay;
+    for (final item in ref.read(appControllerProvider).barangays) {
+      if (item.name.trim().toLowerCase() == place.toLowerCase()) {
+        barangay = item;
+        break;
+      }
+    }
+    if (barangay == null) {
+      return place;
+    }
+    return '$place - ${formatBarangayCutoffValue(barangay)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -955,13 +976,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
               Text(displayFulfillment(order.method), style: bodyStyle),
               const SizedBox(height: 10),
               Text('Barangay', style: labelStyle),
-              Text(
-                order.method == FulfillmentMethod.delivery &&
-                        order.place.trim().isNotEmpty
-                    ? order.place
-                    : '-',
-                style: bodyStyle,
-              ),
+              Text(_displayBarangayWithCutoff(order), style: bodyStyle),
               if (order.method == FulfillmentMethod.delivery) ...[
                 const SizedBox(height: 10),
                 Text('Street/Landmark', style: labelStyle),
