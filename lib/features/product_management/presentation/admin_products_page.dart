@@ -32,6 +32,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
   static double get _filtersFieldWidth =>
       _filtersMenuWidth - (_filtersContentHorizontalPadding * 2);
 
+  final TextEditingController _queryController = TextEditingController();
   String query = '';
   DateTime? createdAtFilter;
   DateTime? updatedAtFilter;
@@ -529,10 +530,22 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     _applyRouteFilters();
   }
 
+  @override
+  void dispose() {
+    _queryController.dispose();
+    super.dispose();
+  }
+
   void _applyRouteFilters() {
     final uri = GoRouterState.of(context).uri;
     final categories = ref.read(appControllerProvider).categories;
     query = uri.queryParameters['query'] ?? uri.queryParameters['q'] ?? '';
+    if (_queryController.text != query) {
+      _queryController.value = TextEditingValue(
+        text: query,
+        selection: TextSelection.collapsed(offset: query.length),
+      );
+    }
     createdAtFilter = _parseRouteDate(
       uri.queryParameters['filters[created_at]'],
     );
@@ -716,6 +729,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                       children: [
                         Expanded(
                           child: TextField(
+                            controller: _queryController,
                             onChanged: (value) =>
                                 _setFilters(() => query = value),
                             decoration: const InputDecoration(
@@ -792,6 +806,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                         SizedBox(
                           width: 280,
                           child: TextField(
+                            controller: _queryController,
                             onChanged: (value) =>
                                 _setFilters(() => query = value),
                             decoration: const InputDecoration(

@@ -26,6 +26,7 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
   static const double _actionHitSize = 34;
   static double get _actionsWidth => _actionHitSize * 4;
 
+  final TextEditingController _queryController = TextEditingController();
   String query = '';
   DateTime? createdAtFilter;
   DateTime? updatedAtFilter;
@@ -37,9 +38,21 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
     _applyRouteFilters();
   }
 
+  @override
+  void dispose() {
+    _queryController.dispose();
+    super.dispose();
+  }
+
   void _applyRouteFilters() {
     final uri = GoRouterState.of(context).uri;
     query = uri.queryParameters['query'] ?? uri.queryParameters['q'] ?? '';
+    if (_queryController.text != query) {
+      _queryController.value = TextEditingValue(
+        text: query,
+        selection: TextSelection.collapsed(offset: query.length),
+      );
+    }
     createdAtFilter = _parseRouteDate(uri.queryParameters['filters[created_at]']);
     updatedAtFilter = _parseRouteDate(uri.queryParameters['filters[updated_at]']);
     statusFilter = _normalizeNullable(uri.queryParameters['filters[status]']);
@@ -141,6 +154,7 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                       children: [
                         Expanded(
                           child: TextField(
+                            controller: _queryController,
                             onChanged: (value) => _setFilters(() => query = value),
                             decoration: const InputDecoration(
                               hintText: 'Search',
@@ -219,6 +233,7 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                         SizedBox(
                           width: 280,
                           child: TextField(
+                            controller: _queryController,
                             onChanged: (value) => _setFilters(() => query = value),
                             decoration: const InputDecoration(
                               hintText: 'Search',
