@@ -90,7 +90,9 @@ class _MousePressableState extends State<MousePressable> {
     _activePointer = event.pointer;
     _pointerDownPosition = event.position;
     _pointerMovedTooFar = false;
-    setState(() => _pressed = widget.enabled);
+    if (!kIsWeb) {
+      setState(() => _pressed = widget.enabled);
+    }
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
