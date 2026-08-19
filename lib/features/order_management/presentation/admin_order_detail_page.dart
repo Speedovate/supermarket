@@ -465,7 +465,32 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
               const SizedBox(height: 10),
               Text('Items', style: labelStyle),
               const SizedBox(height: 4),
-              Text('View $itemCount products', style: bodyStyle),
+              MousePressable(
+                onTap: () => Navigator.of(dialogContext).pop(),
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View $itemCount products',
+                        style: const TextStyle(
+                          color: AppColors.logoBlue,
+                          fontWeight: FontWeight.w700,
+                          height: 1.15,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.open_in_new_rounded,
+                        size: 16,
+                        color: AppColors.logoBlue,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         );

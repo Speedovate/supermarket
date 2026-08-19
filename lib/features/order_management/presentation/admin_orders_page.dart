@@ -851,6 +851,12 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
         orders.map((item) => displayStatus(item.status)),
         valuesStyle: badgeTextStyle,
       ) + _statusBadgeHorizontalPadding,
+      items: maxWidth(
+        'Items',
+        orders.map(
+          (item) => '${item.items.fold<int>(0, (sum, entry) => sum + entry.requestedQuantity)}',
+        ),
+      ),
       createdAt: maxWidth(
         'Created at',
         orders.map(
@@ -1394,6 +1400,11 @@ class _OrderHeaderRow extends StatelessWidget {
         ),
         SizedBox(width: widths.gap),
         SizedBox(
+          width: widths.items,
+          child: Text('Items', style: labelStyle, maxLines: 1),
+        ),
+        SizedBox(width: widths.gap),
+        SizedBox(
           width: widths.total,
           child: Text('Total', style: labelStyle, maxLines: 1),
         ),
@@ -1464,6 +1475,10 @@ class _OrderRow extends StatelessWidget {
       fontSize: (DefaultTextStyle.of(context).style.fontSize ?? 14) * scale,
       height: 1.15,
     );
+    final itemCount = order.items.fold<int>(
+      0,
+      (sum, item) => sum + item.requestedQuantity,
+    );
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -1512,6 +1527,16 @@ class _OrderRow extends StatelessWidget {
                   status: order.status,
                   fontSize: bodyStyle.fontSize ?? 14,
                 ),
+              ),
+            ),
+            SizedBox(width: widths.gap),
+            SizedBox(
+              width: widths.items,
+              child: Text(
+                '$itemCount',
+                style: bodyStyle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             SizedBox(width: widths.gap),
@@ -1616,6 +1641,7 @@ class _OrderColumnWidths {
     required this.phone,
     required this.total,
     required this.status,
+    required this.items,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -1626,6 +1652,7 @@ class _OrderColumnWidths {
   final double phone;
   final double total;
   final double status;
+  final double items;
   final double createdAt;
   final double updatedAt;
 }
@@ -1669,6 +1696,12 @@ double _measureOrderRowHeight({
       maxLines: 1,
     ),
     34,
+    _measureOrderTextHeight(
+      '${order.items.fold<int>(0, (sum, item) => sum + item.requestedQuantity)}',
+      bodyStyle,
+      widths.items,
+      maxLines: 1,
+    ),
     _measureOrderTextHeight(
       formatPesos(order.total),
       bodyStyle,
