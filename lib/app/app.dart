@@ -77,7 +77,7 @@ class _AndrewsSupermarketAppState
             body: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  const logoWidth = 200.0;
+                  const logoWidth = 150.0;
                   const footerWidth = logoWidth;
                   const footerBottomPadding = 36.0;
                   const footerReservedHeight = 110.0;
@@ -87,15 +87,18 @@ class _AndrewsSupermarketAppState
                       Positioned.fill(
                         bottom: footerReservedHeight,
                         child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Image.asset(
-                                'assets/branding/as_logo_lite.png',
-                                width: logoWidth,
-                                filterQuality: FilterQuality.high,
-                              ),
-                            ],
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 25),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Image.asset(
+                                  'assets/branding/as_logo_lite.png',
+                                  width: logoWidth,
+                                  filterQuality: FilterQuality.high,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
