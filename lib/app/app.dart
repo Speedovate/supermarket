@@ -81,12 +81,14 @@ class _AndrewsSupermarketAppState
                   final footerWidth = constraints.maxWidth < 420
                       ? ((constraints.maxWidth - 40) * 0.5).clamp(140.0, 180.0)
                       : 160.0;
+                  const footerBottomPadding = 36.0;
+                  const footerReservedHeight = 110.0;
 
                   return Stack(
                     children: [
-                      Center(
-                        child: Padding(
-                          padding: EdgeInsets.only(right: logoWidth * 0.15),
+                      Positioned.fill(
+                        bottom: footerReservedHeight,
+                        child: Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -102,7 +104,7 @@ class _AndrewsSupermarketAppState
                       Positioned(
                         left: 20,
                         right: 20,
-                        bottom: 20,
+                        bottom: footerBottomPadding,
                         child: Center(
                           child: Image.asset(
                             'assets/branding/sdv_footer_lite.png',
