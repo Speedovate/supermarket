@@ -77,7 +77,7 @@ class _AndrewsSupermarketAppState
             body: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  const logoWidth = 88.0;
+                  const logoWidth = 200.0;
                   const footerWidth = logoWidth;
                   const footerBottomPadding = 36.0;
                   const footerReservedHeight = 110.0;

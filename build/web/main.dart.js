@@ -135120,7 +135120,7 @@ $1(a){return a.a},
 $S:778}
 A.aYU.prototype={
 $2(a,b){var s=null,r=t.p
-return new A.fx(B.bI,s,B.bF,B.w,A.b([A.FL(110,A.d8(A.aB(A.b([A.vi("assets/branding/as_logo_lite.png",s,B.j3,s,s,88)],r),B.k,B.f,B.z,0,B.q),s,s)),A.t9(36,A.d8(A.vi("assets/branding/sdv_footer_lite.png",s,B.j3,s,s,88),s,s),s,s,20,20,s,s)],r),s)},
+return new A.fx(B.bI,s,B.bF,B.w,A.b([A.FL(110,A.d8(A.aB(A.b([A.vi("assets/branding/as_logo_lite.png",s,B.j3,s,s,200)],r),B.k,B.f,B.z,0,B.q),s,s)),A.t9(36,A.d8(A.vi("assets/branding/sdv_footer_lite.png",s,B.j3,s,s,200),s,s),s,s,20,20,s,s)],r),s)},
 $S:779}
 A.bin.prototype={
 $1(a){var s=null,r=a.ef($.bFv(),t.N8),q=A.kU(new A.bi7(),s,"/"),p=A.kU(new A.bi8(),s,"/order-review"),o=A.kU(new A.bi9(),s,"/order-success/:orderId"),n=A.kU(new A.bif(),s,"/admin/login"),m=t.yo,l=A.b([A.kU(s,new A.big(),"/admin/dashboard"),A.kU(s,new A.bih(),"/admin/products"),A.kU(s,new A.bii(),"/admin/banners"),A.kU(s,new A.bij(),"/admin/barangays"),A.kU(s,new A.bik(),"/admin/products/:productId"),A.kU(s,new A.bil(),"/admin/categories"),A.kU(s,new A.bim(),"/admin/categories/:categoryId"),A.kU(s,new A.bia(),"/admin/orders"),A.kU(s,new A.bib(),"/admin/orders/:orderId"),A.kU(s,new A.bic(),"/admin/profile")],m)
