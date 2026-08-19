@@ -353,6 +353,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     }
     final messenger = ScaffoldMessenger.of(this.context);
     messenger.clearSnackBars();
+    var importStage = 'preparing import';
     try {
       if (result.action == _ProductFileAction.exportProducts) {
         final state = ref.read(appControllerProvider);
@@ -380,11 +381,14 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
         messenger.showSnackBar(errorSnackBar('Excel file is required.'));
         return;
       }
+      importStage = 'parsing the Excel file';
       final imported = parseCatalogWorkbook(importBytes);
+      importStage = 'resolving categories and products';
       final resolvedImport = _resolveImportedCatalog(
         imported: imported,
         importMode: result.importMode,
       );
+      importStage = 'confirming the import';
       final shouldImport = await _showImportProductsConfirmationDialog(
         this.context,
         importMode: result.importMode,
@@ -398,6 +402,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
         return;
       }
       if (result.importMode == _ProductImportMode.replace) {
+        importStage = 'replacing current categories and products';
         await ref
             .read(appControllerProvider.notifier)
             .replaceCategoriesAndProducts(
@@ -442,12 +447,14 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
             'Additional import prevents duplicate name + details combinations. Found ${parts.join(' and ')}.',
           );
         }
+        importStage = 'saving imported categories';
         for (final category in resolvedImport.categories) {
           if (existingCategoryIds.contains(category.id)) {
             continue;
           }
           await ref.read(appControllerProvider.notifier).saveCategory(category);
         }
+        importStage = 'saving imported products';
         for (final product in resolvedImport.products) {
           await ref.read(appControllerProvider.notifier).saveProduct(product);
         }
@@ -464,12 +471,18 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
       messenger.showSnackBar(errorSnackBar(error.message));
     } on UnsupportedError catch (error) {
       messenger.showSnackBar(errorSnackBar('$error'));
-    } catch (error) {
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Products import failed during $importStage.\n'
+        'File: ${result.fileName ?? 'unknown'}\n'
+        'Mode: ${result.importMode.name}\n'
+        'Error: $error\n'
+        '$stackTrace',
+      );
       messenger.showSnackBar(
         errorSnackBar(
-          '$error'
-              .replaceFirst('Exception: ', '')
-              .replaceFirst('Bad state: ', ''),
+          'Import failed while $importStage. '
+          '${'$error'.replaceFirst('Exception: ', '').replaceFirst('Bad state: ', '')}',
         ),
       );
     }

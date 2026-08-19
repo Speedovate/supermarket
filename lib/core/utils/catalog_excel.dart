@@ -85,47 +85,68 @@ Uint8List buildCatalogWorkbook({
 }
 
 ImportedCatalogWorkbook parseCatalogWorkbook(Uint8List bytes) {
-  final excel = Excel.decodeBytes(bytes);
-  final productsSheet = excel.tables[_productsSheetName] ??
-      (excel.tables.isEmpty ? null : excel.tables.values.first);
-  if (productsSheet == null || productsSheet.rows.isEmpty) {
-    throw const CatalogWorkbookException(
-      'The file must contain a Products sheet with product rows.',
-    );
-  }
-
-  final header = _headerMap(productsSheet.rows.first);
-  final now = DateTime.now();
-  final products = <ImportedCatalogProductRow>[];
-
-  for (var rowIndex = 1; rowIndex < productsSheet.rows.length; rowIndex++) {
-    final row = productsSheet.rows[rowIndex];
-    if (_rowIsBlank(row)) {
-      continue;
+  try {
+    final excel = Excel.decodeBytes(bytes);
+    final productsSheet = excel.tables[_productsSheetName] ??
+        (excel.tables.isEmpty ? null : excel.tables.values.first);
+    if (productsSheet == null || productsSheet.rows.isEmpty) {
+      throw const CatalogWorkbookException(
+        'The file must contain a Products sheet with product rows.',
+      );
     }
-    final name = _requiredText(row, header, 'name', rowIndex);
-    final details = _requiredText(row, header, 'details', rowIndex);
-    final sold = _requiredInt(row, header, 'sold', rowIndex);
-    final createdAt = _optionalDateTime(row, header, 'created at') ?? now;
-    final updatedAt = _optionalDateTime(row, header, 'updated at') ?? createdAt;
-    products.add(
-      ImportedCatalogProductRow(
-        name: name,
-        details: details,
-        categoryName: (_optionalText(row, header, 'category') ?? '').trim(),
-        priceCentavos: _requiredPriceCentavos(row, header, rowIndex),
-        sold: sold,
-        createdAt: createdAt,
-        updatedAt: updatedAt,
-      ),
+
+    final header = _headerMap(productsSheet.rows.first);
+    _requireHeaders(header, const [
+      'name',
+      'details',
+      'category',
+      'price',
+      'sold',
+      'created at',
+      'updated at',
+    ]);
+    final now = DateTime.now();
+    final products = <ImportedCatalogProductRow>[];
+
+    for (var rowIndex = 1; rowIndex < productsSheet.rows.length; rowIndex++) {
+      final row = productsSheet.rows[rowIndex];
+      if (_rowIsBlank(row)) {
+        continue;
+      }
+      final name = _requiredText(row, header, 'name', rowIndex);
+      final details = _requiredText(row, header, 'details', rowIndex);
+      final sold = _requiredInt(row, header, 'sold', rowIndex);
+      final createdAt =
+          _optionalDateTime(row, header, 'created at') ?? now;
+      final updatedAt =
+          _optionalDateTime(row, header, 'updated at') ?? createdAt;
+      products.add(
+        ImportedCatalogProductRow(
+          name: name,
+          details: details,
+          categoryName: (_optionalText(row, header, 'category') ?? '').trim(),
+          priceCentavos: _requiredPriceCentavos(row, header, rowIndex),
+          sold: sold,
+          createdAt: createdAt,
+          updatedAt: updatedAt,
+        ),
+      );
+    }
+
+    if (products.isEmpty) {
+      throw const CatalogWorkbookException(
+        'No product rows were found in the file.',
+      );
+    }
+
+    return ImportedCatalogWorkbook(products: products);
+  } on CatalogWorkbookException {
+    rethrow;
+  } catch (error) {
+    throw CatalogWorkbookException(
+      'Unable to parse the Excel file. ${error.toString().replaceFirst('Exception: ', '')}',
     );
   }
-
-  if (products.isEmpty) {
-    throw const CatalogWorkbookException('No product rows were found in the file.');
-  }
-
-  return ImportedCatalogWorkbook(products: products);
 }
 
 List<CellValue?> _textRow(List<String> values) {
@@ -152,6 +173,18 @@ Map<String, int> _headerMap(List<Data?> headerRow) {
     }
   }
   return map;
+}
+
+void _requireHeaders(Map<String, int> headers, List<String> requiredHeaders) {
+  final missing = requiredHeaders
+      .where((header) => !headers.containsKey(_normalizeHeader(header)))
+      .toList();
+  if (missing.isEmpty) {
+    return;
+  }
+  throw CatalogWorkbookException(
+    'Missing required column${missing.length == 1 ? '' : 's'}: ${missing.join(', ')}.',
+  );
 }
 
 String _normalizeHeader(String value) {
