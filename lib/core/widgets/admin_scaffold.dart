@@ -8,7 +8,7 @@ import '../../features/app_state/app_controller.dart';
 import 'common_widgets.dart';
 
 double _adminMobileHorizontalPaddingForWidth(double width) {
-  return width <= 360 ? 24 : 32;
+  return 24;
 }
 
 const double _adminMobileHeaderActionSize = 40;
