@@ -622,7 +622,8 @@ class AppController extends Notifier<AppState> {
               isUnassignedCategory);
       final searchMatch = normalizedQuery.isEmpty
           ? true
-          : product.normalizedName.contains(normalizedQuery);
+          : product.normalizedName.contains(normalizedQuery) ||
+                product.details.toLowerCase().contains(normalizedQuery);
       return categoryMatch && publiclyVisible && searchMatch;
     }).toList();
   }

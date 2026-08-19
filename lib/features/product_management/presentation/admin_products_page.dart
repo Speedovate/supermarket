@@ -632,6 +632,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
           final matchesQuery =
               normalizedQuery.isEmpty ||
               product.name.toLowerCase().contains(normalizedQuery) ||
+              product.details.toLowerCase().contains(normalizedQuery) ||
               categoryName.toLowerCase().contains(normalizedQuery) ||
               '${product.id}'.contains(normalizedQuery);
           final createdAt = product.createdAt;
