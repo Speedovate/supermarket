@@ -38,6 +38,24 @@ _flutter.buildConfig = {"engineRevision":"59aa584fdf100e6c78c785d8a5b565d1de4b48
 
 const splash = document.getElementById('app-startup-splash');
 
+function removeSplashWhenFirstFrameIsLikelyReady() {
+  if (!splash) {
+    return;
+  }
+
+  const remove = () => {
+    splash.style.opacity = '0';
+    splash.style.transition = 'opacity 120ms ease-out';
+    window.setTimeout(() => splash.remove(), 120);
+  };
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(remove);
+    });
+  });
+}
+
 _flutter.loader.load({
   config: {
     canvasKitBaseUrl: "canvaskit",
@@ -45,8 +63,6 @@ _flutter.loader.load({
   onEntrypointLoaded: async function(engineInitializer) {
     const appRunner = await engineInitializer.initializeEngine();
     await appRunner.runApp();
-    if (splash) {
-      splash.remove();
-    }
+    removeSplashWhenFirstFrameIsLikelyReady();
   }
 });
