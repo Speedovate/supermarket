@@ -41,8 +41,125 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
   String? nameSort;
   String? soldSort;
 
+  _ResolvedImportedCatalog _resolveImportedCatalog({
+    required ImportedCatalogWorkbook imported,
+    required _ProductImportMode importMode,
+  }) {
+    final now = DateTime.now();
+    final state = ref.read(appControllerProvider);
+
+    if (importMode == _ProductImportMode.replace) {
+      final categories = <Category>[];
+      final categoryIdByNormalizedName = <String, int>{};
+      var nextCategoryId = 1;
+      for (final row in imported.products) {
+        final normalizedCategory = row.categoryName.trim().toLowerCase();
+        if (normalizedCategory.isEmpty ||
+            categoryIdByNormalizedName.containsKey(normalizedCategory)) {
+          continue;
+        }
+        categoryIdByNormalizedName[normalizedCategory] = nextCategoryId;
+        categories.add(
+          Category(
+            id: nextCategoryId,
+            name: row.categoryName.trim(),
+            normalizedName: normalizedCategory,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+        nextCategoryId++;
+      }
+
+      final products = <Product>[];
+      for (var index = 0; index < imported.products.length; index++) {
+        final row = imported.products[index];
+        final normalizedCategory = row.categoryName.trim().toLowerCase();
+        final createdAt = row.createdAt ?? now;
+        final updatedAt = row.updatedAt ?? createdAt;
+        products.add(
+          Product(
+            id: index + 1,
+            active: true,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            name: row.name.trim(),
+            category: normalizedCategory.isEmpty
+                ? 0
+                : (categoryIdByNormalizedName[normalizedCategory] ?? 0),
+            details: row.details.trim(),
+            price: row.priceCentavos,
+            sold: row.sold,
+          ),
+        );
+      }
+
+      return _ResolvedImportedCatalog(
+        categories: categories,
+        products: products,
+      );
+    }
+
+    final categories = [...state.categories];
+    final categoryIdByNormalizedName = {
+      for (final category in categories) category.normalizedName: category.id,
+    };
+    var nextCategoryId = categories.isEmpty
+        ? 1
+        : categories.map((item) => item.id).reduce(math.max) + 1;
+    for (final row in imported.products) {
+      final categoryName = row.categoryName.trim();
+      final normalizedCategory = categoryName.toLowerCase();
+      if (normalizedCategory.isEmpty ||
+          categoryIdByNormalizedName.containsKey(normalizedCategory)) {
+        continue;
+      }
+      categoryIdByNormalizedName[normalizedCategory] = nextCategoryId;
+      categories.add(
+        Category(
+          id: nextCategoryId,
+          name: categoryName,
+          normalizedName: normalizedCategory,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      nextCategoryId++;
+    }
+
+    var nextProductId = state.products.isEmpty
+        ? 1
+        : state.products.map((item) => item.id).reduce(math.max) + 1;
+    final products = <Product>[];
+    for (final row in imported.products) {
+      final normalizedCategory = row.categoryName.trim().toLowerCase();
+      final createdAt = row.createdAt ?? now;
+      final updatedAt = row.updatedAt ?? createdAt;
+      products.add(
+        Product(
+          id: nextProductId++,
+          active: true,
+          createdAt: createdAt,
+          updatedAt: updatedAt,
+          name: row.name.trim(),
+          category: normalizedCategory.isEmpty
+              ? 0
+              : (categoryIdByNormalizedName[normalizedCategory] ?? 0),
+          details: row.details.trim(),
+          price: row.priceCentavos,
+          sold: row.sold,
+        ),
+      );
+    }
+
+    return _ResolvedImportedCatalog(categories: categories, products: products);
+  }
+
   Future<void> _showProductFileActionsDialog(BuildContext context) async {
     var selected = _ProductFileAction.importProducts;
+    var importMode = _ProductImportMode.additional;
     PlatformFile? selectedFile;
     Uint8List? selectedBytes;
     String? inlineError;
@@ -99,6 +216,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                         action: selected,
                         fileName: selectedFile?.name,
                         bytes: selectedBytes,
+                        importMode: importMode,
                       ),
                     );
                   },
@@ -170,8 +288,58 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const AppModalBodyText(
-                      'Importing will override all current products and categories.',
+                    IgnorePointer(
+                      ignoring: false,
+                      child: RadioGroup<_ProductImportMode>(
+                        groupValue: importMode,
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setState(() {
+                            importMode = value;
+                            inlineError = null;
+                          });
+                        },
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: RadioListTile<_ProductImportMode>(
+                                value: _ProductImportMode.additional,
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: const VisualDensity(
+                                  horizontal: -4,
+                                  vertical: -4,
+                                ),
+                                title: const Text('Additional'),
+                              ),
+                            ),
+                            Expanded(
+                              child: RadioListTile<_ProductImportMode>(
+                                value: _ProductImportMode.replace,
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: const VisualDensity(
+                                  horizontal: -4,
+                                  vertical: -4,
+                                ),
+                                title: const Text('Replace'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    AppModalBodyText(
+                      importMode == _ProductImportMode.replace
+                          ? 'Importing will override all current products and categories.'
+                          : 'Importing will append new products and categories only.',
                     ),
                     if (inlineError != null) ...[
                       const SizedBox(height: 8),
@@ -225,24 +393,48 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
         return;
       }
       final imported = parseCatalogWorkbook(importBytes);
+      final resolvedImport = _resolveImportedCatalog(
+        imported: imported,
+        importMode: result.importMode,
+      );
       final shouldImport = await _showImportProductsConfirmationDialog(
         this.context,
-        categoryCount: imported.categories.length,
+        importMode: result.importMode,
+        categoryCount:
+            result.importMode == _ProductImportMode.replace
+                ? resolvedImport.categories.length
+                : resolvedImport.categories.length - ref.read(appControllerProvider).categories.length,
         productCount: imported.products.length,
       );
       if (shouldImport != true || !mounted) {
         return;
       }
-      await ref.read(appControllerProvider.notifier).replaceCategoriesAndProducts(
-            categories: imported.categories,
-            products: imported.products,
-          );
+      if (result.importMode == _ProductImportMode.replace) {
+        await ref
+            .read(appControllerProvider.notifier)
+            .replaceCategoriesAndProducts(
+              categories: resolvedImport.categories,
+              products: resolvedImport.products,
+            );
+      } else {
+        final existingCategoryIds =
+            ref.read(appControllerProvider).categories.map((item) => item.id).toSet();
+        for (final category in resolvedImport.categories) {
+          if (existingCategoryIds.contains(category.id)) {
+            continue;
+          }
+          await ref.read(appControllerProvider.notifier).saveCategory(category);
+        }
+        for (final product in resolvedImport.products) {
+          await ref.read(appControllerProvider.notifier).saveProduct(product);
+        }
+      }
       if (!mounted) {
         return;
       }
       messenger.showSnackBar(
         successSnackBar(
-          'Imported ${imported.categories.length} categor${imported.categories.length == 1 ? 'y' : 'ies'} and ${imported.products.length} product${imported.products.length == 1 ? '' : 's'}.',
+          'Imported ${imported.products.length} product${imported.products.length == 1 ? '' : 's'}.',
         ),
       );
     } on CatalogWorkbookException catch (error) {
@@ -262,6 +454,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
 
   Future<bool?> _showImportProductsConfirmationDialog(
     BuildContext context, {
+    required _ProductImportMode importMode,
     required int categoryCount,
     required int productCount,
   }) {
@@ -277,13 +470,17 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
             ),
             const SizedBox(width: 10),
             AppModalButton(
-              label: 'Import Products',
+              label: importMode == _ProductImportMode.replace
+                  ? 'Replace'
+                  : 'Additional',
               isPrimary: true,
               onPressed: () => Navigator.of(dialogContext).pop(true),
             ),
           ],
           child: AppModalBodyText(
-            'This will override all current products and categories with $categoryCount categor${categoryCount == 1 ? 'y' : 'ies'} and $productCount product${productCount == 1 ? '' : 's'}.',
+            importMode == _ProductImportMode.replace
+                ? 'This will override all current products and categories with $categoryCount categor${categoryCount == 1 ? 'y' : 'ies'} and $productCount product${productCount == 1 ? '' : 's'}.'
+                : 'This will append $categoryCount new categor${categoryCount == 1 ? 'y' : 'ies'} and $productCount new product${productCount == 1 ? '' : 's'} without overriding existing data.',
           ),
         );
       },
@@ -1645,16 +1842,30 @@ enum _ProductFileAction {
   String get actionLabel => label.split(' ').first;
 }
 
+enum _ProductImportMode { additional, replace }
+
 class _ProductFileActionResult {
   const _ProductFileActionResult({
     required this.action,
     this.fileName,
     this.bytes,
+    this.importMode = _ProductImportMode.additional,
   });
 
   final _ProductFileAction action;
   final String? fileName;
   final Uint8List? bytes;
+  final _ProductImportMode importMode;
+}
+
+class _ResolvedImportedCatalog {
+  const _ResolvedImportedCatalog({
+    required this.categories,
+    required this.products,
+  });
+
+  final List<Category> categories;
+  final List<Product> products;
 }
 
 class _FiltersSection extends StatelessWidget {
