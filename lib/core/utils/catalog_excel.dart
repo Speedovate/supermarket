@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:excel/excel.dart';
+import 'package:xml/xml.dart';
 
 import '../models/app_models.dart';
 
@@ -86,16 +88,46 @@ Uint8List buildCatalogWorkbook({
 
 ImportedCatalogWorkbook parseCatalogWorkbook(Uint8List bytes) {
   try {
-    final excel = Excel.decodeBytes(bytes);
-    final productsSheet = excel.tables[_productsSheetName] ??
-        (excel.tables.isEmpty ? null : excel.tables.values.first);
-    if (productsSheet == null || productsSheet.rows.isEmpty) {
+    final archive = ZipDecoder().decodeBytes(bytes);
+    final workbookFile = archive.files.firstWhere(
+      (file) => file.name == 'xl/workbook.xml',
+      orElse: () => throw const CatalogWorkbookException(
+        'The file is missing workbook.xml.',
+      ),
+    );
+    final workbook = XmlDocument.parse(
+      _archiveText(workbookFile),
+    );
+    final workbookRelsFile = archive.files.firstWhere(
+      (file) => file.name == 'xl/_rels/workbook.xml.rels',
+      orElse: () => throw const CatalogWorkbookException(
+        'The file is missing workbook relationships.',
+      ),
+    );
+    final workbookRels = XmlDocument.parse(
+      _archiveText(workbookRelsFile),
+    );
+    final sheetPath = _resolveProductsSheetPath(
+      workbook: workbook,
+      workbookRels: workbookRels,
+    );
+    final sheetFile = archive.files.firstWhere(
+      (file) => file.name == sheetPath,
+      orElse: () => throw CatalogWorkbookException(
+        'The file is missing $sheetPath.',
+      ),
+    );
+    final sheetDocument = XmlDocument.parse(
+      _archiveText(sheetFile),
+    );
+    final rows = _sheetRows(sheetDocument);
+    if (rows.isEmpty) {
       throw const CatalogWorkbookException(
         'The file must contain a Products sheet with product rows.',
       );
     }
 
-    final header = _headerMap(productsSheet.rows.first);
+    final header = _headerMap(rows.first);
     _requireHeaders(header, const [
       'name',
       'details',
@@ -108,8 +140,8 @@ ImportedCatalogWorkbook parseCatalogWorkbook(Uint8List bytes) {
     final now = DateTime.now();
     final products = <ImportedCatalogProductRow>[];
 
-    for (var rowIndex = 1; rowIndex < productsSheet.rows.length; rowIndex++) {
-      final row = productsSheet.rows[rowIndex];
+    for (var rowIndex = 1; rowIndex < rows.length; rowIndex++) {
+      final row = rows[rowIndex];
       if (_rowIsBlank(row)) {
         continue;
       }
@@ -149,6 +181,98 @@ ImportedCatalogWorkbook parseCatalogWorkbook(Uint8List bytes) {
   }
 }
 
+String _archiveText(ArchiveFile file) {
+  final content = file.content;
+  if (content is List<int>) {
+    return String.fromCharCodes(content);
+  }
+  if (content is Uint8List) {
+    return String.fromCharCodes(content);
+  }
+  throw const CatalogWorkbookException('Unable to read the Excel file contents.');
+}
+
+String _resolveProductsSheetPath({
+  required XmlDocument workbook,
+  required XmlDocument workbookRels,
+}) {
+  final sheets = workbook.findAllElements('sheet');
+  XmlElement? targetSheet;
+  for (final sheet in sheets) {
+    if ((sheet.getAttribute('name') ?? '').trim() == _productsSheetName) {
+      targetSheet = sheet;
+      break;
+    }
+  }
+  targetSheet ??= sheets.isEmpty ? null : sheets.first;
+  if (targetSheet == null) {
+    throw const CatalogWorkbookException('The file does not contain any sheets.');
+  }
+  final relationshipId = targetSheet.getAttribute(
+    'id',
+    namespace:
+        'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  );
+  if (relationshipId == null || relationshipId.trim().isEmpty) {
+    throw const CatalogWorkbookException(
+      'The Products sheet is missing a worksheet relationship id.',
+    );
+  }
+  for (final relationship in workbookRels.findAllElements('Relationship')) {
+    if ((relationship.getAttribute('Id') ?? '').trim() != relationshipId) {
+      continue;
+    }
+    final target = (relationship.getAttribute('Target') ?? '').trim();
+    if (target.isEmpty) {
+      break;
+    }
+    final normalized = target.startsWith('/')
+        ? target.substring(1)
+        : target.startsWith('xl/')
+        ? target
+        : 'xl/$target';
+    return normalized;
+  }
+  throw CatalogWorkbookException(
+    'Unable to resolve the Products sheet path for relationship $relationshipId.',
+  );
+}
+
+List<List<_SheetCell>> _sheetRows(XmlDocument sheetDocument) {
+  final rows = <List<_SheetCell>>[];
+  for (final row in sheetDocument.findAllElements('row')) {
+    final cells = <_SheetCell>[];
+    for (final cell in row.findElements('c')) {
+      final reference = cell.getAttribute('r') ?? '';
+      final columnIndex = _columnIndexFromCellReference(reference);
+      final cellType = cell.getAttribute('t') ?? '';
+      String value = '';
+      if (cellType == 'inlineStr') {
+        value = cell.findAllElements('t').map((item) => item.innerText).join().trim();
+      } else {
+        value = (cell.getElement('v')?.innerText ?? '').trim();
+      }
+      cells.add(_SheetCell(columnIndex: columnIndex, value: value));
+    }
+    rows.add(cells);
+  }
+  return rows;
+}
+
+int _columnIndexFromCellReference(String reference) {
+  var total = 0;
+  for (final codeUnit in reference.codeUnits) {
+    final isUppercase = codeUnit >= 65 && codeUnit <= 90;
+    final isLowercase = codeUnit >= 97 && codeUnit <= 122;
+    if (!isUppercase && !isLowercase) {
+      break;
+    }
+    final uppercase = isLowercase ? codeUnit - 32 : codeUnit;
+    total = (total * 26) + (uppercase - 64);
+  }
+  return total == 0 ? 0 : total - 1;
+}
+
 List<CellValue?> _textRow(List<String> values) {
   return values.map<CellValue?>((value) => TextCellValue(value)).toList();
 }
@@ -164,12 +288,12 @@ String _formatPricePesos(int centavos) {
   return pesos.toStringAsFixed(2);
 }
 
-Map<String, int> _headerMap(List<Data?> headerRow) {
+Map<String, int> _headerMap(List<_SheetCell> headerRow) {
   final map = <String, int>{};
-  for (var index = 0; index < headerRow.length; index++) {
-    final key = _normalizeHeader(_cellText(headerRow[index]));
+  for (final cell in headerRow) {
+    final key = _normalizeHeader(cell.value);
     if (key.isNotEmpty) {
-      map[key] = index;
+      map[key] = cell.columnIndex;
     }
   }
   return map;
@@ -195,9 +319,9 @@ String _normalizeHeader(String value) {
       .replaceAll(RegExp(r'\s+'), ' ');
 }
 
-bool _rowIsBlank(List<Data?> row) {
+bool _rowIsBlank(List<_SheetCell> row) {
   for (final cell in row) {
-    if (_cellText(cell).trim().isNotEmpty) {
+    if (cell.value.trim().isNotEmpty) {
       return false;
     }
   }
@@ -205,7 +329,7 @@ bool _rowIsBlank(List<Data?> row) {
 }
 
 String _requiredText(
-  List<Data?> row,
+  List<_SheetCell> row,
   Map<String, int> headers,
   String column,
   int rowIndex,
@@ -219,17 +343,25 @@ String _requiredText(
   return value.trim();
 }
 
-String? _optionalText(List<Data?> row, Map<String, int> headers, String column) {
+String? _optionalText(
+  List<_SheetCell> row,
+  Map<String, int> headers,
+  String column,
+) {
   final index = headers[_normalizeHeader(column)];
-  if (index == null || index < 0 || index >= row.length) {
+  if (index == null || index < 0) {
     return null;
   }
-  final value = _cellText(row[index]).trim();
+  final value = row
+      .where((cell) => cell.columnIndex == index)
+      .map((cell) => cell.value)
+      .firstWhere((_) => true, orElse: () => '')
+      .trim();
   return value.isEmpty ? null : value;
 }
 
 int _requiredInt(
-  List<Data?> row,
+  List<_SheetCell> row,
   Map<String, int> headers,
   String column,
   int rowIndex,
@@ -245,7 +377,7 @@ int _requiredInt(
 }
 
 int _requiredPriceCentavos(
-  List<Data?> row,
+  List<_SheetCell> row,
   Map<String, int> headers,
   int rowIndex,
 ) {
@@ -260,7 +392,7 @@ int _requiredPriceCentavos(
 }
 
 DateTime? _optionalDateTime(
-  List<Data?> row,
+  List<_SheetCell> row,
   Map<String, int> headers,
   String column,
 ) {
@@ -271,17 +403,12 @@ DateTime? _optionalDateTime(
   return DateTime.tryParse(raw);
 }
 
-String _cellText(Data? cell) {
-  final value = cell?.value;
-  return switch (value) {
-    null => '',
-    TextCellValue() => value.value.text ?? '',
-    IntCellValue() => '${value.value}',
-    DoubleCellValue() => '${value.value}',
-    BoolCellValue() => value.value ? 'true' : 'false',
-    DateCellValue() => value.asDateTimeUtc().toIso8601String(),
-    DateTimeCellValue() => value.asDateTimeUtc().toIso8601String(),
-    TimeCellValue() => value.toString(),
-    FormulaCellValue() => value.formula,
-  };
+class _SheetCell {
+  const _SheetCell({
+    required this.columnIndex,
+    required this.value,
+  });
+
+  final int columnIndex;
+  final String value;
 }
