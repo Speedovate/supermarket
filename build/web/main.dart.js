@@ -136191,18 +136191,15 @@ $0(){var s=this.a
 if((s.a.a&30)===0)s.fd(0,null)},
 $S:0}
 A.bjv.prototype={
-$1(a){var s,r,q=this,p=q.a,o=p.files
-if((o==null?null:!B.vz.gX(o))===!0){p=p.files
-p.toString
-s=B.vz.gS(p)}else s=null
-if(s==null){q.b.$0()
-return}p=new FileReader()
-p.toString
-o=t.fg
-r=q.b
-new A.wX(p,"load",!1,o).gS(0).bX(new A.bjt(p,q.c,s,r),t.P)
-new A.wX(p,"error",!1,o).gS(0).bX(new A.bju(r),t.H)
-p.readAsArrayBuffer(s)},
+$1(a){var s,r,q,p=this,o=p.a.files,n=o!=null&&!B.vz.gX(o)?B.vz.gS(o):null
+if(n==null){p.b.$0()
+return}s=new FileReader()
+s.toString
+r=t.fg
+q=p.b
+new A.wX(s,"load",!1,r).gS(0).bX(new A.bjt(s,p.c,n,q),t.P)
+new A.wX(s,"error",!1,r).gS(0).bX(new A.bju(q),t.H)
+s.readAsArrayBuffer(n)},
 $S:834}
 A.bjt.prototype={
 $1(a){var s,r,q=this,p=B.VK.gXE(q.a)

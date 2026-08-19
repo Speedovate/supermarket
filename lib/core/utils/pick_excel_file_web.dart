@@ -19,7 +19,8 @@ Future<PickedExcelFile?> pickExcelFile() async {
   }
 
   input.onChange.first.then((_) {
-    final file = input.files?.isNotEmpty == true ? input.files!.first : null;
+    final files = input.files;
+    final file = files != null && files.isNotEmpty ? files.first : null;
     if (file == null) {
       completeNull();
       return;
