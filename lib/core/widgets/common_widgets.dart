@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../constants/app_colors.dart';
 import '../models/app_models.dart';
+import '../utils/browser_text_selection.dart';
 import '../utils/formatters.dart';
 
 const _snackbarSuccessColor = Color(0xFF2E7D32);
@@ -127,7 +128,7 @@ class _MousePressableState extends State<MousePressable> {
       setState(() => _pressed = false);
     }
     _handlePointerEnd(event.pointer);
-    if (shouldTap) {
+    if (shouldTap && !hasBrowserTextSelection()) {
       widget.onTap!.call();
     }
   }
