@@ -77,23 +77,26 @@ class _AndrewsSupermarketAppState
             body: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final logoWidth = constraints.maxWidth < 420 ? 220.0 : 176.0;
+                  final logoWidth = constraints.maxWidth < 420 ? 110.0 : 88.0;
                   final footerWidth = constraints.maxWidth < 420
-                      ? constraints.maxWidth - 40
-                      : 320.0;
+                      ? ((constraints.maxWidth - 40) * 0.5).clamp(140.0, 180.0)
+                      : 160.0;
 
                   return Stack(
                     children: [
                       Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Image.asset(
-                              'assets/branding/as_logo_lite.png',
-                              width: logoWidth,
-                              filterQuality: FilterQuality.high,
-                            ),
-                          ],
+                        child: Padding(
+                          padding: EdgeInsets.only(right: logoWidth * 0.15),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Image.asset(
+                                'assets/branding/as_logo_lite.png',
+                                width: logoWidth,
+                                filterQuality: FilterQuality.high,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       Positioned(
@@ -103,7 +106,7 @@ class _AndrewsSupermarketAppState
                         child: Center(
                           child: Image.asset(
                             'assets/branding/sdv_footer_lite.png',
-                            width: footerWidth.clamp(180.0, 360.0),
+                            width: footerWidth,
                             filterQuality: FilterQuality.high,
                           ),
                         ),
