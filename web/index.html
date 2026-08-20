@@ -134,6 +134,77 @@
       height: auto;
       display: block;
     }
+
+    #social-browser-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+      background: rgba(16, 24, 40, 0.72);
+      backdrop-filter: blur(4px);
+    }
+
+    #social-browser-overlay[data-visible="true"] {
+      display: flex;
+    }
+
+    #social-browser-overlay__card {
+      width: min(100%, 420px);
+      background: #FFFFFF;
+      border-radius: 24px;
+      padding: 24px;
+      box-sizing: border-box;
+      box-shadow: 0 24px 64px rgba(16, 24, 40, 0.20);
+      font-family: Arial, sans-serif;
+      color: #101828;
+    }
+
+    #social-browser-overlay__title {
+      margin: 0;
+      color: #2F3DBF;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    #social-browser-overlay__message {
+      margin: 12px 0 0;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    #social-browser-overlay__actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .social-browser-overlay__button {
+      appearance: none;
+      border: 0;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.15;
+      cursor: pointer;
+    }
+
+    .social-browser-overlay__button--primary {
+      background: #2F3DBF;
+      color: #FFFFFF;
+    }
+
+    .social-browser-overlay__button--secondary {
+      background: #F2F4F7;
+      color: #344054;
+    }
   </style>
 </head>
 <body>
@@ -151,6 +222,30 @@
       </div>
     </div>
   </div>
+  <div id="social-browser-overlay" aria-hidden="true">
+    <div id="social-browser-overlay__card" role="dialog" aria-modal="true" aria-labelledby="social-browser-overlay__title">
+      <h1 id="social-browser-overlay__title">Open In Chrome</h1>
+      <p id="social-browser-overlay__message">
+        This social browser may not fully support Andrew's Supermarket. Open this page in Chrome for the best experience.
+      </p>
+      <div id="social-browser-overlay__actions">
+        <button
+          id="social-browser-open-chrome"
+          class="social-browser-overlay__button social-browser-overlay__button--primary"
+          type="button"
+        >
+          Open in Chrome
+        </button>
+        <button
+          id="social-browser-continue"
+          class="social-browser-overlay__button social-browser-overlay__button--secondary"
+          type="button"
+        >
+          Continue Here
+        </button>
+      </div>
+    </div>
+  </div>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
@@ -162,10 +257,67 @@
   <script src="flutter_bootstrap.js" async></script>
   <script>
     (function () {
+      const userAgent = navigator.userAgent || '';
+      const socialBrowserPattern =
+        /FBAN|FBAV|FB_IAB|Messenger|Instagram|Line|MicroMessenger|WeChat|Twitter|Telegram|Viber|Snapchat|LinkedInApp|Pinterest|wv\)|; wv|TikTok/i;
+      const isSocialInAppBrowser = socialBrowserPattern.test(userAgent);
       const splashThemeColor = '#2F3DBF';
       const adminThemeColor = '#2F3DBF';
       const clientThemeColor = '#FFFFFF';
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+      const socialOverlay = document.getElementById('social-browser-overlay');
+      const openChromeButton = document.getElementById('social-browser-open-chrome');
+      const continueButton = document.getElementById('social-browser-continue');
+
+      function currentAbsoluteUrl() {
+        return window.location.origin +
+          window.location.pathname +
+          window.location.search +
+          window.location.hash;
+      }
+
+      function hideSocialOverlay() {
+        if (!socialOverlay) {
+          return;
+        }
+        socialOverlay.setAttribute('aria-hidden', 'true');
+        socialOverlay.dataset.visible = 'false';
+      }
+
+      function showSocialOverlay() {
+        if (!socialOverlay) {
+          return;
+        }
+        socialOverlay.setAttribute('aria-hidden', 'false');
+        socialOverlay.dataset.visible = 'true';
+      }
+
+      function openInChrome() {
+        const targetUrl = currentAbsoluteUrl();
+        const isAndroid = /Android/i.test(userAgent);
+        const isIos = /iPhone|iPad|iPod/i.test(userAgent);
+
+        if (isAndroid) {
+          const intentUrl =
+            'intent://' +
+            targetUrl.replace(/^https?:\/\//i, '') +
+            '#Intent;scheme=https;package=com.android.chrome;end';
+          window.location.href = intentUrl;
+          return;
+        }
+
+        if (isIos) {
+          const chromeUrl = targetUrl.replace(/^http:\/\//i, 'googlechrome://')
+            .replace(/^https:\/\//i, 'googlechromes://');
+          window.location.href = chromeUrl;
+          window.setTimeout(() => {
+            window.location.href = targetUrl;
+          }, 900);
+          return;
+        }
+
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      }
 
       function isSplashVisible() {
         return Boolean(document.getElementById('app-startup-splash'));
@@ -201,6 +353,16 @@
       };
 
       window.addEventListener('popstate', syncThemeColor);
+      if (isSocialInAppBrowser) {
+        showSocialOverlay();
+        window.__socialInAppBrowserDetected = true;
+      }
+      if (openChromeButton) {
+        openChromeButton.addEventListener('click', openInChrome);
+      }
+      if (continueButton) {
+        continueButton.addEventListener('click', hideSocialOverlay);
+      }
       syncThemeColor();
     })();
   </script>

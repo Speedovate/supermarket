@@ -38,6 +38,9 @@ _flutter.buildConfig = {"engineRevision":"59aa584fdf100e6c78c785d8a5b565d1de4b48
 
 const splash = document.getElementById('app-startup-splash');
 let splashRemoved = false;
+const userAgent = navigator.userAgent || "";
+const isMetaInAppBrowser =
+  /FBAN|FBAV|FB_IAB|Messenger|Instagram|Line|MicroMessenger|WeChat|Twitter|Telegram|Viber|Snapchat|LinkedInApp|Pinterest|wv\)|; wv|TikTok/i.test(userAgent);
 
 function removeSplashWhenFirstFrameIsLikelyReady() {
   if (!splash || splashRemoved) {
@@ -66,6 +69,7 @@ function removeSplashWhenFirstFrameIsLikelyReady() {
 _flutter.loader.load({
   config: {
     canvasKitBaseUrl: "canvaskit",
+    renderer: isMetaInAppBrowser ? "canvaskit" : undefined,
   },
   onEntrypointLoaded: async function(engineInitializer) {
     const fallbackRemovalTimer = window.setTimeout(
