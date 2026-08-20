@@ -192,7 +192,6 @@
     #social-browser-gate__actions {
       display: flex;
       flex-direction: column;
-      gap: 12px;
       margin-top: 24px;
     }
 
@@ -264,13 +263,6 @@
           type="button"
         >
           Open In Chrome
-        </button>
-        <button
-          id="social-browser-gate__continue"
-          class="social-browser-gate__button social-browser-gate__button--secondary"
-          type="button"
-        >
-          Continue Here
         </button>
       </div>
       <p id="social-browser-gate__hint">
@@ -360,18 +352,10 @@
 
       window.addEventListener('DOMContentLoaded', function () {
         const openButton = document.getElementById('social-browser-gate__open');
-        const continueButton = document.getElementById('social-browser-gate__continue');
 
         if (openButton) {
           openButton.addEventListener('click', function () {
             window.location.href = getChromeOpenUrl();
-          });
-        }
-
-        if (continueButton) {
-          continueButton.addEventListener('click', function () {
-            document.documentElement.removeAttribute('data-social-inapp');
-            startFlutterApp();
           });
         }
 
