@@ -135,79 +135,96 @@
       display: block;
     }
 
-    #social-browser-overlay {
+    #social-browser-gate {
       position: fixed;
       inset: 0;
-      z-index: 10000;
       display: none;
       align-items: center;
       justify-content: center;
       padding: 24px;
       box-sizing: border-box;
-      background: rgba(16, 24, 40, 0.72);
-      backdrop-filter: blur(4px);
+      background: #2F3DBF;
+      z-index: 10000;
     }
 
-    #social-browser-overlay[data-visible="true"] {
+    html[data-social-inapp="true"] #social-browser-gate {
       display: flex;
     }
 
-    #social-browser-overlay__card {
+    html[data-social-inapp="true"] #app-startup-splash {
+      display: none;
+    }
+
+    #social-browser-gate__card {
       width: min(100%, 420px);
-      background: #FFFFFF;
-      border-radius: 24px;
-      padding: 24px;
+      padding: 28px 24px;
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 28px 80px rgba(16, 24, 40, 0.24);
       box-sizing: border-box;
-      box-shadow: 0 24px 64px rgba(16, 24, 40, 0.20);
-      font-family: Arial, sans-serif;
-      color: #101828;
       text-align: center;
     }
 
-    #social-browser-overlay__title {
-      margin: 0;
+    #social-browser-gate__logo {
+      width: min(180px, 52vw);
+      height: auto;
+      display: block;
+      margin: 0 auto 24px;
+    }
+
+    #social-browser-gate__title {
+      margin: 0 0 12px;
       color: #2F3DBF;
-      font-size: 20px;
-      font-weight: 700;
-      line-height: 1.15;
+      font: 700 30px/1.05 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
 
-    #social-browser-overlay__message {
-      margin: 12px 0 0;
-      font-size: 14px;
-      line-height: 1.4;
+    #social-browser-gate__body {
+      margin: 0;
+      color: rgba(16, 24, 40, 0.88);
+      font: 500 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    #social-browser-overlay__actions {
+    #social-browser-gate__actions {
       display: flex;
       flex-direction: column;
-      align-items: center;
       gap: 12px;
-      margin-top: 20px;
+      margin-top: 24px;
     }
 
-    .social-browser-overlay__button {
-      appearance: none;
-      border: 0;
-      border-radius: 16px;
-      min-height: 50px;
-      padding: 12px 16px;
-      font-size: 14px;
-      font-weight: 700;
-      line-height: 1.15;
+    .social-browser-gate__button {
       cursor: pointer;
       width: 100%;
-      max-width: 260px;
+      border: 0;
+      border-radius: 999px;
+      padding: 15px 18px;
+      font: 700 16px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: transform 160ms ease, opacity 160ms ease, background 160ms ease;
     }
 
-    .social-browser-overlay__button--primary {
+    .social-browser-gate__button:hover {
+      transform: translateY(-1px);
+    }
+
+    .social-browser-gate__button--primary {
       background: #2F3DBF;
       color: #FFFFFF;
     }
 
-    .social-browser-overlay__button--secondary {
-      background: #F2F4F7;
-      color: #344054;
+    .social-browser-gate__button--secondary {
+      background: transparent;
+      color: #2F3DBF;
+      border: 1px solid rgba(47, 61, 191, 0.24);
+    }
+
+    #social-browser-gate__hint {
+      margin: 16px 0 0;
+      color: rgba(52, 64, 84, 0.72);
+      font: 500 12px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
   </style>
 </head>
@@ -226,30 +243,37 @@
       </div>
     </div>
   </div>
-  <div id="social-browser-overlay" aria-hidden="true">
-    <div id="social-browser-overlay__card" role="dialog" aria-modal="true" aria-labelledby="social-browser-overlay__title">
-      <h1 id="social-browser-overlay__title">Open In Chrome</h1>
-      <p id="social-browser-overlay__message">
-        This website may not render correctly inside social media browsers. Open it in Chrome for the best experience.
+  <div id="social-browser-gate" aria-modal="true" role="dialog" aria-labelledby="social-browser-gate__title">
+    <div id="social-browser-gate__card">
+      <img
+        id="social-browser-gate__logo"
+        src="assets/assets/branding/as_logo_lite.png"
+        alt="Andrew's Supermarket"
+      >
+      <h1 id="social-browser-gate__title">Open In Chrome</h1>
+      <p id="social-browser-gate__body">
+        This website may not render correctly inside social media browsers.
+        Open it in Chrome for the best experience.
       </p>
-      <div id="social-browser-overlay__actions">
+      <div id="social-browser-gate__actions">
         <button
-          id="social-browser-open-chrome"
-          class="social-browser-overlay__button social-browser-overlay__button--primary"
+          id="social-browser-gate__open"
+          class="social-browser-gate__button social-browser-gate__button--primary"
           type="button"
         >
-          Open in Chrome
+          Open In Chrome
         </button>
         <button
-          id="social-browser-continue"
-          class="social-browser-overlay__button social-browser-overlay__button--secondary"
+          id="social-browser-gate__continue"
+          class="social-browser-gate__button social-browser-gate__button--secondary"
           type="button"
         >
           Continue Here
         </button>
       </div>
-      <p id="social-browser-overlay__message">
-        If Chrome does not open automatically, tap your browser menu and choose “Open in browser”.
+      <p id="social-browser-gate__hint">
+        If Chrome does not open automatically, tap your browser menu and choose
+        “Open in browser”.
       </p>
     </div>
   </div>
@@ -263,68 +287,38 @@
   -->
   <script src="flutter_bootstrap.js" async></script>
   <script>
+    function getChromeOpenUrl() {
+      const href = window.location.href;
+      const isAndroid = /Android/i.test(navigator.userAgent || '');
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+
+      if (isAndroid) {
+        const cleanUrl = href.replace(/^https?:\/\//, '');
+        return 'intent://' + cleanUrl + '#Intent;scheme=https;package=com.android.chrome;end';
+      }
+
+      if (isIOS) {
+        return href.replace(/^https:\/\//, 'googlechromes://').replace(/^http:\/\//, 'googlechrome://');
+      }
+
+      return href;
+    }
+
+    async function startFlutterApp() {
+      if (!window.__ANDREWS_START_FLUTTER__) {
+        window.setTimeout(startFlutterApp, 120);
+        return;
+      }
+
+      await window.__ANDREWS_START_FLUTTER__();
+    }
+
     (function () {
-      const userAgent = navigator.userAgent || '';
-      const socialBrowserPattern =
-        /FBAN|FBAV|FB_IAB|Messenger|Instagram|Line|MicroMessenger|WeChat|Twitter|Telegram|Viber|Snapchat|LinkedInApp|Pinterest|wv\)|; wv|TikTok/i;
-      const isSocialInAppBrowser = socialBrowserPattern.test(userAgent);
+      const isSocialInAppBrowser = window.__ANDREWS_SOCIAL_INAPP__ === true;
       const splashThemeColor = '#2F3DBF';
       const adminThemeColor = '#2F3DBF';
       const clientThemeColor = '#FFFFFF';
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
-      const socialOverlay = document.getElementById('social-browser-overlay');
-      const openChromeButton = document.getElementById('social-browser-open-chrome');
-      const continueButton = document.getElementById('social-browser-continue');
-
-      function currentAbsoluteUrl() {
-        return window.location.origin +
-          window.location.pathname +
-          window.location.search +
-          window.location.hash;
-      }
-
-      function hideSocialOverlay() {
-        if (!socialOverlay) {
-          return;
-        }
-        socialOverlay.setAttribute('aria-hidden', 'true');
-        socialOverlay.dataset.visible = 'false';
-      }
-
-      function showSocialOverlay() {
-        if (!socialOverlay) {
-          return;
-        }
-        socialOverlay.setAttribute('aria-hidden', 'false');
-        socialOverlay.dataset.visible = 'true';
-      }
-
-      function openInChrome() {
-        const targetUrl = currentAbsoluteUrl();
-        const isAndroid = /Android/i.test(userAgent);
-        const isIos = /iPhone|iPad|iPod/i.test(userAgent);
-
-        if (isAndroid) {
-          const intentUrl =
-            'intent://' +
-            targetUrl.replace(/^https?:\/\//i, '') +
-            '#Intent;scheme=https;package=com.android.chrome;end';
-          window.location.href = intentUrl;
-          return;
-        }
-
-        if (isIos) {
-          const chromeUrl = targetUrl.replace(/^http:\/\//i, 'googlechrome://')
-            .replace(/^https:\/\//i, 'googlechromes://');
-          window.location.href = chromeUrl;
-          window.setTimeout(() => {
-            window.location.href = targetUrl;
-          }, 900);
-          return;
-        }
-
-        window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      }
 
       function isSplashVisible() {
         return Boolean(document.getElementById('app-startup-splash'));
@@ -360,17 +354,29 @@
       };
 
       window.addEventListener('popstate', syncThemeColor);
-      if (isSocialInAppBrowser) {
-        showSocialOverlay();
-        window.__socialInAppBrowserDetected = true;
-      }
-      if (openChromeButton) {
-        openChromeButton.addEventListener('click', openInChrome);
-      }
-      if (continueButton) {
-        continueButton.addEventListener('click', hideSocialOverlay);
-      }
       syncThemeColor();
+
+      window.addEventListener('DOMContentLoaded', function () {
+        const openButton = document.getElementById('social-browser-gate__open');
+        const continueButton = document.getElementById('social-browser-gate__continue');
+
+        if (openButton) {
+          openButton.addEventListener('click', function () {
+            window.location.href = getChromeOpenUrl();
+          });
+        }
+
+        if (continueButton) {
+          continueButton.addEventListener('click', function () {
+            document.documentElement.removeAttribute('data-social-inapp');
+            startFlutterApp();
+          });
+        }
+
+        if (!isSocialInAppBrowser) {
+          return;
+        }
+      });
     })();
   </script>
 </body>
