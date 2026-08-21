@@ -987,7 +987,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
               Text(order.name, style: bodyStyle),
               const SizedBox(height: 10),
               Text('Phone', style: labelStyle),
-              Text(order.phone, style: bodyStyle),
+              PhoneActionText(order.phone, style: bodyStyle),
               const SizedBox(height: 10),
               Text('Method', style: labelStyle),
               Text(displayFulfillment(order.method), style: bodyStyle),
@@ -1522,7 +1522,7 @@ class _OrderRow extends StatelessWidget {
             SizedBox(width: widths.gap),
             SizedBox(
               width: widths.phone,
-              child: Text(
+              child: PhoneActionText(
                 order.phone,
                 style: bodyStyle,
                 maxLines: 1,

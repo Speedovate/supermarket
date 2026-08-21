@@ -425,7 +425,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
               Text(order.name, style: bodyStyle),
               const SizedBox(height: 10),
               Text('Phone', style: labelStyle),
-              Text(order.phone, style: bodyStyle),
+              PhoneActionText(order.phone, style: bodyStyle),
               const SizedBox(height: 10),
               Text('Method', style: labelStyle),
               Text(displayFulfillment(order.method), style: bodyStyle),
@@ -1385,8 +1385,8 @@ class _OrderClientIdentity extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  order.phone.trim().isEmpty ? '-' : order.phone.trim(),
+                PhoneActionText(
+                  order.phone,
                   style: subtitleStyle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
 import '../models/app_models.dart';
 import '../utils/formatters.dart';
+import '../utils/open_external_url.dart';
 
 const _snackbarSuccessColor = Color(0xFF2E7D32);
 const _snackbarErrorColor = Color(0xFFE31E24);
@@ -38,6 +39,69 @@ SnackBar errorSnackBar(String message) {
       ),
     ),
   );
+}
+
+class PhoneActionText extends StatelessWidget {
+  const PhoneActionText(
+    this.phone, {
+    super.key,
+    this.style,
+    this.maxLines,
+    this.overflow,
+    this.textAlign,
+    this.emptyFallback = '-',
+  });
+
+  final String phone;
+  final TextStyle? style;
+  final int? maxLines;
+  final TextOverflow? overflow;
+  final TextAlign? textAlign;
+  final String emptyFallback;
+
+  Future<void> _copyPhone(BuildContext context, String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!context.mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(successSnackBar('Phone number copied.'));
+  }
+
+  Future<void> _callPhone(BuildContext context, String value) async {
+    final opened = await openExternalUrl('tel:$value');
+    if (opened || !context.mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(errorSnackBar('Unable to open phone dialer.'));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = phone.trim();
+    final label = trimmed.isEmpty ? emptyFallback : trimmed;
+    final textWidget = Text(
+      label,
+      style: style,
+      maxLines: maxLines,
+      overflow: overflow,
+      textAlign: textAlign,
+    );
+
+    if (trimmed.isEmpty) {
+      return textWidget;
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _callPhone(context, trimmed),
+      onLongPress: () => _copyPhone(context, trimmed),
+      child: textWidget,
+    );
+  }
 }
 
 class MousePressable extends StatefulWidget {
