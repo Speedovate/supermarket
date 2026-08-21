@@ -79,6 +79,48 @@ class PhoneActionText extends StatelessWidget {
     messenger.showSnackBar(errorSnackBar('Unable to open phone dialer.'));
   }
 
+  Future<void> _showOptions(BuildContext context, String value) async {
+    final overlay = Overlay.of(context).context.findRenderObject();
+    final renderObject = context.findRenderObject();
+    if (overlay is! RenderBox || renderObject is! RenderBox) {
+      return;
+    }
+    final topLeft = renderObject.localToGlobal(Offset.zero, ancestor: overlay);
+    final bottomRight = renderObject.localToGlobal(
+      renderObject.size.bottomRight(Offset.zero),
+      ancestor: overlay,
+    );
+    final result = await showMenu<String>(
+      context: context,
+      color: Colors.white,
+      surfaceTintColor: Colors.white,
+      menuPadding: EdgeInsets.zero,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(topLeft, bottomRight),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem<String>(
+          value: 'copy',
+          child: Text('Copy', style: TextStyle(height: 1.15)),
+        ),
+        PopupMenuItem<String>(
+          value: 'call',
+          child: Text('Call', style: TextStyle(height: 1.15)),
+        ),
+      ],
+    );
+    if (!context.mounted || result == null) {
+      return;
+    }
+    switch (result) {
+      case 'copy':
+        await _copyPhone(context, value);
+      case 'call':
+        await _callPhone(context, value);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final trimmed = phone.trim();
@@ -97,8 +139,7 @@ class PhoneActionText extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _callPhone(context, trimmed),
-      onLongPress: () => _copyPhone(context, trimmed),
+      onTap: () => _showOptions(context, trimmed),
       child: textWidget,
     );
   }
