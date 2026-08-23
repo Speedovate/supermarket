@@ -67,7 +67,17 @@ class _AndrewsSupermarketAppState
       ),
       routerConfig: router,
       builder: (context, child) {
-        return SelectionArea(child: child ?? const SizedBox.shrink());
+        final appChild = child ?? const SizedBox.shrink();
+
+        // Keep the app globally selectable on web without mounting
+        // SelectionArea above MaterialApp's internal Overlay.
+        return Overlay(
+          initialEntries: [
+            OverlayEntry(
+              builder: (context) => SelectionArea(child: appChild),
+            ),
+          ],
+        );
       },
     );
   }
