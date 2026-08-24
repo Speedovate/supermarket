@@ -155,7 +155,7 @@ String formatCutoffTimeFromMinutes(int minutes) {
 }
 
 String formatBarangayCutoffSchedule(Barangay barangay) {
-  return 'Cutoff on ${displayWeekday(barangay.cutoffWeekday, plural: true)} ${formatCutoffTimeFromMinutes(barangay.cutoffMinutes)}';
+  return 'Cutoff on ${displayWeekday(barangay.cutoffWeekday, plural: true)} ${formatCutoffTimeFromMinutes(barangay.cutoffMinutes)}.';
 }
 
 String formatBarangayCutoffValue(Barangay barangay) {

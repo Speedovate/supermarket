@@ -791,52 +791,56 @@ class _NavList extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.fromLTRB(
-                headerHorizontal,
-                headerTop,
-                headerHorizontal,
-                headerBottom,
-              ),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1538DD),
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.black.withValues(alpha: 0.12),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onLongPress: () => context.go('/'),
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.fromLTRB(
+                  headerHorizontal,
+                  headerTop,
+                  headerHorizontal,
+                  headerBottom,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1538DD),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.black.withValues(alpha: 0.12),
+                    ),
                   ),
                 ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.only(
-                      right: logoOffsetRight,
-                      bottom: logoBottom,
-                    ),
-                    child: Center(
-                      child: Image(
-                        image: const AssetImage(
-                          'assets/branding/as_logo_lite.png',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.only(
+                        right: logoOffsetRight,
+                        bottom: logoBottom,
+                      ),
+                      child: Center(
+                        child: Image(
+                          image: const AssetImage(
+                            'assets/branding/as_logo_lite.png',
+                          ),
+                          width: logoSize,
+                          height: logoSize,
+                          fit: BoxFit.contain,
                         ),
-                        width: logoSize,
-                        height: logoSize,
-                        fit: BoxFit.contain,
                       ),
                     ),
-                  ),
-                  Text(
-                    "Andrew's Supermarket",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: brandFontSize,
-                      height: 1.15,
+                    Text(
+                      "Andrew's Supermarket",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: brandFontSize,
+                        height: 1.15,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             SizedBox(height: navTopGap),

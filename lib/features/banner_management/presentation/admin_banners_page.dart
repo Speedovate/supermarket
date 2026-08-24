@@ -29,6 +29,8 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
       _filtersMenuWidth - (_filtersContentHorizontalPadding * 2);
 
   final TextEditingController _queryController = TextEditingController();
+  final GlobalKey _mobileFiltersAnchorKey = GlobalKey();
+  final GlobalKey _desktopFiltersAnchorKey = GlobalKey();
   String query = '';
   DateTime? createdAtFilter;
   DateTime? updatedAtFilter;
@@ -134,7 +136,7 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
 
     final widths = _computeBannerColumnWidths(
       screenWidth: screenWidth,
-      banners: filteredBanners,
+      banners: banners,
       headerStyle: headerStyle,
       bodyStyle: bodyStyle,
     );
@@ -157,16 +159,26 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                           child: TextField(
                             controller: _queryController,
                             onChanged: (value) => _setFilters(() => query = value),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Search',
-                              hintStyle: TextStyle(
+                              hintStyle: const TextStyle(
                                 color: AppColors.logoBlue,
                                 height: 1.15,
                               ),
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.search,
                                 color: AppColors.logoBlue,
                               ),
+                              suffixIcon: query.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear search',
+                                      onPressed: () {
+                                        _queryController.clear();
+                                        _setFilters(() => query = '');
+                                      },
+                                      icon: const Icon(Icons.close),
+                                    ),
                             ),
                           ),
                         ),
@@ -189,7 +201,11 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                             ),
                           ),
                           menuChildren: [
-                            _buildFiltersMenu(context: context, banners: banners),
+                            _buildFiltersMenu(
+                              context: context,
+                              anchorKey: _mobileFiltersAnchorKey,
+                              banners: banners,
+                            ),
                           ],
                           builder: (context, controller, child) {
                             return MousePressable(
@@ -202,6 +218,7 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                               },
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
+                                key: _mobileFiltersAnchorKey,
                                 width: toolbarActionSize,
                                 height: toolbarActionSize,
                                 decoration: BoxDecoration(
@@ -229,16 +246,26 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                           child: TextField(
                             controller: _queryController,
                             onChanged: (value) => _setFilters(() => query = value),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Search',
-                              hintStyle: TextStyle(
+                              hintStyle: const TextStyle(
                                 color: AppColors.logoBlue,
                                 height: 1.15,
                               ),
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.search,
                                 color: AppColors.logoBlue,
                               ),
+                              suffixIcon: query.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear search',
+                                      onPressed: () {
+                                        _queryController.clear();
+                                        _setFilters(() => query = '');
+                                      },
+                                      icon: const Icon(Icons.close),
+                                    ),
                             ),
                           ),
                         ),
@@ -260,7 +287,11 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                             ),
                           ),
                           menuChildren: [
-                            _buildFiltersMenu(context: context, banners: banners),
+                            _buildFiltersMenu(
+                              context: context,
+                              anchorKey: _desktopFiltersAnchorKey,
+                              banners: banners,
+                            ),
                           ],
                           builder: (context, controller, child) {
                             return MousePressable(
@@ -273,6 +304,7 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                               },
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
+                                key: _desktopFiltersAnchorKey,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 18,
                                   vertical: 14,
@@ -602,20 +634,19 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
   InputDecoration _filterDropdownDecoration(String hintText) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(height: 1.15),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      hintStyle: const TextStyle(color: AppColors.logoBlue, height: 1.15),
+      contentPadding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
       filled: true,
-      fillColor: const Color(0xFFF7F9FF),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFC7D7FE)),
-      ),
+      fillColor: AppColors.logoBlueSoft,
+      isDense: true,
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFC7D7FE)),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: AppColors.logoBlue.withValues(alpha: 0.16),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: AppColors.logoBlue),
       ),
     );
@@ -623,9 +654,10 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
 
   Widget _buildFiltersMenu({
     required BuildContext context,
+    required GlobalKey anchorKey,
     required List<AppBanner> banners,
   }) {
-    return SizedBox(
+    final menuContent = SizedBox(
       width: _filtersMenuWidth,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -635,21 +667,15 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
             title: 'Status',
             child: SizedBox(
               width: _filtersFieldWidth,
-              child: DropdownButtonFormField<String?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: statusFilter,
+              child: AppPopupMenuField<String>(
+                value: statusFilter,
                 decoration: _filterDropdownDecoration('Status'),
-                items: const [
-                  DropdownMenuItem<String?>(value: null, child: Text('Any')),
-                  DropdownMenuItem<String?>(value: 'active', child: Text('Active')),
-                  DropdownMenuItem<String?>(
+                options: const [
+                  AppPopupMenuOption<String?>(value: null, label: 'Any'),
+                  AppPopupMenuOption<String?>(value: 'active', label: 'Active'),
+                  AppPopupMenuOption<String?>(
                     value: 'inactive',
-                    child: Text('Inactive'),
+                    label: 'Inactive',
                   ),
                 ],
                 onChanged: (value) {
@@ -762,6 +788,33 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
           ),
         ],
       ),
+    );
+    final anchorContext = anchorKey.currentContext;
+    final overlayBox =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final anchorBox = anchorContext?.findRenderObject() as RenderBox?;
+    if (overlayBox == null ||
+        anchorBox == null ||
+        !overlayBox.hasSize ||
+        !anchorBox.hasSize) {
+      return menuContent;
+    }
+    final anchorTopLeft = anchorBox.localToGlobal(
+      Offset.zero,
+      ancestor: overlayBox,
+    );
+    final anchorBottom = anchorTopLeft.dy + anchorBox.size.height;
+    final maxMenuHeight = math.max(
+      0.0,
+      overlayBox.size.height - anchorBottom - 28,
+    );
+    if (maxMenuHeight <= 0) {
+      return menuContent;
+    }
+    return SizedBox(
+      width: _filtersMenuWidth,
+      height: maxMenuHeight,
+      child: SingleChildScrollView(child: menuContent),
     );
   }
 
@@ -1070,13 +1123,12 @@ class _DateField extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: const Color(0xFF1D2939),
-                  fontSize: isPlaceholder ? 16.5 : 16,
+                  fontSize: isPlaceholder ? 14 : 15.5,
                   height: 1.15,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(icon, color: AppColors.logoBlue, size: 22),
+            Icon(icon, color: AppColors.logoBlue, size: 18),
           ],
         ),
       ),
@@ -1119,22 +1171,12 @@ class _BannerHeaderRow extends StatelessWidget {
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.createdAt,
-          child: Text(
-            'Created at',
-            style: labelStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Text('Created at', style: labelStyle),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.updatedAt,
-          child: Text(
-            'Updated at',
-            style: labelStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Text('Updated at', style: labelStyle),
         ),
         SizedBox(width: widths.gap),
         if (trailingSpace > 0) SizedBox(width: trailingSpace),
@@ -1142,13 +1184,7 @@ class _BannerHeaderRow extends StatelessWidget {
           width: _AdminBannersPageState._actionsWidth,
           child: Align(
             alignment: Alignment.centerRight,
-            child: Text(
-              'Actions',
-              style: labelStyle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-            ),
+            child: Text('Actions', style: labelStyle, textAlign: TextAlign.right),
           ),
         ),
       ],

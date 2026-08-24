@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -316,11 +317,148 @@ class _MousePressableState extends State<MousePressable> {
         onPointerMove: _handlePointerMove,
         onPointerUp: _handlePointerUp,
         onPointerCancel: _handlePointerCancel,
-        child: kIsWeb ? child : GestureDetector(
-          behavior: widget.behavior,
-          onTap: widget.enabled ? widget.onTap : null,
-          child: child,
-        ),
+        child: kIsWeb
+            ? child
+            : GestureDetector(
+                behavior: widget.behavior,
+                onTap: widget.enabled ? widget.onTap : null,
+                child: child,
+              ),
+      ),
+    );
+  }
+}
+
+class AppPopupMenuOption<T> {
+  const AppPopupMenuOption({required this.value, required this.label});
+
+  final T value;
+  final String label;
+}
+
+class AppPopupMenuField<T> extends StatelessWidget {
+  const AppPopupMenuField({
+    super.key,
+    required this.value,
+    required this.options,
+    required this.decoration,
+    required this.onChanged,
+  });
+
+  final T? value;
+  final List<AppPopupMenuOption<T?>> options;
+  final InputDecoration decoration;
+  final ValueChanged<T?> onChanged;
+
+  ThemeData _interactiveMenuTheme(BuildContext context) {
+    return Theme.of(context).copyWith(
+      focusColor: Colors.transparent,
+      hoverColor: Colors.black.withValues(
+        alpha: AppColors.neutralHoverOverlayAlpha,
+      ),
+      highlightColor: Colors.black.withValues(
+        alpha: AppColors.neutralPressedOverlayAlpha,
+      ),
+      splashColor: Colors.transparent,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    AppPopupMenuOption<T?>? selectedOption;
+    for (final option in options) {
+      if (option.value == value) {
+        selectedOption = option;
+        break;
+      }
+    }
+    final displayLabel = selectedOption?.label ?? decoration.hintText ?? '';
+    final isEmpty = selectedOption == null;
+    final bodyStyle =
+        Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.15) ??
+        const TextStyle(fontSize: 14, height: 1.15);
+    final hintStyle =
+        decoration.hintStyle?.copyWith(height: 1.15) ??
+        bodyStyle.copyWith(color: const Color(0xFF98A2B3));
+
+    return Theme(
+      data: _interactiveMenuTheme(context),
+      child: Builder(
+        builder: (themedContext) {
+          return MousePressable(
+            onTap: () async {
+              final fieldBox = themedContext.findRenderObject() as RenderBox?;
+              final overlayBox =
+                  Overlay.of(themedContext).context.findRenderObject()
+                      as RenderBox?;
+              if (fieldBox == null || overlayBox == null) {
+                return;
+              }
+              final menuWidth = math.max(0.0, fieldBox.size.width);
+              final result = await showMenu<T?>(
+                context: themedContext,
+                color: Colors.white,
+                surfaceTintColor: Colors.white,
+                constraints: BoxConstraints.tightFor(width: menuWidth),
+                menuPadding: EdgeInsets.zero,
+                position: RelativeRect.fromRect(
+                  Rect.fromPoints(
+                    fieldBox.localToGlobal(Offset.zero, ancestor: overlayBox),
+                    fieldBox.localToGlobal(
+                      fieldBox.size.bottomRight(Offset.zero),
+                      ancestor: overlayBox,
+                    ),
+                  ),
+                  Offset.zero & overlayBox.size,
+                ),
+                items: [
+                  for (final option in options)
+                    PopupMenuItem<T?>(
+                      value: option.value,
+                      padding: EdgeInsets.zero,
+                      mouseCursor: SystemMouseCursors.click,
+                      child: SizedBox(
+                        width: menuWidth,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Text(
+                            option.label,
+                            style: const TextStyle(height: 1.15),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+              if (result != null ||
+                  options.any((option) => option.value == null)) {
+                onChanged(result);
+              }
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: InputDecorator(
+              isEmpty: isEmpty,
+              decoration: decoration.copyWith(
+                labelText: null,
+                floatingLabelBehavior: FloatingLabelBehavior.never,
+                suffixIcon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: AppColors.logoBlue,
+                  size: 24,
+                ),
+              ),
+              child: Text(
+                displayLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: isEmpty ? hintStyle : bodyStyle,
+              ),
+            ),
+          );
+        },
       ),
     );
   }

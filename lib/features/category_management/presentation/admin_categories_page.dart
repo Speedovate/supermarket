@@ -40,6 +40,8 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
       _filtersMenuWidth - (_filtersContentHorizontalPadding * 2);
 
   final TextEditingController _queryController = TextEditingController();
+  final GlobalKey _mobileFiltersAnchorKey = GlobalKey();
+  final GlobalKey _desktopFiltersAnchorKey = GlobalKey();
   String query = '';
   DateTime? createdAtFilter;
   DateTime? updatedAtFilter;
@@ -66,8 +68,12 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
         selection: TextSelection.collapsed(offset: query.length),
       );
     }
-    createdAtFilter = _parseRouteDate(uri.queryParameters['filters[created_at]']);
-    updatedAtFilter = _parseRouteDate(uri.queryParameters['filters[updated_at]']);
+    createdAtFilter = _parseRouteDate(
+      uri.queryParameters['filters[created_at]'],
+    );
+    updatedAtFilter = _parseRouteDate(
+      uri.queryParameters['filters[updated_at]'],
+    );
     statusFilter = _normalizeNullable(uri.queryParameters['filters[status]']);
   }
 
@@ -138,26 +144,10 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
           '${category.id}'.contains(normalizedQuery);
       final matchesCreatedAt =
           createdAtFilter == null ||
-          !_startOfDay(
-                category.createdAt,
-              ).isAtSameMomentAs(_startOfDay(createdAtFilter!)) &&
-              !_endOfDay(
-                category.createdAt,
-              ).isBefore(_startOfDay(createdAtFilter!)) &&
-              !_startOfDay(
-                category.createdAt,
-              ).isAfter(_endOfDay(createdAtFilter!));
+          _isSameDay(category.createdAt, createdAtFilter!);
       final matchesUpdatedAt =
           updatedAtFilter == null ||
-          !_startOfDay(
-                category.updatedAt,
-              ).isAtSameMomentAs(_startOfDay(updatedAtFilter!)) &&
-              !_endOfDay(
-                category.updatedAt,
-              ).isBefore(_startOfDay(updatedAtFilter!)) &&
-              !_startOfDay(
-                category.updatedAt,
-              ).isAfter(_endOfDay(updatedAtFilter!));
+          _isSameDay(category.updatedAt, updatedAtFilter!);
       final matchesStatus = switch (statusFilter) {
         'active' => category.isActive,
         'inactive' => !category.isActive,
@@ -170,7 +160,7 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
     }).toList()..sort((a, b) => b.id.compareTo(a.id));
     final columnWidths = _computeCategoryColumnWidths(
       screenWidth: screenWidth,
-      categories: categories,
+      categories: allCategories,
       assignedCounts: assignedCounts,
       gap: categoryColumnGap,
       headerTextStyle: headerTextStyle,
@@ -218,15 +208,25 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                 controller: _queryController,
                                 onChanged: (value) =>
                                     _setFilters(() => query = value),
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
                                   hintText: 'Search',
-                                  hintStyle: TextStyle(
+                                  hintStyle: const TextStyle(
                                     color: AppColors.logoBlue,
                                   ),
-                                  prefixIcon: Icon(
+                                  prefixIcon: const Icon(
                                     Icons.search,
                                     color: AppColors.logoBlue,
                                   ),
+                                  suffixIcon: query.trim().isEmpty
+                                      ? null
+                                      : IconButton(
+                                          tooltip: 'Clear search',
+                                          onPressed: () {
+                                            _queryController.clear();
+                                            _setFilters(() => query = '');
+                                          },
+                                          icon: const Icon(Icons.close),
+                                        ),
                                 ),
                               ),
                             ),
@@ -251,9 +251,12 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                 ),
                               ),
                               menuChildren: [
-                                SizedBox(
-                                  width: _filtersMenuWidth,
-                                  child: Column(
+                                _buildAnchoredFiltersMenu(
+                                  context: context,
+                                  anchorKey: _mobileFiltersAnchorKey,
+                                  child: SizedBox(
+                                    width: _filtersMenuWidth,
+                                    child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
@@ -282,416 +285,28 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                               alignment: Alignment.centerLeft,
                                               child: SizedBox(
                                                 width: _filtersFieldWidth,
-                                                child: DropdownButtonFormField<String?>(
-                                                  isExpanded: true,
-                                                  icon: const Icon(
-                                                    Icons
-                                                        .keyboard_arrow_down_rounded,
-                                                    color: AppColors.logoBlue,
-                                                    size: 24,
-                                                  ),
-                                                  initialValue: statusFilter,
+                                                child: AppPopupMenuField<String>(
+                                                  value: statusFilter,
                                                   decoration:
                                                       _filterDropdownDecoration(
                                                         'Status',
                                                       ),
-                                                  items: const [
-                                                    DropdownMenuItem<String?>(
+                                                  options: const [
+                                                    AppPopupMenuOption<String?>(
                                                       value: null,
-                                                      child: Text('Any'),
+                                                      label: 'Any',
                                                     ),
-                                                    DropdownMenuItem<String?>(
+                                                    AppPopupMenuOption<String?>(
                                                       value: 'active',
-                                                      child: Text('Active'),
+                                                      label: 'Active',
                                                     ),
-                                                    DropdownMenuItem<String?>(
+                                                    AppPopupMenuOption<String?>(
                                                       value: 'inactive',
-                                                      child: Text('Inactive'),
+                                                      label: 'Inactive',
                                                     ),
                                                   ],
                                                   onChanged: (value) =>
-                                    _setFilters(
-                                      () => statusFilter =
-                                          value,
-                                    ),
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                          ],
-                                        ),
-                                      ),
-                                      const _FilterDivider(),
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          12,
-                                          _filtersContentHorizontalPadding,
-                                          0,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            const Text(
-                                              'Created at',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.logoBlue,
-                                                height: 1.15,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: SizedBox(
-                                                width: _filtersFieldWidth,
-                                                child: _DateField(
-                                                  label: createdAtFilter == null
-                                                      ? 'Any'
-                                                      : formatAsOfDate(
-                                                          createdAtFilter!,
-                                                        ),
-                                                  decoration:
-                                                      _filterDropdownDecoration(
-                                                        'Created at',
-                                                      ),
-                                                  icon: Icons
-                                                      .calendar_month_rounded,
-                                                  onTap: () async {
-                                                    final now = DateTime.now();
-                                                    final earliestDate =
-                                                        allCategories
-                                                            .map(
-                                                              (
-                                                                category,
-                                                              ) => category
-                                                                  .createdAt,
-                                                            )
-                                                            .reduce(
-                                                              (
-                                                                value,
-                                                                element,
-                                                              ) =>
-                                                                  value
-                                                                      .isBefore(
-                                                                        element,
-                                                                      )
-                                                                  ? value
-                                                                  : element,
-                                                            );
-                                                    final pickedDate =
-                                                        await showDatePicker(
-                                                          context: context,
-                                                          firstDate: DateTime(
-                                                            earliestDate.year -
-                                                                1,
-                                                          ),
-                                                          lastDate: DateTime(
-                                                            now.year + 2,
-                                                            12,
-                                                            31,
-                                                          ),
-                                                          initialDate:
-                                                              createdAtFilter ??
-                                                              now,
-                                                          currentDate: now,
-                                                        );
-                                                    if (pickedDate == null ||
-                                                        !context.mounted) {
-                                                      return;
-                                                    }
-                                                    _setFilters(() {
-                                                      createdAtFilter =
-                                                          pickedDate;
-                                                    });
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                          ],
-                                        ),
-                                      ),
-                                      const _FilterDivider(),
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          12,
-                                          _filtersContentHorizontalPadding,
-                                          0,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            const Text(
-                                              'Updated at',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.logoBlue,
-                                                height: 1.15,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: SizedBox(
-                                                width: _filtersFieldWidth,
-                                                child: _DateField(
-                                                  label: updatedAtFilter == null
-                                                      ? 'Any'
-                                                      : formatAsOfDate(
-                                                          updatedAtFilter!,
-                                                        ),
-                                                  decoration:
-                                                      _filterDropdownDecoration(
-                                                        'Updated at',
-                                                      ),
-                                                  icon: Icons
-                                                      .calendar_month_rounded,
-                                                  onTap: () async {
-                                                    final now = DateTime.now();
-                                                    final earliestDate =
-                                                        allCategories
-                                                            .map(
-                                                              (
-                                                                category,
-                                                              ) => category
-                                                                  .updatedAt,
-                                                            )
-                                                            .reduce(
-                                                              (
-                                                                value,
-                                                                element,
-                                                              ) =>
-                                                                  value
-                                                                      .isBefore(
-                                                                        element,
-                                                                      )
-                                                                  ? value
-                                                                  : element,
-                                                            );
-                                                    final pickedDate =
-                                                        await showDatePicker(
-                                                          context: context,
-                                                          firstDate: DateTime(
-                                                            earliestDate.year -
-                                                                1,
-                                                          ),
-                                                          lastDate: DateTime(
-                                                            now.year + 2,
-                                                            12,
-                                                            31,
-                                                          ),
-                                                          initialDate:
-                                                              updatedAtFilter ??
-                                                              now,
-                                                          currentDate: now,
-                                                        );
-                                                    if (pickedDate == null ||
-                                                        !context.mounted) {
-                                                      return;
-                                                    }
-                                                    setState(() {
-                                                      updatedAtFilter =
-                                                          pickedDate;
-                                                    });
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                          ],
-                                        ),
-                                      ),
-                                      const _FilterDivider(),
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          12,
-                                          _filtersContentHorizontalPadding,
-                                          _filtersContentHorizontalPadding,
-                                        ),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: SizedBox(
-                                            width: _filtersFieldWidth,
-                                            child: MousePressable(
-                                              onTap: () {
-                                                setState(() {
-                                                  createdAtFilter = null;
-                                                  updatedAtFilter = null;
-                                                  statusFilter = null;
-                                                });
-                                              },
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              child: Container(
-                                                width: double.infinity,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 14,
-                                                      vertical: 10,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  border: Border.all(
-                                                    color: const Color(
-                                                      0xFFE4E7EC,
-                                                    ),
-                                                  ),
-                                                ),
-                                                alignment: Alignment.center,
-                                                child: const Text(
-                                                  'Clear',
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.w700,
-                                                    height: 1.15,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              builder: (context, controller, child) {
-                                return MousePressable(
-                                  onTap: () {
-                                    if (controller.isOpen) {
-                                      controller.close();
-                                    } else {
-                                      controller.open();
-                                    }
-                                  },
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Container(
-                                    width: toolbarActionSize,
-                                    height: toolbarActionSize,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.logoBlue,
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: const Icon(
-                                      Icons.filter_list_rounded,
-                                      size: 18,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        )
-                      : Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            SizedBox(
-                              width: 280,
-                              child: TextField(
-                                controller: _queryController,
-                                onChanged: (value) =>
-                                    _setFilters(() => query = value),
-                                decoration: const InputDecoration(
-                                  hintText: 'Search',
-                                  hintStyle: TextStyle(
-                                    color: AppColors.logoBlue,
-                                  ),
-                                  prefixIcon: Icon(
-                                    Icons.search,
-                                    color: AppColors.logoBlue,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            MenuAnchor(
-                              style: const MenuStyle(
-                                backgroundColor: WidgetStatePropertyAll(
-                                  Colors.white,
-                                ),
-                                surfaceTintColor: WidgetStatePropertyAll(
-                                  Colors.white,
-                                ),
-                                padding: WidgetStatePropertyAll(
-                                  EdgeInsets.zero,
-                                ),
-                                shape: WidgetStatePropertyAll(
-                                  RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.all(
-                                      Radius.circular(16),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              menuChildren: [
-                                SizedBox(
-                                  width: _filtersMenuWidth,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          16,
-                                          _filtersContentHorizontalPadding,
-                                          0,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            const Text(
-                                              'Status',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.logoBlue,
-                                                height: 1.15,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: SizedBox(
-                                                width: _filtersFieldWidth,
-                                                child: DropdownButtonFormField<String?>(
-                                                  isExpanded: true,
-                                                  icon: const Icon(
-                                                    Icons
-                                                        .keyboard_arrow_down_rounded,
-                                                    color: AppColors.logoBlue,
-                                                    size: 24,
-                                                  ),
-                                                  initialValue: statusFilter,
-                                                  decoration:
-                                                      _filterDropdownDecoration(
-                                                        'Status',
-                                                      ),
-                                                  items: const [
-                                                    DropdownMenuItem<String?>(
-                                                      value: null,
-                                                      child: Text('Any'),
-                                                    ),
-                                                    DropdownMenuItem<String?>(
-                                                      value: 'active',
-                                                      child: Text('Active'),
-                                                    ),
-                                                    DropdownMenuItem<String?>(
-                                                      value: 'inactive',
-                                                      child: Text('Inactive'),
-                                                    ),
-                                                  ],
-                                                  onChanged: (value) =>
-                                                      setState(
+                                                      _setFilters(
                                                         () => statusFilter =
                                                             value,
                                                       ),
@@ -941,6 +556,7 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                     ],
                                   ),
                                 ),
+                                ),
                               ],
                               builder: (context, controller, child) {
                                 return MousePressable(
@@ -953,6 +569,396 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                   },
                                   borderRadius: BorderRadius.circular(16),
                                   child: Container(
+                                    key: _mobileFiltersAnchorKey,
+                                    width: toolbarActionSize,
+                                    height: toolbarActionSize,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.logoBlue,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: const Icon(
+                                      Icons.filter_list_rounded,
+                                      size: 18,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        )
+                      : Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            SizedBox(
+                              width: 280,
+                              child: TextField(
+                                controller: _queryController,
+                                onChanged: (value) =>
+                                    _setFilters(() => query = value),
+                                decoration: InputDecoration(
+                                  hintText: 'Search',
+                                  hintStyle: const TextStyle(
+                                    color: AppColors.logoBlue,
+                                  ),
+                                  prefixIcon: const Icon(
+                                    Icons.search,
+                                    color: AppColors.logoBlue,
+                                  ),
+                                  suffixIcon: query.trim().isEmpty
+                                      ? null
+                                      : IconButton(
+                                          tooltip: 'Clear search',
+                                          onPressed: () {
+                                            _queryController.clear();
+                                            _setFilters(() => query = '');
+                                          },
+                                          icon: const Icon(Icons.close),
+                                        ),
+                                ),
+                              ),
+                            ),
+                            MenuAnchor(
+                              style: const MenuStyle(
+                                backgroundColor: WidgetStatePropertyAll(
+                                  Colors.white,
+                                ),
+                                surfaceTintColor: WidgetStatePropertyAll(
+                                  Colors.white,
+                                ),
+                                padding: WidgetStatePropertyAll(
+                                  EdgeInsets.zero,
+                                ),
+                                shape: WidgetStatePropertyAll(
+                                  RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.all(
+                                      Radius.circular(16),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              menuChildren: [
+                                _buildAnchoredFiltersMenu(
+                                  context: context,
+                                  anchorKey: _desktopFiltersAnchorKey,
+                                  child: SizedBox(
+                                    width: _filtersMenuWidth,
+                                    child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          _filtersContentHorizontalPadding,
+                                          16,
+                                          _filtersContentHorizontalPadding,
+                                          0,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            const Text(
+                                              'Status',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.logoBlue,
+                                                height: 1.15,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: SizedBox(
+                                                width: _filtersFieldWidth,
+                                                child: AppPopupMenuField<String>(
+                                                  value: statusFilter,
+                                                  decoration:
+                                                      _filterDropdownDecoration(
+                                                        'Status',
+                                                      ),
+                                                  options: const [
+                                                    AppPopupMenuOption<String?>(
+                                                      value: null,
+                                                      label: 'Any',
+                                                    ),
+                                                    AppPopupMenuOption<String?>(
+                                                      value: 'active',
+                                                      label: 'Active',
+                                                    ),
+                                                    AppPopupMenuOption<String?>(
+                                                      value: 'inactive',
+                                                      label: 'Inactive',
+                                                    ),
+                                                  ],
+                                                  onChanged: (value) =>
+                                                      _setFilters(
+                                                        () => statusFilter =
+                                                            value,
+                                                      ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                          ],
+                                        ),
+                                      ),
+                                      const _FilterDivider(),
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          _filtersContentHorizontalPadding,
+                                          12,
+                                          _filtersContentHorizontalPadding,
+                                          0,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            const Text(
+                                              'Created at',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.logoBlue,
+                                                height: 1.15,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: SizedBox(
+                                                width: _filtersFieldWidth,
+                                                child: _DateField(
+                                                  label: createdAtFilter == null
+                                                      ? 'Any'
+                                                      : formatAsOfDate(
+                                                          createdAtFilter!,
+                                                        ),
+                                                  decoration:
+                                                      _filterDropdownDecoration(
+                                                        'Created at',
+                                                      ),
+                                                  icon: Icons
+                                                      .calendar_month_rounded,
+                                                  onTap: () async {
+                                                    final now = DateTime.now();
+                                                    final earliestDate =
+                                                        allCategories
+                                                            .map(
+                                                              (
+                                                                category,
+                                                              ) => category
+                                                                  .createdAt,
+                                                            )
+                                                            .reduce(
+                                                              (
+                                                                value,
+                                                                element,
+                                                              ) =>
+                                                                  value
+                                                                      .isBefore(
+                                                                        element,
+                                                                      )
+                                                                  ? value
+                                                                  : element,
+                                                            );
+                                                    final pickedDate =
+                                                        await showDatePicker(
+                                                          context: context,
+                                                          firstDate: DateTime(
+                                                            earliestDate.year -
+                                                                1,
+                                                          ),
+                                                          lastDate: DateTime(
+                                                            now.year + 2,
+                                                            12,
+                                                            31,
+                                                          ),
+                                                          initialDate:
+                                                              createdAtFilter ??
+                                                              now,
+                                                          currentDate: now,
+                                                        );
+                                                    if (pickedDate == null ||
+                                                        !context.mounted) {
+                                                      return;
+                                                    }
+                                                    _setFilters(() {
+                                                      createdAtFilter =
+                                                          pickedDate;
+                                                    });
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                          ],
+                                        ),
+                                      ),
+                                      const _FilterDivider(),
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          _filtersContentHorizontalPadding,
+                                          12,
+                                          _filtersContentHorizontalPadding,
+                                          0,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            const Text(
+                                              'Updated at',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.logoBlue,
+                                                height: 1.15,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: SizedBox(
+                                                width: _filtersFieldWidth,
+                                                child: _DateField(
+                                                  label: updatedAtFilter == null
+                                                      ? 'Any'
+                                                      : formatAsOfDate(
+                                                          updatedAtFilter!,
+                                                        ),
+                                                  decoration:
+                                                      _filterDropdownDecoration(
+                                                        'Updated at',
+                                                      ),
+                                                  icon: Icons
+                                                      .calendar_month_rounded,
+                                                  onTap: () async {
+                                                    final now = DateTime.now();
+                                                    final earliestDate =
+                                                        allCategories
+                                                            .map(
+                                                              (
+                                                                category,
+                                                              ) => category
+                                                                  .updatedAt,
+                                                            )
+                                                            .reduce(
+                                                              (
+                                                                value,
+                                                                element,
+                                                              ) =>
+                                                                  value
+                                                                      .isBefore(
+                                                                        element,
+                                                                      )
+                                                                  ? value
+                                                                  : element,
+                                                            );
+                                                    final pickedDate =
+                                                        await showDatePicker(
+                                                          context: context,
+                                                          firstDate: DateTime(
+                                                            earliestDate.year -
+                                                                1,
+                                                          ),
+                                                          lastDate: DateTime(
+                                                            now.year + 2,
+                                                            12,
+                                                            31,
+                                                          ),
+                                                          initialDate:
+                                                              updatedAtFilter ??
+                                                              now,
+                                                          currentDate: now,
+                                                        );
+                                                    if (pickedDate == null ||
+                                                        !context.mounted) {
+                                                      return;
+                                                    }
+                                                    _setFilters(() {
+                                                      updatedAtFilter =
+                                                          pickedDate;
+                                                    });
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                          ],
+                                        ),
+                                      ),
+                                      const _FilterDivider(),
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          _filtersContentHorizontalPadding,
+                                          12,
+                                          _filtersContentHorizontalPadding,
+                                          _filtersContentHorizontalPadding,
+                                        ),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: SizedBox(
+                                            width: _filtersFieldWidth,
+                                            child: MousePressable(
+                                              onTap: () {
+                                                _setFilters(() {
+                                                  createdAtFilter = null;
+                                                  updatedAtFilter = null;
+                                                  statusFilter = null;
+                                                });
+                                              },
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              child: Container(
+                                                width: double.infinity,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 14,
+                                                      vertical: 10,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                    color: const Color(
+                                                      0xFFE4E7EC,
+                                                    ),
+                                                  ),
+                                                ),
+                                                alignment: Alignment.center,
+                                                child: const Text(
+                                                  'Clear',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    height: 1.15,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ),
+                              ],
+                              builder: (context, controller, child) {
+                                return MousePressable(
+                                  onTap: () {
+                                    if (controller.isOpen) {
+                                      controller.close();
+                                    } else {
+                                      controller.open();
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    key: _desktopFiltersAnchorKey,
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 18,
                                       vertical: 14,
@@ -1053,84 +1059,110 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
           fit: FlexFit.loose,
           child: LayoutBuilder(
             builder: (context, constraints) {
-            final effectiveTableWidth = constraints.maxWidth > tableWidth
-                ? constraints.maxWidth
-                : tableWidth;
-            final trailingSpace = effectiveTableWidth - tableWidth;
-            const headerHeight = 53.0;
-            const dividerHeight = 0.6;
-            const emptyStateHeight = 232.0;
-            final rowHeights = categories
-                .map(
-                  (category) => _measureCategoryRowHeight(
-                    category: category,
-                    assignedCount: assignedCounts[category.id] ?? 0,
-                    widths: columnWidths,
-                    bodyStyle: bodyTextStyle,
-                  ),
-                )
-                .toList();
-            final contentHeightEstimate = categories.isEmpty
-                ? emptyStateHeight
-                : rowHeights.fold<double>(0, (sum, height) => sum + height) +
-                    math.max(0, categories.length - 1) * dividerHeight;
-            final maxTableHeight = constraints.maxHeight.isFinite
-                ? constraints.maxHeight
-                : headerHeight + dividerHeight + contentHeightEstimate;
-            final targetTableHeight = math.min(
-              maxTableHeight,
-              headerHeight + dividerHeight + contentHeightEstimate,
-            );
-            final shouldScrollBody =
-                headerHeight + dividerHeight + contentHeightEstimate >
-                maxTableHeight;
-            return SectionCard(
-              showShadow: false,
-              padding: EdgeInsets.zero,
-              borderRadius: 16,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: ColoredBox(
-                  color: Colors.white,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: effectiveTableWidth,
-                      height: shouldScrollBody ? targetTableHeight : null,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: AppColors.logoBlue.withValues(alpha: 0.10),
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(16),
-                                topRight: Radius.circular(16),
+              final effectiveTableWidth = constraints.maxWidth > tableWidth
+                  ? constraints.maxWidth
+                  : tableWidth;
+              final trailingSpace = effectiveTableWidth - tableWidth;
+              const headerHeight = 53.0;
+              const dividerHeight = 0.6;
+              const emptyStateHeight = 232.0;
+              final rowHeights = categories
+                  .map(
+                    (category) => _measureCategoryRowHeight(
+                      category: category,
+                      assignedCount: assignedCounts[category.id] ?? 0,
+                      widths: columnWidths,
+                      bodyStyle: bodyTextStyle,
+                    ),
+                  )
+                  .toList();
+              final contentHeightEstimate = categories.isEmpty
+                  ? emptyStateHeight
+                  : rowHeights.fold<double>(0, (sum, height) => sum + height) +
+                        math.max(0, categories.length - 1) * dividerHeight;
+              final maxTableHeight = constraints.maxHeight.isFinite
+                  ? constraints.maxHeight
+                  : headerHeight + dividerHeight + contentHeightEstimate;
+              final targetTableHeight = math.min(
+                maxTableHeight,
+                headerHeight + dividerHeight + contentHeightEstimate,
+              );
+              final shouldScrollBody =
+                  headerHeight + dividerHeight + contentHeightEstimate >
+                  maxTableHeight;
+              return SectionCard(
+                showShadow: false,
+                padding: EdgeInsets.zero,
+                borderRadius: 16,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: ColoredBox(
+                    color: Colors.white,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: effectiveTableWidth,
+                        height: shouldScrollBody ? targetTableHeight : null,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: AppColors.logoBlue.withValues(
+                                  alpha: 0.10,
+                                ),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(16),
+                                  topRight: Radius.circular(16),
+                                ),
                               ),
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                16,
+                                20,
+                                16,
+                              ),
+                              child: categories.isEmpty
+                                  ? _CategoryHeaderRow(
+                                      isEmpty: true,
+                                      widths: columnWidths,
+                                      trailingSpace: trailingSpace,
+                                    )
+                                  : _CategoryHeaderRow(
+                                      isEmpty: false,
+                                      widths: columnWidths,
+                                      trailingSpace: trailingSpace,
+                                    ),
                             ),
-                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                            child: categories.isEmpty
-                                ? _CategoryHeaderRow(
-                                    isEmpty: true,
-                                    widths: columnWidths,
-                                    trailingSpace: trailingSpace,
-                                  )
-                                : _CategoryHeaderRow(
-                                    isEmpty: false,
-                                    widths: columnWidths,
-                                    trailingSpace: trailingSpace,
+                            const Divider(
+                              height: 0,
+                              thickness: 0.6,
+                              color: Color(0xFFE4E7EC),
+                            ),
+                            if (categories.isEmpty)
+                              if (shouldScrollBody)
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadius.only(
+                                      bottomLeft: Radius.circular(16),
+                                      bottomRight: Radius.circular(16),
+                                    ),
+                                    child: EmptyStateCard(
+                                      title: 'No categories found',
+                                      message:
+                                          normalizedQuery.isEmpty &&
+                                              statusFilter == null &&
+                                              createdAtFilter == null &&
+                                              updatedAtFilter == null
+                                          ? 'Create your first product category.'
+                                          : 'Adjust filters or create a new category.',
+                                      showBorder: false,
+                                    ),
                                   ),
-                          ),
-                          const Divider(
-                            height: 0,
-                            thickness: 0.6,
-                            color: Color(0xFFE4E7EC),
-                          ),
-                          if (categories.isEmpty)
-                            if (shouldScrollBody)
-                              Expanded(
-                                child: ClipRRect(
+                                )
+                              else
+                                ClipRRect(
                                   borderRadius: const BorderRadius.only(
                                     bottomLeft: Radius.circular(16),
                                     bottomRight: Radius.circular(16),
@@ -1146,63 +1178,125 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                         : 'Adjust filters or create a new category.',
                                     showBorder: false,
                                   ),
-                                ),
-                              )
-                            else
-                              ClipRRect(
-                                borderRadius: const BorderRadius.only(
-                                  bottomLeft: Radius.circular(16),
-                                  bottomRight: Radius.circular(16),
-                                ),
-                                child: EmptyStateCard(
-                                  title: 'No categories found',
-                                  message:
-                                      normalizedQuery.isEmpty &&
-                                          statusFilter == null &&
-                                          createdAtFilter == null &&
-                                          updatedAtFilter == null
-                                      ? 'Create your first product category.'
-                                      : 'Adjust filters or create a new category.',
-                                  showBorder: false,
-                                ),
-                              )
-                          else if (canReorder)
-                            shouldScrollBody
-                                ? Expanded(
-                                    child: ReorderableListView.builder(
+                                )
+                            else if (canReorder)
+                              shouldScrollBody
+                                  ? Expanded(
+                                      child: ReorderableListView.builder(
+                                        padding: EdgeInsets.zero,
+                                        buildDefaultDragHandles: false,
+                                        proxyDecorator:
+                                            (child, index, animation) {
+                                              return DecoratedBox(
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  border: Border.all(
+                                                    color: const Color(
+                                                      0xFFE4E7EC,
+                                                    ),
+                                                    width: 0.6,
+                                                  ),
+                                                ),
+                                                child: Material(
+                                                  color: Colors.transparent,
+                                                  shadowColor:
+                                                      Colors.transparent,
+                                                  surfaceTintColor:
+                                                      Colors.transparent,
+                                                  elevation: 0,
+                                                  child: child,
+                                                ),
+                                              );
+                                            },
+                                        itemCount: categories.length,
+                                        onReorder: (oldIndex, newIndex) {
+                                          final nextCategories = [
+                                            ...categories,
+                                          ];
+                                          if (newIndex > oldIndex) {
+                                            newIndex -= 1;
+                                          }
+                                          final moved = nextCategories.removeAt(
+                                            oldIndex,
+                                          );
+                                          nextCategories.insert(
+                                            newIndex,
+                                            moved,
+                                          );
+                                          ref
+                                              .read(
+                                                appControllerProvider.notifier,
+                                              )
+                                              .reorderCategoriesByIds(
+                                                nextCategories
+                                                    .map(
+                                                      (category) => category.id,
+                                                    )
+                                                    .toList(),
+                                              );
+                                        },
+                                        itemBuilder: (context, index) {
+                                          final category = categories[index];
+                                          return _buildReorderableCategoryItem(
+                                            context,
+                                            ref,
+                                            category,
+                                            index,
+                                            categories.length,
+                                            assignedCounts[category.id] ?? 0,
+                                            columnWidths,
+                                            trailingSpace,
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : ReorderableListView.builder(
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
                                       padding: EdgeInsets.zero,
                                       buildDefaultDragHandles: false,
-                                      proxyDecorator: (child, index, animation) {
-                                        return DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            border: Border.all(
-                                              color: const Color(0xFFE4E7EC),
-                                              width: 0.6,
-                                            ),
-                                          ),
-                                          child: Material(
-                                            color: Colors.transparent,
-                                            shadowColor: Colors.transparent,
-                                            surfaceTintColor: Colors.transparent,
-                                            elevation: 0,
-                                            child: child,
-                                          ),
-                                        );
-                                      },
+                                      proxyDecorator:
+                                          (child, index, animation) {
+                                            return DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFFE4E7EC,
+                                                  ),
+                                                  width: 0.6,
+                                                ),
+                                              ),
+                                              child: Material(
+                                                color: Colors.transparent,
+                                                shadowColor: Colors.transparent,
+                                                surfaceTintColor:
+                                                    Colors.transparent,
+                                                elevation: 0,
+                                                child: child,
+                                              ),
+                                            );
+                                          },
                                       itemCount: categories.length,
                                       onReorder: (oldIndex, newIndex) {
                                         final nextCategories = [...categories];
                                         if (newIndex > oldIndex) {
                                           newIndex -= 1;
                                         }
-                                        final moved = nextCategories.removeAt(oldIndex);
+                                        final moved = nextCategories.removeAt(
+                                          oldIndex,
+                                        );
                                         nextCategories.insert(newIndex, moved);
                                         ref
-                                            .read(appControllerProvider.notifier)
+                                            .read(
+                                              appControllerProvider.notifier,
+                                            )
                                             .reorderCategoriesByIds(
                                               nextCategories
-                                                  .map((category) => category.id)
+                                                  .map(
+                                                    (category) => category.id,
+                                                  )
                                                   .toList(),
                                             );
                                       },
@@ -1219,218 +1313,195 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                           trailingSpace,
                                         );
                                       },
-                                    ),
-                                  )
-                                : ReorderableListView.builder(
-                                    shrinkWrap: true,
-                                    physics: const NeverScrollableScrollPhysics(),
-                                    padding: EdgeInsets.zero,
-                                    buildDefaultDragHandles: false,
-                                    proxyDecorator: (child, index, animation) {
-                                      return DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          border: Border.all(
-                                            color: const Color(0xFFE4E7EC),
-                                            width: 0.6,
-                                          ),
-                                        ),
-                                        child: Material(
-                                          color: Colors.transparent,
-                                          shadowColor: Colors.transparent,
-                                          surfaceTintColor: Colors.transparent,
-                                          elevation: 0,
-                                          child: child,
-                                        ),
-                                      );
-                                    },
-                                    itemCount: categories.length,
-                                    onReorder: (oldIndex, newIndex) {
-                                      final nextCategories = [...categories];
-                                      if (newIndex > oldIndex) {
-                                        newIndex -= 1;
-                                      }
-                                      final moved = nextCategories.removeAt(oldIndex);
-                                      nextCategories.insert(newIndex, moved);
-                                      ref
-                                          .read(appControllerProvider.notifier)
-                                          .reorderCategoriesByIds(
-                                            nextCategories
-                                                .map((category) => category.id)
-                                                .toList(),
-                                          );
-                                    },
-                                    itemBuilder: (context, index) {
-                                      final category = categories[index];
-                                      return _buildReorderableCategoryItem(
-                                        context,
-                                        ref,
-                                        category,
-                                        index,
-                                        categories.length,
-                                        assignedCounts[category.id] ?? 0,
-                                        columnWidths,
-                                        trailingSpace,
-                                      );
-                                    },
-                                  )
-                          else
-                            shouldScrollBody
-                                ? Expanded(
-                                    child: ListView.builder(
-                                      padding: EdgeInsets.zero,
-                                      itemCount: categories.length,
-                                      itemBuilder: (context, index) {
-                                        return Column(
-                                          children: [
-                                            _CategoryRow(
-                                              category: categories[index],
-                                              assignedCount:
-                                                  assignedCounts[categories[index].id] ??
-                                                  0,
-                                              widths: columnWidths,
-                                              trailingSpace: trailingSpace,
-                                              isLast: index == categories.length - 1,
-                                              onEdit: () => _showCategoryDialog(
-                                                context,
-                                                ref,
-                                                initial: categories[index],
-                                              ),
-                                              onToggleActive: () async {
-                                                final category = categories[index];
-                                                final nextIsActive =
-                                                    !category.isActive;
-                                                final shouldToggle =
-                                                    await _showToggleCategoryStatusDialog(
+                                    )
+                            else
+                              shouldScrollBody
+                                  ? Expanded(
+                                      child: ListView.builder(
+                                        padding: EdgeInsets.zero,
+                                        itemCount: categories.length,
+                                        itemBuilder: (context, index) {
+                                          return Column(
+                                            children: [
+                                              _CategoryRow(
+                                                category: categories[index],
+                                                assignedCount:
+                                                    assignedCounts[categories[index]
+                                                        .id] ??
+                                                    0,
+                                                widths: columnWidths,
+                                                trailingSpace: trailingSpace,
+                                                isLast:
+                                                    index ==
+                                                    categories.length - 1,
+                                                onEdit: () =>
+                                                    _showCategoryDialog(
                                                       context,
-                                                      category.name,
-                                                      nextIsActive,
-                                                    );
-                                                if (shouldToggle == true) {
-                                                  await ref
-                                                      .read(appControllerProvider.notifier)
-                                                      .saveCategory(
-                                                        category.copyWith(
-                                                          isActive: nextIsActive,
-                                                          updatedAt: DateTime.now(),
-                                                        ),
+                                                      ref,
+                                                      initial:
+                                                          categories[index],
+                                                    ),
+                                                onToggleActive: () async {
+                                                  final category =
+                                                      categories[index];
+                                                  final nextIsActive =
+                                                      !category.isActive;
+                                                  final shouldToggle =
+                                                      await _showToggleCategoryStatusDialog(
+                                                        context,
+                                                        category.name,
+                                                        nextIsActive,
                                                       );
-                                                }
-                                              },
-                                              onDelete: () async {
-                                                final category = categories[index];
-                                                final shouldDelete =
-                                                    await _showDeleteCategoryDialog(
-                                                      context,
-                                                      category.name,
-                                                    );
-                                                if (shouldDelete == true) {
-                                                  await ref
-                                                      .read(appControllerProvider.notifier)
-                                                      .deleteCategory(category.id);
-                                                }
-                                              },
-                                              dragChild: const Padding(
-                                                padding: EdgeInsets.only(left: 8),
-                                                child: Icon(
-                                                  Icons.drag_indicator_rounded,
-                                                  size: 20,
-                                                  color: Color(0xFF98A2B3),
+                                                  if (shouldToggle == true) {
+                                                    await ref
+                                                        .read(
+                                                          appControllerProvider
+                                                              .notifier,
+                                                        )
+                                                        .saveCategory(
+                                                          category.copyWith(
+                                                            isActive:
+                                                                nextIsActive,
+                                                            updatedAt:
+                                                                DateTime.now(),
+                                                          ),
+                                                        );
+                                                  }
+                                                },
+                                                onDelete: () async {
+                                                  final category =
+                                                      categories[index];
+                                                  final shouldDelete =
+                                                      await _showDeleteCategoryDialog(
+                                                        context,
+                                                        category.name,
+                                                      );
+                                                  if (shouldDelete == true) {
+                                                    await ref
+                                                        .read(
+                                                          appControllerProvider
+                                                              .notifier,
+                                                        )
+                                                        .deleteCategory(
+                                                          category.id,
+                                                        );
+                                                  }
+                                                },
+                                                dragChild: const Padding(
+                                                  padding: EdgeInsets.only(
+                                                    left: 8,
+                                                  ),
+                                                  child: Icon(
+                                                    Icons
+                                                        .drag_indicator_rounded,
+                                                    size: 20,
+                                                    color: Color(0xFF98A2B3),
+                                                  ),
                                                 ),
                                               ),
+                                              if (index !=
+                                                  categories.length - 1)
+                                                const Divider(
+                                                  height: 0,
+                                                  thickness: 0.6,
+                                                  color: Color(0xFFE4E7EC),
+                                                ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        for (
+                                          var index = 0;
+                                          index < categories.length;
+                                          index++
+                                        ) ...[
+                                          _CategoryRow(
+                                            category: categories[index],
+                                            assignedCount:
+                                                assignedCounts[categories[index]
+                                                    .id] ??
+                                                0,
+                                            widths: columnWidths,
+                                            trailingSpace: trailingSpace,
+                                            isLast:
+                                                index == categories.length - 1,
+                                            onEdit: () => _showCategoryDialog(
+                                              context,
+                                              ref,
+                                              initial: categories[index],
                                             ),
-                                            if (index != categories.length - 1)
-                                              const Divider(
-                                                height: 0,
-                                                thickness: 0.6,
-                                                color: Color(0xFFE4E7EC),
+                                            onToggleActive: () async {
+                                              final category =
+                                                  categories[index];
+                                              final nextIsActive =
+                                                  !category.isActive;
+                                              final shouldToggle =
+                                                  await _showToggleCategoryStatusDialog(
+                                                    context,
+                                                    category.name,
+                                                    nextIsActive,
+                                                  );
+                                              if (shouldToggle == true) {
+                                                await ref
+                                                    .read(
+                                                      appControllerProvider
+                                                          .notifier,
+                                                    )
+                                                    .saveCategory(
+                                                      category.copyWith(
+                                                        isActive: nextIsActive,
+                                                        updatedAt:
+                                                            DateTime.now(),
+                                                      ),
+                                                    );
+                                              }
+                                            },
+                                            onDelete: () async {
+                                              final shouldDelete =
+                                                  await _showDeleteCategoryDialog(
+                                                    context,
+                                                    categories[index].name,
+                                                  );
+                                              if (shouldDelete == true) {
+                                                await ref
+                                                    .read(
+                                                      appControllerProvider
+                                                          .notifier,
+                                                    )
+                                                    .deleteCategory(
+                                                      categories[index].id,
+                                                    );
+                                              }
+                                            },
+                                            dragChild: const Padding(
+                                              padding: EdgeInsets.only(left: 8),
+                                              child: Icon(
+                                                Icons.drag_indicator_rounded,
+                                                size: 20,
+                                                color: Color(0xFF98A2B3),
                                               ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  )
-                                : Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      for (var index = 0; index < categories.length; index++) ...[
-                                        _CategoryRow(
-                                          category: categories[index],
-                                          assignedCount:
-                                              assignedCounts[categories[index].id] ??
-                                              0,
-                                          widths: columnWidths,
-                                          trailingSpace: trailingSpace,
-                                          isLast: index == categories.length - 1,
-                                          onEdit: () => _showCategoryDialog(
-                                            context,
-                                            ref,
-                                            initial: categories[index],
-                                          ),
-                                          onToggleActive: () async {
-                                            final category = categories[index];
-                                            final nextIsActive =
-                                                !category.isActive;
-                                            final shouldToggle =
-                                                await _showToggleCategoryStatusDialog(
-                                                  context,
-                                                  category.name,
-                                                  nextIsActive,
-                                                );
-                                            if (shouldToggle == true) {
-                                              await ref
-                                                  .read(
-                                                    appControllerProvider.notifier,
-                                                  )
-                                                  .saveCategory(
-                                                    category.copyWith(
-                                                      isActive: nextIsActive,
-                                                      updatedAt: DateTime.now(),
-                                                    ),
-                                                  );
-                                            }
-                                          },
-                                          onDelete: () async {
-                                            final shouldDelete =
-                                                await _showDeleteCategoryDialog(
-                                                  context,
-                                                  categories[index].name,
-                                                );
-                                            if (shouldDelete == true) {
-                                              await ref
-                                                  .read(
-                                                    appControllerProvider.notifier,
-                                                  )
-                                                  .deleteCategory(
-                                                    categories[index].id,
-                                                  );
-                                            }
-                                          },
-                                          dragChild: const Padding(
-                                            padding: EdgeInsets.only(left: 8),
-                                            child: Icon(
-                                              Icons.drag_indicator_rounded,
-                                              size: 20,
-                                              color: Color(0xFF98A2B3),
                                             ),
                                           ),
-                                        ),
-                                        if (index != categories.length - 1)
-                                          const Divider(
-                                            height: 0,
-                                            thickness: 0.6,
-                                            color: Color(0xFFE4E7EC),
-                                          ),
+                                          if (index != categories.length - 1)
+                                            const Divider(
+                                              height: 0,
+                                              thickness: 0.6,
+                                              color: Color(0xFFE4E7EC),
+                                            ),
+                                        ],
                                       ],
-                                    ],
-                                  ),
-                        ],
+                                    ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            );
+              );
             },
           ),
         ),
@@ -1461,7 +1532,7 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
       filled: true,
       fillColor: AppColors.logoBlueSoft,
       isDense: true,
-      contentPadding: const EdgeInsets.fromLTRB(16, 16, 10, 16),
+      contentPadding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(
@@ -1475,12 +1546,44 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
     );
   }
 
-  static DateTime _startOfDay(DateTime value) {
-    return DateTime(value.year, value.month, value.day);
+  static bool _isSameDay(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
   }
 
-  static DateTime _endOfDay(DateTime value) {
-    return DateTime(value.year, value.month, value.day, 23, 59, 59, 999);
+  Widget _buildAnchoredFiltersMenu({
+    required BuildContext context,
+    required GlobalKey anchorKey,
+    required Widget child,
+  }) {
+    final anchorContext = anchorKey.currentContext;
+    final overlayBox =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final anchorBox = anchorContext?.findRenderObject() as RenderBox?;
+    if (overlayBox == null ||
+        anchorBox == null ||
+        !overlayBox.hasSize ||
+        !anchorBox.hasSize) {
+      return child;
+    }
+    final anchorTopLeft = anchorBox.localToGlobal(
+      Offset.zero,
+      ancestor: overlayBox,
+    );
+    final anchorBottom = anchorTopLeft.dy + anchorBox.size.height;
+    final maxMenuHeight = math.max(
+      0.0,
+      overlayBox.size.height - anchorBottom - 28,
+    );
+    if (maxMenuHeight <= 0) {
+      return child;
+    }
+    return SizedBox(
+      width: _filtersMenuWidth,
+      height: maxMenuHeight,
+      child: SingleChildScrollView(child: child),
+    );
   }
 
   _CategoryColumnWidths _computeCategoryColumnWidths({
@@ -1542,29 +1645,37 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
         categories.map((category) => category.name),
         max: _categoryNameMaxWidthForScreen(screenWidth),
       ),
-      status: maxWidth(
-        'Status',
-        categories.map((category) => category.isActive ? 'Active' : 'Inactive'),
-        valuesStyle: badgeTextStyle,
-      ) + _categoryStatusBadgeHorizontalPadding,
+      status:
+          maxWidth(
+            'Status',
+            categories.map(
+              (category) => category.isActive ? 'Active' : 'Inactive',
+            ),
+            valuesStyle: badgeTextStyle,
+          ) +
+          _categoryStatusBadgeHorizontalPadding,
       items: maxWidth(
         'Items',
         categories.map((category) => '${assignedCounts[category.id] ?? 0}'),
       ),
-      createdAt: maxWidth(
-        'Created at',
-        categories.map(
-          (category) =>
-              '${formatOrderDate(category.createdAt)}\n${formatOrderTimeWithSeconds(category.createdAt)}',
-        ),
-      ) + _categoryDateHeaderExtraAllowance,
-      updatedAt: maxWidth(
-        'Updated at',
-        categories.map(
-          (category) =>
-              '${formatOrderDate(category.updatedAt)}\n${formatOrderTimeWithSeconds(category.updatedAt)}',
-        ),
-      ) + _categoryDateHeaderExtraAllowance,
+      createdAt:
+          maxWidth(
+            'Created at',
+            categories.map(
+              (category) =>
+                  '${formatOrderDate(category.createdAt)}\n${formatOrderTimeWithSeconds(category.createdAt)}',
+            ),
+          ) +
+          _categoryDateHeaderExtraAllowance,
+      updatedAt:
+          maxWidth(
+            'Updated at',
+            categories.map(
+              (category) =>
+                  '${formatOrderDate(category.updatedAt)}\n${formatOrderTimeWithSeconds(category.updatedAt)}',
+            ),
+          ) +
+          _categoryDateHeaderExtraAllowance,
     );
   }
 
@@ -1595,10 +1706,25 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
         '${formatOrderDate(category.updatedAt)}\n${formatOrderTimeWithSeconds(category.updatedAt)}';
 
     final tallestContent = <double>[
-      _measureCategoryTextHeight('${category.id}', bodyStyle, widths.id, maxLines: 1),
-      _measureCategoryTextHeight(category.name, bodyStyle, widths.name, maxLines: 2),
+      _measureCategoryTextHeight(
+        '${category.id}',
+        bodyStyle,
+        widths.id,
+        maxLines: 1,
+      ),
+      _measureCategoryTextHeight(
+        category.name,
+        bodyStyle,
+        widths.name,
+        maxLines: 2,
+      ),
       34,
-      _measureCategoryTextHeight('$assignedCount', bodyStyle, widths.items, maxLines: 1),
+      _measureCategoryTextHeight(
+        '$assignedCount',
+        bodyStyle,
+        widths.items,
+        maxLines: 1,
+      ),
       _measureCategoryTextHeight(
         createdAtText,
         bodyStyle,
@@ -1664,11 +1790,8 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
               assignedCount: assignedCount,
               widths: columnWidths,
               trailingSpace: trailingSpace,
-              onEdit: () => _showCategoryDialog(
-                context,
-                ref,
-                initial: category,
-              ),
+              onEdit: () =>
+                  _showCategoryDialog(context, ref, initial: category),
               onToggleActive: () async {
                 final nextIsActive = !category.isActive;
                 final shouldToggle = await _showToggleCategoryStatusDialog(
@@ -1677,12 +1800,14 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                   nextIsActive,
                 );
                 if (shouldToggle == true) {
-                  await ref.read(appControllerProvider.notifier).saveCategory(
-                    category.copyWith(
-                      isActive: nextIsActive,
-                      updatedAt: DateTime.now(),
-                    ),
-                  );
+                  await ref
+                      .read(appControllerProvider.notifier)
+                      .saveCategory(
+                        category.copyWith(
+                          isActive: nextIsActive,
+                          updatedAt: DateTime.now(),
+                        ),
+                      );
                 }
               },
               onDelete: () async {
@@ -1710,16 +1835,11 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
             ),
           ),
           if (index != totalCount - 1)
-            const Divider(
-              height: 0,
-              thickness: 0.6,
-              color: Color(0xFFE4E7EC),
-            ),
+            const Divider(height: 0, thickness: 0.6, color: Color(0xFFE4E7EC)),
         ],
       ),
     );
   }
-
 }
 
 class _FilterDivider extends StatelessWidget {
@@ -1762,13 +1882,12 @@ class _DateField extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Color(0xFF1D2939),
-                  fontSize: isPlaceholder ? 16.5 : 16,
+                  fontSize: isPlaceholder ? 14 : 15.5,
                   height: 1.15,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(icon, color: AppColors.logoBlue, size: 22),
+            Icon(icon, color: AppColors.logoBlue, size: 18),
           ],
         ),
       ),
@@ -1821,22 +1940,12 @@ class _CategoryHeaderRow extends StatelessWidget {
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.createdAt,
-          child: Text(
-            'Created at',
-            style: labelStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Text('Created at', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.updatedAt,
-          child: Text(
-            'Updated at',
-            style: labelStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Text('Updated at', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap + trailingSpace),
         SizedBox(
@@ -2211,9 +2320,7 @@ extension on _AdminCategoriesPageState {
                         controller: nameController,
                         onFieldSubmitted: (_) => submit(dialogContext),
                         maxLength: 15,
-                        inputFormatters: [
-                          LengthLimitingTextInputFormatter(15),
-                        ],
+                        inputFormatters: [LengthLimitingTextInputFormatter(15)],
                         decoration: const InputDecoration(
                           labelText: 'Category name',
                         ),

@@ -33,6 +33,8 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
       _filtersMenuWidth - (_filtersContentHorizontalPadding * 2);
 
   final TextEditingController _queryController = TextEditingController();
+  final GlobalKey _mobileFiltersAnchorKey = GlobalKey();
+  final GlobalKey _desktopFiltersAnchorKey = GlobalKey();
   String query = '';
   DateTime? createdAtFilter;
   DateTime? updatedAtFilter;
@@ -393,10 +395,10 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
       final shouldImport = await _showImportProductsConfirmationDialog(
         this.context,
         importMode: result.importMode,
-        categoryCount:
-            result.importMode == _ProductImportMode.replace
-                ? resolvedImport.categories.length
-                : resolvedImport.categories.length - ref.read(appControllerProvider).categories.length,
+        categoryCount: result.importMode == _ProductImportMode.replace
+            ? resolvedImport.categories.length
+            : resolvedImport.categories.length -
+                  ref.read(appControllerProvider).categories.length,
         productCount: imported.products.length,
       );
       if (shouldImport != true || !mounted) {
@@ -412,8 +414,9 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
             );
       } else {
         final currentState = ref.read(appControllerProvider);
-        final existingCategoryIds =
-            currentState.categories.map((item) => item.id).toSet();
+        final existingCategoryIds = currentState.categories
+            .map((item) => item.id)
+            .toSet();
         final existingProductKeys = currentState.products
             .map(
               (item) =>
@@ -437,7 +440,8 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
             );
           }
         }
-        if (duplicateImportedKeys.isNotEmpty || duplicateExistingLabels.isNotEmpty) {
+        if (duplicateImportedKeys.isNotEmpty ||
+            duplicateExistingLabels.isNotEmpty) {
           final parts = <String>[
             if (duplicateImportedKeys.isNotEmpty)
               'duplicate imported product${duplicateImportedKeys.length == 1 ? '' : 's'}: ${duplicateImportedKeys.join(', ')}',
@@ -706,7 +710,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
 
     final widths = _computeProductColumnWidths(
       screenWidth: screenWidth,
-      products: filteredProducts,
+      products: products,
       categoryById: categoryById,
       headerStyle: headerStyle,
       bodyStyle: bodyStyle,
@@ -736,16 +740,26 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                             controller: _queryController,
                             onChanged: (value) =>
                                 _setFilters(() => query = value),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Search',
-                              hintStyle: TextStyle(
+                              hintStyle: const TextStyle(
                                 color: AppColors.logoBlue,
                                 height: 1.15,
                               ),
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.search,
                                 color: AppColors.logoBlue,
                               ),
+                              suffixIcon: query.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear search',
+                                      onPressed: () {
+                                        _queryController.clear();
+                                        _setFilters(() => query = '');
+                                      },
+                                      icon: const Icon(Icons.close),
+                                    ),
                             ),
                           ),
                         ),
@@ -768,10 +782,14 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                             ),
                           ),
                           menuChildren: [
-                            _buildFiltersMenu(
-                              context: context,
-                              products: products,
-                              categories: categories,
+                            SizedBox(
+                              width: _filtersMenuWidth,
+                              child: _buildFiltersMenu(
+                                context: context,
+                                anchorKey: _mobileFiltersAnchorKey,
+                                products: products,
+                                categories: categories,
+                              ),
                             ),
                           ],
                           builder: (context, controller, child) {
@@ -785,6 +803,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                               },
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
+                                key: _mobileFiltersAnchorKey,
                                 width: toolbarActionSize,
                                 height: toolbarActionSize,
                                 decoration: BoxDecoration(
@@ -813,16 +832,26 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                             controller: _queryController,
                             onChanged: (value) =>
                                 _setFilters(() => query = value),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Search',
-                              hintStyle: TextStyle(
+                              hintStyle: const TextStyle(
                                 color: AppColors.logoBlue,
                                 height: 1.15,
                               ),
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.search,
                                 color: AppColors.logoBlue,
                               ),
+                              suffixIcon: query.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear search',
+                                      onPressed: () {
+                                        _queryController.clear();
+                                        _setFilters(() => query = '');
+                                      },
+                                      icon: const Icon(Icons.close),
+                                    ),
                             ),
                           ),
                         ),
@@ -844,10 +873,14 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                             ),
                           ),
                           menuChildren: [
-                            _buildFiltersMenu(
-                              context: context,
-                              products: products,
-                              categories: categories,
+                            SizedBox(
+                              width: _filtersMenuWidth,
+                              child: _buildFiltersMenu(
+                                context: context,
+                                anchorKey: _desktopFiltersAnchorKey,
+                                products: products,
+                                categories: categories,
+                              ),
                             ),
                           ],
                           builder: (context, controller, child) {
@@ -861,6 +894,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                               },
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
+                                key: _desktopFiltersAnchorKey,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 18,
                                   vertical: 14,
@@ -1248,20 +1282,19 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
   InputDecoration _filterDropdownDecoration(String hintText) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(height: 1.15),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      hintStyle: const TextStyle(color: AppColors.logoBlue, height: 1.15),
+      contentPadding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
       filled: true,
-      fillColor: const Color(0xFFF7F9FF),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFC7D7FE)),
-      ),
+      fillColor: AppColors.logoBlueSoft,
+      isDense: true,
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFC7D7FE)),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: AppColors.logoBlue.withValues(alpha: 0.16),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: AppColors.logoBlue),
       ),
     );
@@ -1269,272 +1302,260 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
 
   Widget _buildFiltersMenu({
     required BuildContext context,
+    required GlobalKey anchorKey,
     required List<Product> products,
     required List<Category> categories,
   }) {
+    final menuContent = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _FiltersSection(
+          title: 'Category',
+          child: SizedBox(
+            width: _filtersFieldWidth,
+            child: AppPopupMenuField<int>(
+              value: categoryFilter,
+              decoration: _filterDropdownDecoration('Category'),
+              options: [
+                const AppPopupMenuOption<int?>(value: null, label: 'Any'),
+                ...categories.map(
+                  (item) => AppPopupMenuOption<int?>(
+                    value: item.id,
+                    label: item.name,
+                  ),
+                ),
+              ],
+              onChanged: (value) {
+                _setFilters(() => categoryFilter = value);
+              },
+            ),
+          ),
+        ),
+        const _FilterDivider(),
+        _FiltersSection(
+          title: 'Status',
+          child: SizedBox(
+            width: _filtersFieldWidth,
+            child: AppPopupMenuField<String>(
+              value: statusFilter,
+              decoration: _filterDropdownDecoration('Status'),
+              options: const [
+                AppPopupMenuOption<String?>(value: null, label: 'Any'),
+                AppPopupMenuOption<String?>(value: 'active', label: 'Active'),
+                AppPopupMenuOption<String?>(
+                  value: 'inactive',
+                  label: 'Inactive',
+                ),
+              ],
+              onChanged: (value) {
+                _setFilters(() => statusFilter = value);
+              },
+            ),
+          ),
+        ),
+        const _FilterDivider(),
+        _FiltersSection(
+          title: 'Sold',
+          child: SizedBox(
+            width: _filtersFieldWidth,
+            child: AppPopupMenuField<String>(
+              value: soldSort,
+              decoration: _filterDropdownDecoration('Sold'),
+              options: const [
+                AppPopupMenuOption<String?>(value: null, label: 'Any'),
+                AppPopupMenuOption<String?>(
+                  value: 'few_many',
+                  label: 'Few-Many',
+                ),
+                AppPopupMenuOption<String?>(
+                  value: 'many_few',
+                  label: 'Many-Few',
+                ),
+              ],
+              onChanged: (value) {
+                _setFilters(() => soldSort = value);
+              },
+            ),
+          ),
+        ),
+        const _FilterDivider(),
+        _FiltersSection(
+          title: 'Price',
+          child: SizedBox(
+            width: _filtersFieldWidth,
+            child: AppPopupMenuField<String>(
+              value: priceSort,
+              decoration: _filterDropdownDecoration('Price'),
+              options: const [
+                AppPopupMenuOption<String?>(value: null, label: 'Any'),
+                AppPopupMenuOption<String?>(
+                  value: 'low_high',
+                  label: 'Low-High',
+                ),
+                AppPopupMenuOption<String?>(
+                  value: 'high_low',
+                  label: 'High-Low',
+                ),
+              ],
+              onChanged: (value) {
+                _setFilters(() => priceSort = value);
+              },
+            ),
+          ),
+        ),
+        const _FilterDivider(),
+        _FiltersSection(
+          title: 'Name',
+          child: SizedBox(
+            width: _filtersFieldWidth,
+            child: AppPopupMenuField<String>(
+              value: nameSort,
+              decoration: _filterDropdownDecoration('Name'),
+              options: const [
+                AppPopupMenuOption<String?>(value: null, label: 'Any'),
+                AppPopupMenuOption<String?>(value: 'a_z', label: 'A-Z'),
+                AppPopupMenuOption<String?>(value: 'z_a', label: 'Z-A'),
+              ],
+              onChanged: (value) {
+                _setFilters(() => nameSort = value);
+              },
+            ),
+          ),
+        ),
+        const _FilterDivider(),
+        _FiltersSection(
+          title: 'Created at',
+          child: SizedBox(
+            width: _filtersFieldWidth,
+            child: _DateField(
+              label: createdAtFilter == null
+                  ? 'Any'
+                  : formatAsOfDate(createdAtFilter!),
+              decoration: _filterDropdownDecoration('Created at'),
+              icon: Icons.calendar_month_rounded,
+              onTap: () async {
+                final dates = products.map((item) => item.createdAt).toList();
+                final picked = await showDatePicker(
+                  context: context,
+                  firstDate: dates.isEmpty
+                      ? DateTime(2026, 1, 1)
+                      : dates.reduce((a, b) => a.isBefore(b) ? a : b),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                  initialDate:
+                      createdAtFilter ??
+                      (dates.isEmpty ? DateTime.now() : dates.first),
+                );
+                if (picked != null && mounted) {
+                  _setFilters(() => createdAtFilter = picked);
+                }
+              },
+            ),
+          ),
+        ),
+        const _FilterDivider(),
+        _FiltersSection(
+          title: 'Updated at',
+          child: SizedBox(
+            width: _filtersFieldWidth,
+            child: _DateField(
+              label: updatedAtFilter == null
+                  ? 'Any'
+                  : formatAsOfDate(updatedAtFilter!),
+              decoration: _filterDropdownDecoration('Updated at'),
+              icon: Icons.calendar_month_rounded,
+              onTap: () async {
+                final dates = products.map((item) => item.updatedAt).toList();
+                final picked = await showDatePicker(
+                  context: context,
+                  firstDate: dates.isEmpty
+                      ? DateTime(2026, 1, 1)
+                      : dates.reduce((a, b) => a.isBefore(b) ? a : b),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                  initialDate:
+                      updatedAtFilter ??
+                      (dates.isEmpty ? DateTime.now() : dates.first),
+                );
+                if (picked != null && mounted) {
+                  _setFilters(() => updatedAtFilter = picked);
+                }
+              },
+            ),
+          ),
+        ),
+        const _FilterDivider(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            _filtersContentHorizontalPadding,
+            12,
+            _filtersContentHorizontalPadding,
+            _filtersContentHorizontalPadding,
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: _filtersFieldWidth,
+              child: MousePressable(
+                onTap: () {
+                  _setFilters(() {
+                    createdAtFilter = null;
+                    updatedAtFilter = null;
+                    categoryFilter = null;
+                    statusFilter = null;
+                    priceSort = null;
+                    nameSort = null;
+                    soldSort = null;
+                  });
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE4E7EC)),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    'Clear',
+                    style: TextStyle(fontWeight: FontWeight.w700, height: 1.15),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+    final anchorContext = anchorKey.currentContext;
+    final overlayBox =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final anchorBox = anchorContext?.findRenderObject() as RenderBox?;
+    if (overlayBox == null ||
+        anchorBox == null ||
+        !overlayBox.hasSize ||
+        !anchorBox.hasSize) {
+      return menuContent;
+    }
+    final anchorTopLeft = anchorBox.localToGlobal(
+      Offset.zero,
+      ancestor: overlayBox,
+    );
+    final anchorBottom = anchorTopLeft.dy + anchorBox.size.height;
+    final maxMenuHeight = math.max(
+      0.0,
+      overlayBox.size.height - anchorBottom - 24,
+    );
+    if (maxMenuHeight <= 0) {
+      return menuContent;
+    }
     return SizedBox(
-      width: _filtersMenuWidth,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _FiltersSection(
-            title: 'Category',
-            child: SizedBox(
-              width: _filtersFieldWidth,
-              child: DropdownButtonFormField<int?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: categoryFilter,
-                decoration: _filterDropdownDecoration('Category'),
-                items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('Any')),
-                  ...categories.map(
-                    (item) => DropdownMenuItem<int?>(
-                      value: item.id,
-                      child: Text(item.name),
-                    ),
-                  ),
-                ],
-                onChanged: (value) {
-                  _setFilters(() => categoryFilter = value);
-                },
-              ),
-            ),
-          ),
-          const _FilterDivider(),
-          _FiltersSection(
-            title: 'Status',
-            child: SizedBox(
-              width: _filtersFieldWidth,
-              child: DropdownButtonFormField<String?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: statusFilter,
-                decoration: _filterDropdownDecoration('Status'),
-                items: const [
-                  DropdownMenuItem<String?>(value: null, child: Text('Any')),
-                  DropdownMenuItem<String?>(
-                    value: 'active',
-                    child: Text('Active'),
-                  ),
-                  DropdownMenuItem<String?>(
-                    value: 'inactive',
-                    child: Text('Inactive'),
-                  ),
-                ],
-                onChanged: (value) {
-                  _setFilters(() => statusFilter = value);
-                },
-              ),
-            ),
-          ),
-          const _FilterDivider(),
-          _FiltersSection(
-            title: 'Sold',
-            child: SizedBox(
-              width: _filtersFieldWidth,
-              child: DropdownButtonFormField<String?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: soldSort,
-                decoration: _filterDropdownDecoration('Sold'),
-                items: const [
-                  DropdownMenuItem<String?>(value: null, child: Text('Any')),
-                  DropdownMenuItem<String?>(
-                    value: 'few_many',
-                    child: Text('Few-Many'),
-                  ),
-                  DropdownMenuItem<String?>(
-                    value: 'many_few',
-                    child: Text('Many-Few'),
-                  ),
-                ],
-                onChanged: (value) {
-                  _setFilters(() => soldSort = value);
-                },
-              ),
-            ),
-          ),
-          const _FilterDivider(),
-          _FiltersSection(
-            title: 'Price',
-            child: SizedBox(
-              width: _filtersFieldWidth,
-              child: DropdownButtonFormField<String?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: priceSort,
-                decoration: _filterDropdownDecoration('Price'),
-                items: const [
-                  DropdownMenuItem<String?>(value: null, child: Text('Any')),
-                  DropdownMenuItem<String?>(
-                    value: 'low_high',
-                    child: Text('Low-High'),
-                  ),
-                  DropdownMenuItem<String?>(
-                    value: 'high_low',
-                    child: Text('High-Low'),
-                  ),
-                ],
-                onChanged: (value) {
-                  _setFilters(() => priceSort = value);
-                },
-              ),
-            ),
-          ),
-          const _FilterDivider(),
-          _FiltersSection(
-            title: 'Name',
-            child: SizedBox(
-              width: _filtersFieldWidth,
-              child: DropdownButtonFormField<String?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: nameSort,
-                decoration: _filterDropdownDecoration('Name'),
-                items: const [
-                  DropdownMenuItem<String?>(value: null, child: Text('Any')),
-                  DropdownMenuItem<String?>(value: 'a_z', child: Text('A-Z')),
-                  DropdownMenuItem<String?>(value: 'z_a', child: Text('Z-A')),
-                ],
-                onChanged: (value) {
-                  _setFilters(() => nameSort = value);
-                },
-              ),
-            ),
-          ),
-          const _FilterDivider(),
-          _FiltersSection(
-            title: 'Created at',
-            child: SizedBox(
-              width: _filtersFieldWidth,
-              child: _DateField(
-                label: createdAtFilter == null
-                    ? 'Any'
-                    : formatAsOfDate(createdAtFilter!),
-                decoration: _filterDropdownDecoration('Created at'),
-                icon: Icons.calendar_month_rounded,
-                onTap: () async {
-                  final dates = products.map((item) => item.createdAt).toList();
-                  final picked = await showDatePicker(
-                    context: context,
-                    firstDate: dates.isEmpty
-                        ? DateTime(2026, 1, 1)
-                        : dates.reduce((a, b) => a.isBefore(b) ? a : b),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                    initialDate:
-                        createdAtFilter ??
-                        (dates.isEmpty ? DateTime.now() : dates.first),
-                  );
-                  if (picked != null && mounted) {
-                    _setFilters(() => createdAtFilter = picked);
-                  }
-                },
-              ),
-            ),
-          ),
-          const _FilterDivider(),
-          _FiltersSection(
-            title: 'Updated at',
-            child: SizedBox(
-              width: _filtersFieldWidth,
-              child: _DateField(
-                label: updatedAtFilter == null
-                    ? 'Any'
-                    : formatAsOfDate(updatedAtFilter!),
-                decoration: _filterDropdownDecoration('Updated at'),
-                icon: Icons.calendar_month_rounded,
-                onTap: () async {
-                  final dates = products.map((item) => item.updatedAt).toList();
-                  final picked = await showDatePicker(
-                    context: context,
-                    firstDate: dates.isEmpty
-                        ? DateTime(2026, 1, 1)
-                        : dates.reduce((a, b) => a.isBefore(b) ? a : b),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                    initialDate:
-                        updatedAtFilter ??
-                        (dates.isEmpty ? DateTime.now() : dates.first),
-                  );
-                  if (picked != null && mounted) {
-                    _setFilters(() => updatedAtFilter = picked);
-                  }
-                },
-              ),
-            ),
-          ),
-          const _FilterDivider(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              _filtersContentHorizontalPadding,
-              12,
-              _filtersContentHorizontalPadding,
-              _filtersContentHorizontalPadding,
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: _filtersFieldWidth,
-                child: MousePressable(
-                  onTap: () {
-                    _setFilters(() {
-                      createdAtFilter = null;
-                      updatedAtFilter = null;
-                      categoryFilter = null;
-                      statusFilter = null;
-                      priceSort = null;
-                      nameSort = null;
-                      soldSort = null;
-                    });
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE4E7EC)),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      'Clear',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        height: 1.15,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      height: maxMenuHeight,
+      child: SingleChildScrollView(child: menuContent),
     );
   }
 
@@ -1998,13 +2019,12 @@ class _DateField extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: const Color(0xFF1D2939),
-                  fontSize: isPlaceholder ? 16.5 : 16,
+                  fontSize: isPlaceholder ? 14 : 15.5,
                   height: 1.15,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(icon, color: AppColors.logoBlue, size: 22),
+            Icon(icon, color: AppColors.logoBlue, size: 18),
           ],
         ),
       ),
@@ -2045,11 +2065,7 @@ class _ProductHeaderRow extends StatelessWidget {
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.details,
-          child: _SelectableCellText(
-            'Details',
-            style: labelStyle,
-            maxLines: 1,
-          ),
+          child: _SelectableCellText('Details', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
@@ -2077,7 +2093,6 @@ class _ProductHeaderRow extends StatelessWidget {
             'Created at',
             style: labelStyle,
             maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ),
         SizedBox(width: widths.gap),
@@ -2087,7 +2102,6 @@ class _ProductHeaderRow extends StatelessWidget {
             'Updated at',
             style: labelStyle,
             maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ),
         SizedBox(width: widths.gap),
@@ -2100,7 +2114,6 @@ class _ProductHeaderRow extends StatelessWidget {
               'Actions',
               style: labelStyle,
               maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.right,
             ),
           ),

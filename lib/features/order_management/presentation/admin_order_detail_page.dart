@@ -731,6 +731,16 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                               Icons.search,
                               color: AppColors.logoBlue,
                             ),
+                            suffixIcon: searchController.text.trim().isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Clear search',
+                                    onPressed: () {
+                                      searchController.clear();
+                                      setModalState(() {});
+                                    },
+                                    icon: const Icon(Icons.close),
+                                  ),
                             filled: true,
                             fillColor: Colors.white,
                             contentPadding: const EdgeInsets.symmetric(

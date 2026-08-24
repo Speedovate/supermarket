@@ -457,12 +457,8 @@ class CustomerDraft {
     'name': name,
     'mobileNumber': mobileNumber,
     'normalizedMobileNumber': normalizedMobileNumber,
-    'barangay': fulfillmentMethod == FulfillmentMethod.delivery
-        ? barangay
-        : '',
-    'addressStreet': fulfillmentMethod == FulfillmentMethod.delivery
-        ? addressStreet
-        : '',
+    'barangay': barangay,
+    'addressStreet': addressStreet,
     'addressLandmark': addressLandmark,
     'note': note,
     'fulfillmentMethod': fulfillmentMethod.name,

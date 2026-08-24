@@ -22,6 +22,8 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
   static const double _filtersContentHorizontalPadding = 16;
   static double get _filtersFieldWidth =>
       _filtersMenuWidth - (_filtersContentHorizontalPadding * 2);
+  final GlobalKey _mobileFiltersAnchorKey = GlobalKey();
+  final GlobalKey _desktopFiltersAnchorKey = GlobalKey();
 
   DateTime? startDateFilter;
   DateTime? endDateFilter;
@@ -89,6 +91,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
         : width >= 760
         ? 2
         : 2;
+    final metricValueFontSize = isMobile ? 24.0 : 32.0;
     final activeFilterCount =
         (startDateFilter == null ? 0 : 1) + (endDateFilter == null ? 0 : 1);
     final toolbarActionSize = isMobile ? 48.0 : 0.0;
@@ -163,7 +166,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                             ?.copyWith(
                               color: accent,
                               fontWeight: FontWeight.w800,
-                              fontSize: 32,
+                              fontSize: metricValueFontSize,
                               height: 1.05,
                             ),
                       ),
@@ -200,7 +203,12 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                     ),
                   ),
                 ),
-                menuChildren: [_buildFiltersMenu(context: context)],
+                menuChildren: [
+                  _buildFiltersMenu(
+                    context: context,
+                    anchorKey: _mobileFiltersAnchorKey,
+                  ),
+                ],
                 builder: (context, controller, child) {
                   return MousePressable(
                     onTap: () {
@@ -212,6 +220,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                     },
                     borderRadius: BorderRadius.circular(16),
                     child: Container(
+                      key: _mobileFiltersAnchorKey,
                       width: toolbarActionSize,
                       height: toolbarActionSize,
                       decoration: BoxDecoration(
@@ -240,7 +249,12 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                     ),
                   ),
                 ),
-                menuChildren: [_buildFiltersMenu(context: context)],
+                menuChildren: [
+                  _buildFiltersMenu(
+                    context: context,
+                    anchorKey: _desktopFiltersAnchorKey,
+                  ),
+                ],
                 builder: (context, controller, child) {
                   return MousePressable(
                     onTap: () {
@@ -252,6 +266,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                     },
                     borderRadius: BorderRadius.circular(16),
                     child: Container(
+                      key: _desktopFiltersAnchorKey,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 18,
                         vertical: 14,
@@ -442,8 +457,11 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     );
   }
 
-  Widget _buildFiltersMenu({required BuildContext context}) {
-    return SizedBox(
+  Widget _buildFiltersMenu({
+    required BuildContext context,
+    required GlobalKey anchorKey,
+  }) {
+    final menuContent = SizedBox(
       width: _filtersMenuWidth,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -552,25 +570,51 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
         ],
       ),
     );
+    final anchorContext = anchorKey.currentContext;
+    final overlayBox =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final anchorBox = anchorContext?.findRenderObject() as RenderBox?;
+    if (overlayBox == null ||
+        anchorBox == null ||
+        !overlayBox.hasSize ||
+        !anchorBox.hasSize) {
+      return menuContent;
+    }
+    final anchorTopLeft = anchorBox.localToGlobal(
+      Offset.zero,
+      ancestor: overlayBox,
+    );
+    final anchorBottom = anchorTopLeft.dy + anchorBox.size.height;
+    final maxMenuHeight = math.max(
+      0.0,
+      overlayBox.size.height - anchorBottom - 28,
+    );
+    if (maxMenuHeight <= 0) {
+      return menuContent;
+    }
+    return SizedBox(
+      width: _filtersMenuWidth,
+      height: maxMenuHeight,
+      child: SingleChildScrollView(child: menuContent),
+    );
   }
 
   InputDecoration _filterDropdownDecoration(String hintText) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(height: 1.15),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      hintStyle: const TextStyle(color: AppColors.logoBlue, height: 1.15),
+      contentPadding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
       filled: true,
-      fillColor: const Color(0xFFF7F9FF),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFC7D7FE)),
-      ),
+      fillColor: AppColors.logoBlueSoft,
+      isDense: true,
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFC7D7FE)),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: AppColors.logoBlue.withValues(alpha: 0.16),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: AppColors.logoBlue),
       ),
     );
@@ -794,13 +838,12 @@ class _DateField extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: const Color(0xFF1D2939),
-                  fontSize: isPlaceholder ? 16.5 : 16,
+                  fontSize: isPlaceholder ? 14 : 15.5,
                   height: 1.15,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(icon, color: AppColors.logoBlue, size: 22),
+            Icon(icon, color: AppColors.logoBlue, size: 18),
           ],
         ),
       ),

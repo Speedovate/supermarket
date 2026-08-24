@@ -20,6 +20,8 @@ class AdminBarangaysPage extends ConsumerStatefulWidget {
 class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
   static const double _filtersMenuWidth = 248;
   static const double _filtersContentHorizontalPadding = 16;
+  static double get _filtersFieldWidth =>
+      _filtersMenuWidth - (_filtersContentHorizontalPadding * 2);
   static const double _columnWidthAllowance = 2;
   static const double _dateHeaderExtraAllowance = 2;
   static const double _statusBadgeHorizontalPadding = 28;
@@ -27,6 +29,8 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
   static double get _actionsWidth => _actionHitSize * 4;
 
   final TextEditingController _queryController = TextEditingController();
+  final GlobalKey _mobileFiltersAnchorKey = GlobalKey();
+  final GlobalKey _desktopFiltersAnchorKey = GlobalKey();
   String query = '';
   DateTime? createdAtFilter;
   DateTime? updatedAtFilter;
@@ -131,7 +135,7 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
 
     final widths = _computeBarangayColumnWidths(
       screenWidth: screenWidth,
-      barangays: filteredBarangays,
+      barangays: barangays,
       headerStyle: headerStyle,
       bodyStyle: bodyStyle,
       gap: gap,
@@ -155,16 +159,26 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                           child: TextField(
                             controller: _queryController,
                             onChanged: (value) => _setFilters(() => query = value),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Search',
-                              hintStyle: TextStyle(
+                              hintStyle: const TextStyle(
                                 color: AppColors.logoBlue,
                                 height: 1.15,
                               ),
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.search,
                                 color: AppColors.logoBlue,
                               ),
+                              suffixIcon: query.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear search',
+                                      onPressed: () {
+                                        _queryController.clear();
+                                        _setFilters(() => query = '');
+                                      },
+                                      icon: const Icon(Icons.close),
+                                    ),
                             ),
                           ),
                         ),
@@ -180,7 +194,12 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                               ),
                             ),
                           ),
-                          menuChildren: [_buildFiltersMenu(context: context)],
+                          menuChildren: [
+                            _buildFiltersMenu(
+                              context: context,
+                              anchorKey: _mobileFiltersAnchorKey,
+                            ),
+                          ],
                           builder: (context, controller, child) {
                             return MousePressable(
                               onTap: () {
@@ -192,6 +211,7 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                               },
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
+                                key: _mobileFiltersAnchorKey,
                                 width: toolbarActionSize,
                                 height: toolbarActionSize,
                                 decoration: BoxDecoration(
@@ -234,16 +254,26 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                           child: TextField(
                             controller: _queryController,
                             onChanged: (value) => _setFilters(() => query = value),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Search',
-                              hintStyle: TextStyle(
+                              hintStyle: const TextStyle(
                                 color: AppColors.logoBlue,
                                 height: 1.15,
                               ),
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.search,
                                 color: AppColors.logoBlue,
                               ),
+                              suffixIcon: query.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear search',
+                                      onPressed: () {
+                                        _queryController.clear();
+                                        _setFilters(() => query = '');
+                                      },
+                                      icon: const Icon(Icons.close),
+                                    ),
                             ),
                           ),
                         ),
@@ -258,7 +288,12 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                               ),
                             ),
                           ),
-                          menuChildren: [_buildFiltersMenu(context: context)],
+                          menuChildren: [
+                            _buildFiltersMenu(
+                              context: context,
+                              anchorKey: _desktopFiltersAnchorKey,
+                            ),
+                          ],
                           builder: (context, controller, child) {
                             return MousePressable(
                               onTap: () {
@@ -270,6 +305,7 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                               },
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
+                                key: _desktopFiltersAnchorKey,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 18,
                                   vertical: 14,
@@ -651,136 +687,160 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
     );
   }
 
-  Widget _buildFiltersMenu({required BuildContext context}) {
-    return SizedBox(
+  Widget _buildFiltersMenu({
+    required BuildContext context,
+    required GlobalKey anchorKey,
+  }) {
+    final menuContent = SizedBox(
       width: _filtersMenuWidth,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              _filtersContentHorizontalPadding,
-              16,
-              _filtersContentHorizontalPadding,
-              0,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Status',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF101828),
-                    height: 1.15,
+          _FiltersSection(
+            title: 'Status',
+            child: SizedBox(
+              width: _filtersFieldWidth,
+              child: AppPopupMenuField<String>(
+                value: statusFilter,
+                decoration: _filterDropdownDecoration('Status'),
+                options: const [
+                  AppPopupMenuOption<String?>(value: null, label: 'Any'),
+                  AppPopupMenuOption<String?>(value: 'active', label: 'Active'),
+                  AppPopupMenuOption<String?>(
+                    value: 'inactive',
+                    label: 'Inactive',
                   ),
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String?>(
-                  isExpanded: true,
-                  initialValue: statusFilter,
-                  decoration: _filterDropdownDecoration('Status'),
-                  items: const [
-                    DropdownMenuItem<String?>(value: null, child: Text('Any')),
-                    DropdownMenuItem<String?>(
-                      value: 'active',
-                      child: Text('Active'),
-                    ),
-                    DropdownMenuItem<String?>(
-                      value: 'inactive',
-                      child: Text('Inactive'),
-                    ),
-                  ],
-                  onChanged: (value) => _setFilters(() => statusFilter = value),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Created At',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF101828),
-                    height: 1.15,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _FilterDateField(
-                  value: createdAtFilter,
-                  hintText: 'Created date',
-                  onTap: () async {
-                    final selected = await showDatePicker(
-                      context: context,
-                      initialDate: createdAtFilter ?? DateTime(2026, 8, 16),
-                      firstDate: DateTime(2024, 1, 1),
-                      lastDate: DateTime(2030, 12, 31),
-                    );
-                    if (selected == null) {
-                      return;
-                    }
-                    _setFilters(() => createdAtFilter = selected);
-                  },
-                  onClear: createdAtFilter == null
-                      ? null
-                      : () => _setFilters(() => createdAtFilter = null),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Updated At',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF101828),
-                    height: 1.15,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _FilterDateField(
-                  value: updatedAtFilter,
-                  hintText: 'Updated date',
-                  onTap: () async {
-                    final selected = await showDatePicker(
-                      context: context,
-                      initialDate: updatedAtFilter ?? DateTime(2026, 8, 16),
-                      firstDate: DateTime(2024, 1, 1),
-                      lastDate: DateTime(2030, 12, 31),
-                    );
-                    if (selected == null) {
-                      return;
-                    }
-                    _setFilters(() => updatedAtFilter = selected);
-                  },
-                  onClear: updatedAtFilter == null
-                      ? null
-                      : () => _setFilters(() => updatedAtFilter = null),
-                ),
-              ],
+                ],
+                onChanged: (value) => _setFilters(() => statusFilter = value),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
+          const _FilterDivider(),
+          _FiltersSection(
+            title: 'Created at',
+            child: SizedBox(
+              width: _filtersFieldWidth,
+              child: _FilterDateField(
+                value: createdAtFilter,
+                decoration: _filterDropdownDecoration('Created at'),
+                onTap: () async {
+                  final selected = await showDatePicker(
+                    context: context,
+                    initialDate: createdAtFilter ?? DateTime(2026, 8, 16),
+                    firstDate: DateTime(2024, 1, 1),
+                    lastDate: DateTime(2030, 12, 31),
+                  );
+                  if (selected == null) {
+                    return;
+                  }
+                  _setFilters(() => createdAtFilter = selected);
+                },
+                onClear: createdAtFilter == null
+                    ? null
+                    : () => _setFilters(() => createdAtFilter = null),
+              ),
+            ),
+          ),
+          const _FilterDivider(),
+          _FiltersSection(
+            title: 'Updated at',
+            child: SizedBox(
+              width: _filtersFieldWidth,
+              child: _FilterDateField(
+                value: updatedAtFilter,
+                decoration: _filterDropdownDecoration('Updated at'),
+                onTap: () async {
+                  final selected = await showDatePicker(
+                    context: context,
+                    initialDate: updatedAtFilter ?? DateTime(2026, 8, 16),
+                    firstDate: DateTime(2024, 1, 1),
+                    lastDate: DateTime(2030, 12, 31),
+                  );
+                  if (selected == null) {
+                    return;
+                  }
+                  _setFilters(() => updatedAtFilter = selected);
+                },
+                onClear: updatedAtFilter == null
+                    ? null
+                    : () => _setFilters(() => updatedAtFilter = null),
+              ),
+            ),
+          ),
+          const _FilterDivider(),
           Padding(
             padding: const EdgeInsets.fromLTRB(
               _filtersContentHorizontalPadding,
-              0,
+              12,
               _filtersContentHorizontalPadding,
-              16,
+              _filtersContentHorizontalPadding,
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _setFilters(() {
-                      query = '';
-                      statusFilter = null;
-                      createdAtFilter = null;
-                      updatedAtFilter = null;
-                    }),
-                    child: const Text('Clear'),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: _filtersFieldWidth,
+                child: MousePressable(
+                  onTap: () => _setFilters(() {
+                    query = '';
+                    statusFilter = null;
+                    createdAtFilter = null;
+                    updatedAtFilter = null;
+                  }),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE4E7EC)),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                      ),
+                    ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ],
       ),
+    );
+    final anchorContext = anchorKey.currentContext;
+    final overlayBox =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final anchorBox = anchorContext?.findRenderObject() as RenderBox?;
+    if (overlayBox == null ||
+        anchorBox == null ||
+        !overlayBox.hasSize ||
+        !anchorBox.hasSize) {
+      return menuContent;
+    }
+    final anchorTopLeft = anchorBox.localToGlobal(
+      Offset.zero,
+      ancestor: overlayBox,
+    );
+    final anchorBottom = anchorTopLeft.dy + anchorBox.size.height;
+    final maxMenuHeight = math.max(
+      0.0,
+      overlayBox.size.height - anchorBottom - 28,
+    );
+    if (maxMenuHeight <= 0) {
+      return menuContent;
+    }
+    return SizedBox(
+      width: _filtersMenuWidth,
+      height: maxMenuHeight,
+      child: SingleChildScrollView(child: menuContent),
     );
   }
 
@@ -1111,35 +1171,19 @@ class _BarangayHeaderRow extends StatelessWidget {
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.createdAt,
-          child: Text(
-            'Created at',
-            style: labelStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Text('Created at', style: labelStyle),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.updatedAt,
-          child: Text(
-            'Updated at',
-            style: labelStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Text('Updated at', style: labelStyle),
         ),
         SizedBox(width: widths.gap + trailingSpace),
         SizedBox(
           width: _AdminBarangaysPageState._actionsWidth,
           child: Align(
             alignment: Alignment.centerRight,
-            child: Text(
-              'Actions',
-              style: labelStyle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-            ),
+            child: Text('Actions', style: labelStyle, textAlign: TextAlign.right),
           ),
         ),
       ],
@@ -1489,41 +1533,60 @@ double _measureBarangayRowHeight({
 class _FilterDateField extends StatelessWidget {
   const _FilterDateField({
     required this.value,
-    required this.hintText,
+    required this.decoration,
     required this.onTap,
     this.onClear,
   });
 
   final DateTime? value;
-  final String hintText;
+  final InputDecoration decoration;
   final VoidCallback onTap;
   final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      readOnly: true,
+    final label = value == null ? 'Any' : formatAsOfDate(value!);
+    final isPlaceholder = value == null;
+    return MousePressable(
       onTap: onTap,
-      controller: TextEditingController(
-        text: value == null ? '' : formatOrderDate(value!),
-      ),
-      decoration: InputDecoration(
-        hintText: hintText,
-        suffixIcon: Row(
-          mainAxisSize: MainAxisSize.min,
+      borderRadius: BorderRadius.circular(14),
+      child: InputDecorator(
+        isEmpty: false,
+        decoration: decoration,
+        child: Row(
           children: [
-            if (onClear != null)
-              IconButton(
-                onPressed: onClear,
-                icon: const Icon(Icons.close_rounded, size: 18),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: const Color(0xFF1D2939),
+                  fontSize: isPlaceholder ? 14 : 15.5,
+                  height: 1.15,
+                ),
               ),
-            const Padding(
-              padding: EdgeInsets.only(right: 12),
-              child: Icon(
-                Icons.calendar_today_outlined,
-                size: 18,
-                color: AppColors.logoBlue,
+            ),
+            if (onClear != null) ...[
+              const SizedBox(width: 8),
+              MousePressable(
+                onTap: onClear,
+                borderRadius: BorderRadius.circular(999),
+                child: const Padding(
+                  padding: EdgeInsets.all(2),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: AppColors.logoBlue,
+                  ),
+                ),
               ),
+            ],
+            const SizedBox(width: 2),
+            const Icon(
+              Icons.calendar_month_rounded,
+              size: 18,
+              color: AppColors.logoBlue,
             ),
           ],
         ),
@@ -1533,7 +1596,65 @@ class _FilterDateField extends StatelessWidget {
 }
 
 InputDecoration _filterDropdownDecoration(String label) {
-  return InputDecoration(labelText: label);
+  return InputDecoration(
+    hintText: label,
+    hintStyle: const TextStyle(color: AppColors.logoBlue, height: 1.15),
+    filled: true,
+    fillColor: AppColors.logoBlueSoft,
+    isDense: true,
+    contentPadding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: AppColors.logoBlue.withValues(alpha: 0.16)),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: AppColors.logoBlue),
+    ),
+  );
+}
+
+class _FiltersSection extends StatelessWidget {
+  const _FiltersSection({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        _AdminBarangaysPageState._filtersContentHorizontalPadding,
+        16,
+        _AdminBarangaysPageState._filtersContentHorizontalPadding,
+        16,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: AppColors.logoBlue,
+              height: 1.15,
+            ),
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterDivider extends StatelessWidget {
+  const _FilterDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(height: 1, thickness: 0.6, color: Color(0xFFE4E7EC));
+  }
 }
 
 double _textScaleForWidth(double width) {

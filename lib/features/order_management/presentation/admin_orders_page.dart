@@ -30,6 +30,8 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
       _filtersMenuWidth - (_filtersContentHorizontalPadding * 2);
 
   final TextEditingController _queryController = TextEditingController();
+  final GlobalKey _mobileFiltersAnchorKey = GlobalKey();
+  final GlobalKey _desktopFiltersAnchorKey = GlobalKey();
   String query = '';
   DateTime? createdAtFilter;
   DateTime? updatedAtFilter;
@@ -167,7 +169,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
 
     final widths = _computeOrderColumnWidths(
       screenWidth: screenWidth,
-      orders: filteredOrders,
+      orders: orders,
       headerStyle: headerStyle,
       bodyStyle: bodyStyle,
       gap: gap,
@@ -192,16 +194,26 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                           child: TextField(
                             controller: _queryController,
                             onChanged: (value) => _setFilters(() => query = value),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Search',
-                              hintStyle: TextStyle(
+                              hintStyle: const TextStyle(
                                 color: AppColors.logoBlue,
                                 height: 1.15,
                               ),
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.search,
                                 color: AppColors.logoBlue,
                               ),
+                              suffixIcon: query.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear search',
+                                      onPressed: () {
+                                        _queryController.clear();
+                                        _setFilters(() => query = '');
+                                      },
+                                      icon: const Icon(Icons.close),
+                                    ),
                             ),
                           ),
                         ),
@@ -224,7 +236,11 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                             ),
                           ),
                           menuChildren: [
-                            _buildFiltersMenu(context: context, orders: orders),
+                            _buildFiltersMenu(
+                              context: context,
+                              anchorKey: _mobileFiltersAnchorKey,
+                              orders: orders,
+                            ),
                           ],
                           builder: (context, controller, child) {
                             return MousePressable(
@@ -237,6 +253,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                               },
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
+                                key: _mobileFiltersAnchorKey,
                                 width: toolbarActionSize,
                                 height: toolbarActionSize,
                                 decoration: BoxDecoration(
@@ -264,16 +281,26 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                           child: TextField(
                             controller: _queryController,
                             onChanged: (value) => _setFilters(() => query = value),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Search',
-                              hintStyle: TextStyle(
+                              hintStyle: const TextStyle(
                                 color: AppColors.logoBlue,
                                 height: 1.15,
                               ),
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.search,
                                 color: AppColors.logoBlue,
                               ),
+                              suffixIcon: query.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear search',
+                                      onPressed: () {
+                                        _queryController.clear();
+                                        _setFilters(() => query = '');
+                                      },
+                                      icon: const Icon(Icons.close),
+                                    ),
                             ),
                           ),
                         ),
@@ -295,7 +322,11 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                             ),
                           ),
                           menuChildren: [
-                            _buildFiltersMenu(context: context, orders: orders),
+                            _buildFiltersMenu(
+                              context: context,
+                              anchorKey: _desktopFiltersAnchorKey,
+                              orders: orders,
+                            ),
                           ],
                           builder: (context, controller, child) {
                             return MousePressable(
@@ -308,6 +339,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                               },
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
+                                key: _desktopFiltersAnchorKey,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 18,
                                   vertical: 14,
@@ -570,20 +602,19 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
   InputDecoration _filterDropdownDecoration(String hintText) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(height: 1.15),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      hintStyle: const TextStyle(color: AppColors.logoBlue, height: 1.15),
+      contentPadding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
       filled: true,
-      fillColor: const Color(0xFFF7F9FF),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFC7D7FE)),
-      ),
+      fillColor: AppColors.logoBlueSoft,
+      isDense: true,
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFFC7D7FE)),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: AppColors.logoBlue.withValues(alpha: 0.16),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: AppColors.logoBlue),
       ),
     );
@@ -591,9 +622,10 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
 
   Widget _buildFiltersMenu({
     required BuildContext context,
+    required GlobalKey anchorKey,
     required List<OrderRequest> orders,
   }) {
-    return SizedBox(
+    final menuContent = SizedBox(
       width: _filtersMenuWidth,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -603,24 +635,18 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
             title: 'Status',
             child: SizedBox(
               width: _filtersFieldWidth,
-              child: DropdownButtonFormField<OrderStatus?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: statusFilter,
+              child: AppPopupMenuField<OrderStatus>(
+                value: statusFilter,
                 decoration: _filterDropdownDecoration('Status'),
-                items: [
-                  const DropdownMenuItem<OrderStatus?>(
+                options: [
+                  const AppPopupMenuOption<OrderStatus?>(
                     value: null,
-                    child: Text('Any'),
+                    label: 'Any',
                   ),
                   ...OrderStatus.values.map(
-                    (status) => DropdownMenuItem<OrderStatus?>(
+                    (status) => AppPopupMenuOption<OrderStatus?>(
                       value: status,
-                      child: Text(displayStatus(status)),
+                      label: displayStatus(status),
                     ),
                   ),
                 ],
@@ -635,24 +661,18 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
             title: 'Method',
             child: SizedBox(
               width: _filtersFieldWidth,
-              child: DropdownButtonFormField<FulfillmentMethod?>(
-                isExpanded: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.logoBlue,
-                  size: 24,
-                ),
-                initialValue: methodFilter,
+              child: AppPopupMenuField<FulfillmentMethod>(
+                value: methodFilter,
                 decoration: _filterDropdownDecoration('Method'),
-                items: [
-                  const DropdownMenuItem<FulfillmentMethod?>(
+                options: [
+                  const AppPopupMenuOption<FulfillmentMethod?>(
                     value: null,
-                    child: Text('Any'),
+                    label: 'Any',
                   ),
                   ...FulfillmentMethod.values.map(
-                    (method) => DropdownMenuItem<FulfillmentMethod?>(
+                    (method) => AppPopupMenuOption<FulfillmentMethod?>(
                       value: method,
-                      child: Text(displayFulfillment(method)),
+                      label: displayFulfillment(method),
                     ),
                   ),
                 ],
@@ -767,6 +787,33 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
           ),
         ],
       ),
+    );
+    final anchorContext = anchorKey.currentContext;
+    final overlayBox =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final anchorBox = anchorContext?.findRenderObject() as RenderBox?;
+    if (overlayBox == null ||
+        anchorBox == null ||
+        !overlayBox.hasSize ||
+        !anchorBox.hasSize) {
+      return menuContent;
+    }
+    final anchorTopLeft = anchorBox.localToGlobal(
+      Offset.zero,
+      ancestor: overlayBox,
+    );
+    final anchorBottom = anchorTopLeft.dy + anchorBox.size.height;
+    final maxMenuHeight = math.max(
+      0.0,
+      overlayBox.size.height - anchorBottom - 28,
+    );
+    if (maxMenuHeight <= 0) {
+      return menuContent;
+    }
+    return SizedBox(
+      width: _filtersMenuWidth,
+      height: maxMenuHeight,
+      child: SingleChildScrollView(child: menuContent),
     );
   }
 
@@ -1355,13 +1402,12 @@ class _DateField extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: const Color(0xFF1D2939),
-                  fontSize: isPlaceholder ? 16.5 : 16,
+                  fontSize: isPlaceholder ? 14 : 15.5,
                   height: 1.15,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(icon, color: AppColors.logoBlue, size: 22),
+            Icon(icon, color: AppColors.logoBlue, size: 18),
           ],
         ),
       ),
@@ -1422,35 +1468,19 @@ class _OrderHeaderRow extends StatelessWidget {
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.createdAt,
-          child: Text(
-            'Created at',
-            style: labelStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Text('Created at', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.updatedAt,
-          child: Text(
-            'Updated at',
-            style: labelStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: Text('Updated at', style: labelStyle, maxLines: 1),
         ),
         SizedBox(width: widths.gap + trailingSpace),
         SizedBox(
           width: _AdminOrdersPageState._actionsWidth,
           child: Align(
             alignment: Alignment.centerRight,
-            child: Text(
-              'Actions',
-              style: labelStyle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-            ),
+            child: Text('Actions', style: labelStyle, maxLines: 1, textAlign: TextAlign.right),
           ),
         ),
       ],

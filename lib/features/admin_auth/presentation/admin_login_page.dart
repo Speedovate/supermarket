@@ -69,9 +69,15 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.only(right: 14, bottom: 28),
-                        child: Center(child: BrandLogo()),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 14, bottom: 28),
+                        child: Center(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onLongPress: () => context.go('/'),
+                            child: const BrandLogo(),
+                          ),
+                        ),
                       ),
                       TextFormField(
                         controller: _emailController,

@@ -71,12 +71,14 @@ class FirestoreCatalogService {
       .collection(FirebasePaths.system)
       .doc(FirebasePaths.catalogMetaDocumentId);
 
-  Future<FirestoreCatalogSnapshot?> loadPublicSnapshot() async {
+  Future<FirestoreCatalogSnapshot?> loadCatalogSnapshot({
+    bool includeInactive = false,
+  }) async {
     final results = await Future.wait<Object?>([
-      loadCategories(includeInactive: false),
-      loadBarangays(includeInactive: false),
-      loadBanners(includeInactive: false),
-      loadProducts(includeInactive: false),
+      loadCategories(includeInactive: includeInactive),
+      loadBarangays(includeInactive: includeInactive),
+      loadBanners(includeInactive: includeInactive),
+      loadProducts(includeInactive: includeInactive),
       loadSettings(),
     ]);
 
@@ -89,6 +91,10 @@ class FirestoreCatalogService {
     );
 
     return snapshot.hasAnyData ? snapshot : null;
+  }
+
+  Future<FirestoreCatalogSnapshot?> loadPublicSnapshot() async {
+    return loadCatalogSnapshot(includeInactive: false);
   }
 
   Future<CatalogMetaSnapshot?> loadCatalogMeta() async {
@@ -564,6 +570,18 @@ class FirestoreCatalogService {
     final counterRef = _firestore
         .collection(FirebasePaths.system)
         .doc(FirebasePaths.ordersCounterDocumentId);
+    final latestOrderQuery = await _firestore
+        .collection(FirebasePaths.orders)
+        .orderBy('id', descending: true)
+        .limit(1)
+        .get();
+    final remoteNextOrderId = latestOrderQuery.docs.isEmpty
+        ? 1
+        : (_coerceInt(latestOrderQuery.docs.first.data()['id']) + 1);
+    final baselineNextOrderId = math.max(
+      1,
+      remoteNextOrderId > 0 ? remoteNextOrderId : fallbackNextOrderId,
+    );
 
     return _firestore.runTransaction<int>((transaction) async {
       final snapshot = await transaction.get(counterRef);
@@ -572,8 +590,8 @@ class FirestoreCatalogService {
           ? 0
           : _coerceInt(data['nextOrderId']);
       final reservedOrderId = currentNextOrderId > 0
-          ? currentNextOrderId
-          : math.max(1, fallbackNextOrderId);
+          ? math.max(currentNextOrderId, baselineNextOrderId)
+          : baselineNextOrderId;
 
       transaction.set(counterRef, {
         'nextOrderId': reservedOrderId + 1,

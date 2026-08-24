@@ -131,10 +131,22 @@ class AppController extends Notifier<AppState> {
   StreamSubscription<List<Product>>? _productsSubscription;
   StreamSubscription<AppSettings?>? _settingsSubscription;
   StreamSubscription<List<OrderRequest>>? _ordersSubscription;
+  bool? _catalogRealtimeIncludesInactive;
   bool _realtimeSyncScheduled = false;
   static const _defaultStoreContactNumber = '09064493206';
   static const _defaultFacebookMessengerUrl =
       'https://www.facebook.com/andrew.s.supermarket.2024';
+
+  bool _isCurrentAdminRoute() {
+    final path = Uri.base.path;
+    return path == '/admin' ||
+        path == '/admin/' ||
+        path.startsWith('/admin/');
+  }
+
+  bool _hasActiveAdminContext([AdminSession? session]) {
+    return session != null && _isCurrentAdminRoute();
+  }
 
   @override
   AppState build() {
@@ -194,7 +206,18 @@ class AppController extends Notifier<AppState> {
 
   void _startRealtimeSync() {
     _realtimeSyncScheduled = false;
-    final includeInactive = state.adminSession != null;
+    final includeInactive = _hasActiveAdminContext(state.adminSession);
+    if (_catalogRealtimeIncludesInactive != includeInactive) {
+      unawaited(_categoriesSubscription?.cancel());
+      unawaited(_barangaysSubscription?.cancel());
+      unawaited(_bannersSubscription?.cancel());
+      unawaited(_productsSubscription?.cancel());
+      _categoriesSubscription = null;
+      _barangaysSubscription = null;
+      _bannersSubscription = null;
+      _productsSubscription = null;
+      _catalogRealtimeIncludesInactive = includeInactive;
+    }
     _categoriesSubscription ??= _firestoreCatalog.watchCategories(
       includeInactive: includeInactive,
     ).listen((categories) async {
@@ -259,14 +282,15 @@ class AppController extends Notifier<AppState> {
   void _restartOrdersRealtimeSync() {
     unawaited(_ordersSubscription?.cancel());
     final adminSession = state.adminSession;
+    final hasActiveAdminContext = _hasActiveAdminContext(adminSession);
     final trackedPhones = _customerLookupPhones();
-    final stream = adminSession != null
+    final stream = hasActiveAdminContext
         ? _firestoreCatalog.watchOrders()
         : _firestoreCatalog.watchOrdersForNormalizedPhones(
             trackedPhones,
           );
     _ordersSubscription = stream.listen((orders) async {
-      final nextOrders = adminSession != null
+      final nextOrders = hasActiveAdminContext
           ? orders
           : _mergeOrdersPreservingLocal(
               existing: state.orders,
@@ -276,14 +300,14 @@ class AppController extends Notifier<AppState> {
       final soldSync = _reconcileProductSoldWithOrders(
         products: state.products,
         orders: nextOrders,
-        shouldPersistRemotely: adminSession != null,
+        shouldPersistRemotely: hasActiveAdminContext,
       );
       state = state.copyWith(
         orders: nextOrders,
         products: soldSync.products,
       );
       await _persist();
-      if (soldSync.changedProducts.isNotEmpty && adminSession != null) {
+      if (soldSync.changedProducts.isNotEmpty && hasActiveAdminContext) {
         await _firestoreCatalog.saveProducts(soldSync.changedProducts);
       }
     }, onError: _handleRealtimeSyncError);
@@ -321,6 +345,15 @@ class AppController extends Notifier<AppState> {
   }
 
   void _applyPersistedState(PersistedData persisted) {
+    final sanitizedOrders = _hasActiveAdminContext(persisted.adminSession)
+        ? persisted.orders
+        : _filterClientVisibleOrders(
+            persisted.orders,
+            trackedPhones: _clientScopedPhoneSeeds(
+              orders: persisted.orders,
+              draft: persisted.customerDraft,
+            ),
+          );
     final syncedCart = _syncCartWithProducts(
       products: persisted.products,
       cart: persisted.cart,
@@ -339,12 +372,12 @@ class AppController extends Notifier<AppState> {
       ),
       banners: persisted.banners,
       products: persisted.products,
-      orders: persisted.orders,
+      orders: sanitizedOrders,
       settings: _normalizeSettings(persisted.settings),
       cart: syncedCart,
       customerDraft: _resolveAutofillDraft(
         currentDraft: persisted.customerDraft,
-        orders: persisted.orders,
+        orders: sanitizedOrders,
       ),
       adminSession: persisted.adminSession,
       catalogHydrated: hasPersistedCatalogContent,
@@ -353,6 +386,7 @@ class AppController extends Notifier<AppState> {
 
   Future<void> _hydratePublicDataFromFirebase() async {
     final shouldManageLoading = state.loading || !state.catalogHydrated;
+    final includeInactive = _hasActiveAdminContext(state.adminSession);
     if (shouldManageLoading) {
       state = state.copyWith(loading: true);
     }
@@ -364,7 +398,9 @@ class AppController extends Notifier<AppState> {
         return;
       }
 
-      var snapshot = await _firestoreCatalog.loadPublicSnapshot();
+      var snapshot = await _firestoreCatalog.loadCatalogSnapshot(
+        includeInactive: includeInactive,
+      );
       if (snapshot == null) {
         await _firestoreCatalog.seedInitialData(
           categories: sampleCategories,
@@ -373,7 +409,9 @@ class AppController extends Notifier<AppState> {
           products: sampleProducts,
           settings: const AppSettings(),
         );
-        snapshot = await _firestoreCatalog.loadPublicSnapshot();
+        snapshot = await _firestoreCatalog.loadCatalogSnapshot(
+          includeInactive: includeInactive,
+        );
       }
       if (snapshot == null) {
         return;
@@ -566,7 +604,10 @@ class AppController extends Notifier<AppState> {
     final hasDraftContent =
         currentDraft.name.trim().isNotEmpty ||
         currentDraft.mobileNumber.trim().isNotEmpty ||
-        currentDraft.barangay.trim().isNotEmpty;
+        currentDraft.barangay.trim().isNotEmpty ||
+        currentDraft.addressStreet.trim().isNotEmpty ||
+        currentDraft.addressLandmark.trim().isNotEmpty ||
+        currentDraft.note.trim().isNotEmpty;
     if (hasDraftContent || orders.isEmpty) {
       return currentDraft;
     }
@@ -751,11 +792,15 @@ class AppController extends Notifier<AppState> {
       barangay: barangay,
       reference: current,
     );
+    final effectiveCutoff = current.isAfter(currentWeekCutoff)
+        ? currentWeekCutoff.add(const Duration(days: 7))
+        : currentWeekCutoff;
+    final nextDeliveryStart = effectiveCutoff.add(const Duration(days: 1));
+    final nextDeliveryEnd = effectiveCutoff.add(const Duration(days: 2));
     if (!current.isAfter(currentWeekCutoff)) {
-      return cutoffLabel;
+      return '$cutoffLabel\n\nOrder will be delivered on ${displayWeekday(nextDeliveryStart.weekday)} or ${displayWeekday(nextDeliveryEnd.weekday)}.';
     }
-    final nextCutoff = currentWeekCutoff.add(const Duration(days: 7));
-    return '$cutoffLabel. Your order will be processed next ${displayWeekday(nextCutoff.weekday)} or you can select pickup instead to get your order faster.';
+    return '$cutoffLabel. Your order will be processed next ${displayWeekday(effectiveCutoff.weekday)} or you can select pickup instead to get your order faster.\n\nOrder will be delivered on ${displayWeekday(nextDeliveryStart.weekday)} or ${displayWeekday(nextDeliveryEnd.weekday)}.';
   }
 
   bool isBarangayCutoffReached(String name, {DateTime? now}) {
@@ -925,9 +970,9 @@ class AppController extends Notifier<AppState> {
         draft.addressStreet.trim().isEmpty) {
       return 'Please enter your street/landmark';
     }
-    if (draft.fulfillmentMethod == FulfillmentMethod.delivery &&
+    if (state.settings.minimumDeliveryOrderAmount > 0 &&
         state.cartTotalCentavos < state.settings.minimumDeliveryOrderAmount) {
-      return 'Minimum order for delivery not reached';
+      return 'Minimum order amount is ${formatPesos(state.settings.minimumDeliveryOrderAmount)}';
     }
     if (state.cart.isEmpty) {
       return 'Add at least one product before submitting.';
@@ -1062,6 +1107,7 @@ class AppController extends Notifier<AppState> {
         errorMessage: null,
       );
       await _persist();
+      _startRealtimeSync();
       _restartOrdersRealtimeSync();
       await _refreshOrdersFromFirebase();
       return true;
@@ -1088,8 +1134,13 @@ class AppController extends Notifier<AppState> {
 
   Future<void> logoutAdmin() async {
     await _auth.signOut();
-    state = state.copyWith(adminSession: null);
+    final trackedPhones = _clientScopedPhoneSeeds();
+    state = state.copyWith(
+      adminSession: null,
+      orders: _filterClientVisibleOrders(state.orders, trackedPhones: trackedPhones),
+    );
     await _persist();
+    _startRealtimeSync();
     _restartOrdersRealtimeSync();
     await _refreshOrdersFromFirebase();
   }
@@ -1433,13 +1484,14 @@ class AppController extends Notifier<AppState> {
   Future<void> _refreshOrdersFromFirebase() async {
     try {
       final adminSession = state.adminSession;
+      final hasActiveAdminContext = _hasActiveAdminContext(adminSession);
       final trackedPhones = _customerLookupPhones();
-      final remoteOrders = adminSession != null
+      final remoteOrders = hasActiveAdminContext
           ? await _firestoreCatalog.loadOrders()
           : await _firestoreCatalog.loadOrdersForNormalizedPhones(
               trackedPhones,
             );
-      final nextOrders = adminSession != null
+      final nextOrders = hasActiveAdminContext
           ? remoteOrders
           : _mergeOrdersPreservingLocal(
               existing: state.orders,
@@ -1449,14 +1501,14 @@ class AppController extends Notifier<AppState> {
       final soldSync = _reconcileProductSoldWithOrders(
         products: state.products,
         orders: nextOrders,
-        shouldPersistRemotely: adminSession != null,
+        shouldPersistRemotely: hasActiveAdminContext,
       );
       state = state.copyWith(
         orders: nextOrders,
         products: soldSync.products,
       );
       await _persist();
-      if (soldSync.changedProducts.isNotEmpty && adminSession != null) {
+      if (soldSync.changedProducts.isNotEmpty && hasActiveAdminContext) {
         await _firestoreCatalog.saveProducts(soldSync.changedProducts);
       }
     } catch (_) {
@@ -1465,18 +1517,55 @@ class AppController extends Notifier<AppState> {
   }
 
   Set<String> _customerLookupPhones() {
+    return _clientScopedPhoneSeeds();
+  }
+
+  Set<String> _clientScopedPhoneSeeds({
+    List<OrderRequest>? orders,
+    CustomerDraft? draft,
+  }) {
+    final sourceOrders = orders ?? state.orders;
+    final sourceDraft = draft ?? state.customerDraft;
     final phones = <String>{};
-    final normalizedDraft = normalizePhoneNumber(state.customerDraft.mobileNumber);
+    final normalizedDraft = normalizePhoneNumber(sourceDraft.mobileNumber);
     if (normalizedDraft.isNotEmpty) {
       phones.add(normalizedDraft);
+      return phones;
     }
-    for (final order in state.orders) {
-      final normalized = normalizePhoneNumber(order.phone);
-      if (normalized.isNotEmpty) {
-        phones.add(normalized);
-      }
+
+    final distinctOrderPhones = sourceOrders
+        .map((order) => normalizePhoneNumber(order.phone))
+        .where((phone) => phone.isNotEmpty)
+        .toSet();
+    if (distinctOrderPhones.length == 1) {
+      phones.add(distinctOrderPhones.first);
     }
     return phones;
+  }
+
+  List<OrderRequest> _filterClientVisibleOrders(
+    List<OrderRequest> orders, {
+    required Set<String> trackedPhones,
+  }) {
+    if (trackedPhones.isEmpty) {
+      return const [];
+    }
+    final filtered = orders.where((order) {
+      final normalizedPhone = normalizePhoneNumber(order.phone);
+      return normalizedPhone.isNotEmpty && trackedPhones.contains(normalizedPhone);
+    }).toList()
+      ..sort((a, b) {
+        final updatedCompare = b.updatedAt.compareTo(a.updatedAt);
+        if (updatedCompare != 0) {
+          return updatedCompare;
+        }
+        final createdCompare = b.createdAt.compareTo(a.createdAt);
+        if (createdCompare != 0) {
+          return createdCompare;
+        }
+        return b.id.compareTo(a.id);
+      });
+    return filtered;
   }
 
   List<OrderRequest> _mergeOrdersPreservingLocal({

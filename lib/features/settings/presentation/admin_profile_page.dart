@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,27 +40,107 @@ class AdminProfilePage extends ConsumerWidget {
       final maxShowController = TextEditingController(
         text: '${settings.bestSellersLimit}',
       );
+      final minAmountController = TextEditingController(
+        text: '${settings.minimumDeliveryOrderAmount ~/ 100}',
+      );
       var showBanners = settings.bestSellersEnabled;
+      var isSaving = false;
 
       final shouldSave = await showDialog<bool>(
         context: context,
         builder: (dialogContext) {
-          void submit() => Navigator.of(dialogContext).pop(true);
-
           return StatefulBuilder(
             builder: (dialogContext, setModalState) {
+              Future<void> submit() async {
+                if (isSaving) {
+                  return;
+                }
+                final nextName = nameController.text.trim();
+                final nextEmail = emailController.text.trim();
+                final nextPhone = phoneController.text.trim();
+                final nextFacebook = facebookController.text.trim();
+                final minSold = int.tryParse(minSoldController.text.trim()) ?? 0;
+                final maxShow = int.tryParse(maxShowController.text.trim()) ?? 0;
+                final minAmountPesos =
+                    int.tryParse(minAmountController.text.trim()) ?? 0;
+
+                if (nextName.isEmpty) {
+                  messenger.clearSnackBars();
+                  messenger.showSnackBar(
+                    errorSnackBar('Please enter your name.'),
+                  );
+                  return;
+                }
+                if (nextEmail.isEmpty) {
+                  messenger.clearSnackBars();
+                  messenger.showSnackBar(
+                    errorSnackBar('Please enter your email.'),
+                  );
+                  return;
+                }
+                if (minSold < 1) {
+                  messenger.clearSnackBars();
+                  messenger.showSnackBar(
+                    errorSnackBar('Minimum sold should be at least 1.'),
+                  );
+                  return;
+                }
+                if (maxShow < 1) {
+                  messenger.clearSnackBars();
+                  messenger.showSnackBar(
+                    errorSnackBar('Max show should be at least 1.'),
+                  );
+                  return;
+                }
+                if (minAmountPesos < 0) {
+                  messenger.clearSnackBars();
+                  messenger.showSnackBar(
+                    errorSnackBar('Min amount cannot be negative.'),
+                  );
+                  return;
+                }
+
+                setModalState(() => isSaving = true);
+                try {
+                  await ref.read(appControllerProvider.notifier).updateAdminProfile(
+                    displayName: nextName,
+                    email: nextEmail,
+                    settings: settings.copyWith(
+                      bestSellersEnabled: showBanners,
+                      bestSellerMinSoldUnits: minSold,
+                      bestSellersLimit: maxShow,
+                      minimumDeliveryOrderAmount: minAmountPesos * 100,
+                      storeContactNumber: nextPhone,
+                      facebookMessengerUrl: nextFacebook,
+                    ),
+                  );
+                  if (!dialogContext.mounted) {
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(true);
+                } catch (_) {
+                  if (dialogContext.mounted) {
+                    setModalState(() => isSaving = false);
+                  }
+                  rethrow;
+                }
+              }
+
               return AppModalFrame(
                 title: 'Edit Profile',
                 onSubmit: submit,
                 actions: [
                   AppModalButton(
                     label: 'Close',
-                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    onPressed: isSaving
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(false),
                   ),
                   const SizedBox(width: 10),
                   AppModalButton(
                     label: 'Save',
                     isPrimary: true,
+                    isLoading: isSaving,
                     onPressed: submit,
                   ),
                 ],
@@ -139,11 +221,30 @@ class AdminProfilePage extends ConsumerWidget {
                     TextField(
                       controller: maxShowController,
                       keyboardType: TextInputType.number,
-                      textInputAction: TextInputAction.done,
+                      textInputAction: TextInputAction.next,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      onSubmitted: (_) => submit(),
                       decoration: const InputDecoration(
                         labelText: 'Max show',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Orders',
+                      style: TextStyle(
+                        color: Color(0xFF172033),
+                        fontWeight: FontWeight.w600,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: minAmountController,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.done,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onSubmitted: (_) => unawaited(submit()),
+                      decoration: const InputDecoration(
+                        labelText: 'Min Amount',
                       ),
                     ),
                   ],
@@ -154,62 +255,15 @@ class AdminProfilePage extends ConsumerWidget {
         },
       );
 
-      final nextName = nameController.text.trim();
-      final nextEmail = emailController.text.trim();
-      final nextPhone = phoneController.text.trim();
-      final nextFacebook = facebookController.text.trim();
-      final minSold = int.tryParse(minSoldController.text.trim()) ?? 0;
-      final maxShow = int.tryParse(maxShowController.text.trim()) ?? 0;
       nameController.dispose();
       emailController.dispose();
       phoneController.dispose();
       facebookController.dispose();
       minSoldController.dispose();
       maxShowController.dispose();
+      minAmountController.dispose();
 
       if (shouldSave != true || !context.mounted) {
-        return;
-      }
-
-      if (nextName.isEmpty) {
-        messenger.clearSnackBars();
-        messenger.showSnackBar(errorSnackBar('Please enter your name.'));
-        return;
-      }
-      if (nextEmail.isEmpty) {
-        messenger.clearSnackBars();
-        messenger.showSnackBar(errorSnackBar('Please enter your email.'));
-        return;
-      }
-      if (minSold < 1) {
-        messenger.clearSnackBars();
-        messenger.showSnackBar(
-          errorSnackBar('Minimum sold should be at least 1.'),
-        );
-        return;
-      }
-      if (maxShow < 1) {
-        messenger.clearSnackBars();
-        messenger.showSnackBar(
-          errorSnackBar('Max show should be at least 1.'),
-        );
-        return;
-      }
-
-      await ref.read(appControllerProvider.notifier).updateAdminProfile(
-        displayName: nextName,
-        email: nextEmail,
-        settings:
-        settings.copyWith(
-          bestSellersEnabled: showBanners,
-          bestSellerMinSoldUnits: minSold,
-          bestSellersLimit: maxShow,
-          storeContactNumber: nextPhone,
-          facebookMessengerUrl: nextFacebook,
-        ),
-      );
-
-      if (!context.mounted) {
         return;
       }
       messenger.clearSnackBars();
@@ -235,8 +289,7 @@ class AdminProfilePage extends ConsumerWidget {
                     phoneNumber: settings.storeContactNumber.trim(),
                     facebookLink: settings.facebookMessengerUrl.trim(),
                     showBanners: settings.bestSellersEnabled,
-                    minimumSold: settings.bestSellerMinSoldUnits,
-                    bannerCount: settings.bestSellersLimit,
+                    minimumAmount: settings.minimumDeliveryOrderAmount,
                     createdAt: adminSession?.createdAt,
                     updatedAt: adminSession?.updatedAt,
                     onEdit: handleEdit,
@@ -258,8 +311,7 @@ class _ProfileTable extends StatelessWidget {
     required this.phoneNumber,
     required this.facebookLink,
     required this.showBanners,
-    required this.minimumSold,
-    required this.bannerCount,
+    required this.minimumAmount,
     required this.createdAt,
     required this.updatedAt,
     required this.onEdit,
@@ -270,8 +322,7 @@ class _ProfileTable extends StatelessWidget {
   final String phoneNumber;
   final String facebookLink;
   final bool showBanners;
-  final int minimumSold;
-  final int bannerCount;
+  final int minimumAmount;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final Future<void> Function() onEdit;
@@ -286,8 +337,7 @@ class _ProfileTable extends StatelessWidget {
           phoneNumber: phoneNumber,
           facebookLink: facebookLink,
           showBanners: showBanners,
-          minimumSold: minimumSold,
-          bannerCount: bannerCount,
+          minimumAmount: minimumAmount,
           createdAt: createdAt,
           updatedAt: updatedAt,
         );
@@ -349,8 +399,7 @@ class _ProfileTable extends StatelessWidget {
                       phoneNumber: phoneNumber,
                       facebookLink: facebookLink,
                       showBanners: showBanners,
-                      minimumSold: minimumSold,
-                      bannerCount: bannerCount,
+                      minimumAmount: minimumAmount,
                       createdAt: createdAt,
                       updatedAt: updatedAt,
                       onEdit: onEdit,
@@ -506,19 +555,9 @@ class _ProfileHeaderRow extends StatelessWidget {
         ),
         SizedBox(width: widths.gap),
         SizedBox(
-          width: widths.minimumSold,
+          width: widths.minimumAmount,
           child: Text(
-            'Min sold',
-            style: labelStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        SizedBox(width: widths.gap),
-        SizedBox(
-          width: widths.bannerCount,
-          child: Text(
-            'Max show',
+            'Min Amount',
             style: labelStyle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -570,8 +609,7 @@ class _ProfileContentRow extends StatelessWidget {
     required this.phoneNumber,
     required this.facebookLink,
     required this.showBanners,
-    required this.minimumSold,
-    required this.bannerCount,
+    required this.minimumAmount,
     required this.createdAt,
     required this.updatedAt,
     required this.onEdit,
@@ -582,8 +620,7 @@ class _ProfileContentRow extends StatelessWidget {
   final String phoneNumber;
   final String facebookLink;
   final bool showBanners;
-  final int minimumSold;
-  final int bannerCount;
+  final int minimumAmount;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final Future<void> Function() onEdit;
@@ -632,13 +669,8 @@ class _ProfileContentRow extends StatelessWidget {
         ),
         SizedBox(width: widths.gap),
         SizedBox(
-          width: widths.minimumSold,
-          child: Text('$minimumSold', style: bodyStyle),
-        ),
-        SizedBox(width: widths.gap),
-        SizedBox(
-          width: widths.bannerCount,
-          child: Text('$bannerCount', style: bodyStyle),
+          width: widths.minimumAmount,
+          child: Text(formatPesos(minimumAmount), style: bodyStyle),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
@@ -697,8 +729,7 @@ class _ProfileSummaryWidths {
     required this.phone,
     required this.facebookLink,
     required this.showBanners,
-    required this.minimumSold,
-    required this.bannerCount,
+    required this.minimumAmount,
     required this.createdAt,
     required this.updatedAt,
     required this.actions,
@@ -709,8 +740,7 @@ class _ProfileSummaryWidths {
   final double phone;
   final double facebookLink;
   final double showBanners;
-  final double minimumSold;
-  final double bannerCount;
+  final double minimumAmount;
   final double createdAt;
   final double updatedAt;
   final double actions;
@@ -724,9 +754,7 @@ class _ProfileSummaryWidths {
       gap +
       showBanners +
       gap +
-      minimumSold +
-      gap +
-      bannerCount +
+      minimumAmount +
       gap +
       createdAt +
       gap +
@@ -739,10 +767,9 @@ class _ProfileSummaryWidths {
     1 => phone,
     2 => facebookLink,
     3 => showBanners,
-    4 => minimumSold,
-    5 => bannerCount,
-    6 => createdAt,
-    7 => updatedAt,
+    4 => minimumAmount,
+    5 => createdAt,
+    6 => updatedAt,
     _ => actions,
   };
 }
@@ -759,8 +786,7 @@ _ProfileSummaryWidths _computeProfileSummaryWidths(
   required String phoneNumber,
   required String facebookLink,
   required bool showBanners,
-  required int minimumSold,
-  required int bannerCount,
+  required int minimumAmount,
   required DateTime? createdAt,
   required DateTime? updatedAt,
 }
@@ -816,8 +842,7 @@ _ProfileSummaryWidths _computeProfileSummaryWidths(
           max: screenWidth < 700 ? 120 : 132,
         ) +
         _profileSummaryStatusBadgeHorizontalPadding,
-    minimumSold: maxWidth('Min sold', '$minimumSold'),
-    bannerCount: maxWidth('Max show', '$bannerCount'),
+    minimumAmount: maxWidth('Min Amount', formatPesos(minimumAmount)),
     createdAt: maxWidth('Created at', createdAtValue),
     updatedAt: maxWidth('Updated at', updatedAtValue),
     actions: maxWidth('Actions', '') > _profileSummaryActionsWidth

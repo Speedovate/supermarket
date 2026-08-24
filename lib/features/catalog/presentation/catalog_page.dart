@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
@@ -203,18 +204,14 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   CustomerDraft _buildCustomerDraft(FulfillmentMethod method) {
     final existingDraft = ref.read(appControllerProvider).customerDraft;
     final now = DateTime.now();
-    final isDelivery = method == FulfillmentMethod.delivery;
-    final hasBarangay = _customerBarangayController.text.trim().isNotEmpty;
     return CustomerDraft(
       name: _customerNameController.text,
       mobileNumber: _customerMobileController.text,
       normalizedMobileNumber: normalizePhoneNumber(
         _customerMobileController.text,
       ),
-      barangay: isDelivery ? _customerBarangayController.text : '',
-      addressStreet: isDelivery && hasBarangay
-          ? _customerStreetController.text
-          : '',
+      barangay: _customerBarangayController.text,
+      addressStreet: _customerStreetController.text,
       addressLandmark: '',
       fulfillmentMethod: method,
       createdAt: existingDraft.createdAt ?? now,
@@ -229,6 +226,37 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     await ref
         .read(appControllerProvider.notifier)
         .updateCustomerDraft(_buildCustomerDraft(currentMethod));
+  }
+
+  void _syncCustomerControllers(CustomerDraft draft) {
+    final streetValue = draft.addressStreet.trim().isNotEmpty
+        ? draft.addressStreet
+        : draft.addressLandmark;
+
+    if (_customerNameController.text != draft.name) {
+      _customerNameController.value = TextEditingValue(
+        text: draft.name,
+        selection: TextSelection.collapsed(offset: draft.name.length),
+      );
+    }
+    if (_customerMobileController.text != draft.mobileNumber) {
+      _customerMobileController.value = TextEditingValue(
+        text: draft.mobileNumber,
+        selection: TextSelection.collapsed(offset: draft.mobileNumber.length),
+      );
+    }
+    if (_customerBarangayController.text != draft.barangay) {
+      _customerBarangayController.value = TextEditingValue(
+        text: draft.barangay,
+        selection: TextSelection.collapsed(offset: draft.barangay.length),
+      );
+    }
+    if (_customerStreetController.text != streetValue) {
+      _customerStreetController.value = TextEditingValue(
+        text: streetValue,
+        selection: TextSelection.collapsed(offset: streetValue.length),
+      );
+    }
   }
 
   Future<void> _handleCartTap(double width) async {
@@ -250,6 +278,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       setState(() => _desktopCartPanelOpen = false);
     }
     _cartBottomSheetOpen = true;
+    final bottomSheetMessengerKey = GlobalKey<ScaffoldMessengerState>();
     var localSelectedThreadId = _selectedCartThreadId;
     var localPreviousOrdersExpanded = _previousOrdersExpanded;
 
@@ -280,6 +309,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                     : 'current';
 
                 return ScaffoldMessenger(
+                  key: bottomSheetMessengerKey,
                   child: Scaffold(
                     backgroundColor: Colors.transparent,
                     resizeToAvoidBottomInset: false,
@@ -350,9 +380,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                   },
                                   onDraftChanged: _persistCustomerDraft,
                                   onReviewOrder: () async {
-                                    final messenger = ScaffoldMessenger.of(
-                                      sheetContext,
-                                    );
+                                    final messenger =
+                                        bottomSheetMessengerKey.currentState;
                                     await _persistCustomerDraft();
                                     if (!mounted) {
                                       return;
@@ -364,8 +393,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                         .read(appControllerProvider.notifier)
                                         .validateCheckoutDraft(nextDraft);
                                     if (error != null) {
-                                      messenger.clearSnackBars();
-                                      messenger.showSnackBar(errorSnackBar(error));
+                                      messenger?.clearSnackBars();
+                                      messenger?.showSnackBar(errorSnackBar(error));
                                       return;
                                     }
                                     final itemCount = ref
@@ -397,8 +426,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                               .read(appControllerProvider)
                                               .errorMessage ??
                                           'Unable to submit your order right now.';
-                                      messenger.clearSnackBars();
-                                      messenger.showSnackBar(
+                                      messenger?.clearSnackBars();
+                                      messenger?.showSnackBar(
                                         errorSnackBar(submitError),
                                       );
                                       return;
@@ -556,6 +585,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   Widget build(BuildContext context) {
     final vm = ref.watch(catalogViewModelProvider);
     final appState = ref.watch(appControllerProvider);
+    _syncCustomerControllers(appState.customerDraft);
     final controller = ref.watch(appControllerProvider.notifier);
     final allPublicProducts = controller.publicProductsFor(
       categoryId: 'all',
@@ -1356,7 +1386,11 @@ class _Header extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const BrandLogo(),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onLongPress: () => context.go('/admin'),
+                child: const BrandLogo(),
+              ),
               if (stackSearch) const Expanded(child: SizedBox()),
               if (!stackSearch) SizedBox(width: searchGap),
               if (!stackSearch)
@@ -3061,17 +3095,20 @@ class _DesktopCartCustomerCardState
           ),
           const SizedBox(height: 14),
           if (isReadOnly) ...[
-            _ReadOnlyDetailsField(label: 'Name', value: effectiveDraft.name),
+            _ReadOnlyDetailsField(
+              label: 'Name/Store',
+              value: effectiveDraft.name,
+            ),
             const SizedBox(height: 12),
             _ReadOnlyDetailsField(
-              label: 'Phone',
+              label: 'Mobile Number',
               value: effectiveDraft.mobileNumber,
             ),
           ] else ...[
             TextField(
               controller: controllers.name,
               onChanged: (_) => widget.onDraftChanged(),
-              decoration: const InputDecoration(labelText: 'Name'),
+              decoration: const InputDecoration(labelText: 'Name/Store'),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -3082,7 +3119,7 @@ class _DesktopCartCustomerCardState
                 _PhilippineMobileInputFormatter(),
               ],
               onChanged: (_) => widget.onDraftChanged(),
-              decoration: const InputDecoration(labelText: 'Phone'),
+              decoration: const InputDecoration(labelText: 'Mobile Number'),
             ),
           ],
           if ((settings.requirePlaceForDeliveryOnly &&
