@@ -523,50 +523,6 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
               ),
             ),
           ),
-          const _FilterDivider(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              _filtersContentHorizontalPadding,
-              12,
-              _filtersContentHorizontalPadding,
-              _filtersContentHorizontalPadding,
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: _filtersFieldWidth,
-                child: MousePressable(
-                  onTap: () {
-                    _setFilters(() {
-                      startDateFilter = null;
-                      endDateFilter = null;
-                    });
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE4E7EC)),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text(
-                      'Clear',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        height: 1.15,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
