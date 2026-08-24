@@ -729,7 +729,9 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     return Column(
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: isMobile
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
           children: [
             Expanded(
               child: isMobile
@@ -1553,8 +1555,8 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     if (maxMenuHeight <= 0) {
       return menuContent;
     }
-    return SizedBox(
-      height: maxMenuHeight,
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxMenuHeight),
       child: SingleChildScrollView(child: menuContent),
     );
   }

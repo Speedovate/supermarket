@@ -149,7 +149,9 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
     return Column(
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: isMobile
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
           children: [
             Expanded(
               child: isMobile
@@ -811,9 +813,11 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
     if (maxMenuHeight <= 0) {
       return menuContent;
     }
-    return SizedBox(
-      width: _filtersMenuWidth,
-      height: maxMenuHeight,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: _filtersMenuWidth,
+        maxHeight: maxMenuHeight,
+      ),
       child: SingleChildScrollView(child: menuContent),
     );
   }

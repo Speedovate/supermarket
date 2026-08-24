@@ -548,9 +548,11 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     if (maxMenuHeight <= 0) {
       return menuContent;
     }
-    return SizedBox(
-      width: _filtersMenuWidth,
-      height: maxMenuHeight,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: _filtersMenuWidth,
+        maxHeight: maxMenuHeight,
+      ),
       child: SingleChildScrollView(child: menuContent),
     );
   }
