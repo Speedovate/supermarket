@@ -297,18 +297,28 @@ class AppController extends Notifier<AppState> {
               incoming: orders,
               trackedPhones: trackedPhones,
             );
-      final soldSync = _reconcileProductSoldWithOrders(
-        products: state.products,
-        orders: nextOrders,
-        shouldPersistRemotely: hasActiveAdminContext,
-      );
       state = state.copyWith(
         orders: nextOrders,
-        products: soldSync.products,
+        products: hasActiveAdminContext
+            ? _reconcileProductSoldWithOrders(
+                products: state.products,
+                orders: nextOrders,
+                shouldPersistRemotely: true,
+              ).products
+            : state.products,
       );
       await _persist();
-      if (soldSync.changedProducts.isNotEmpty && hasActiveAdminContext) {
-        await _firestoreCatalog.saveProducts(soldSync.changedProducts);
+      if (hasActiveAdminContext) {
+        final soldSync = _reconcileProductSoldWithOrders(
+          products: state.products,
+          orders: nextOrders,
+          shouldPersistRemotely: true,
+        );
+        if (soldSync.changedProducts.isNotEmpty) {
+          state = state.copyWith(products: soldSync.products);
+          await _persist();
+          await _firestoreCatalog.saveProducts(soldSync.changedProducts);
+        }
       }
     }, onError: _handleRealtimeSyncError);
   }
@@ -1498,18 +1508,28 @@ class AppController extends Notifier<AppState> {
               incoming: remoteOrders,
               trackedPhones: trackedPhones,
             );
-      final soldSync = _reconcileProductSoldWithOrders(
-        products: state.products,
-        orders: nextOrders,
-        shouldPersistRemotely: hasActiveAdminContext,
-      );
       state = state.copyWith(
         orders: nextOrders,
-        products: soldSync.products,
+        products: hasActiveAdminContext
+            ? _reconcileProductSoldWithOrders(
+                products: state.products,
+                orders: nextOrders,
+                shouldPersistRemotely: true,
+              ).products
+            : state.products,
       );
       await _persist();
-      if (soldSync.changedProducts.isNotEmpty && hasActiveAdminContext) {
-        await _firestoreCatalog.saveProducts(soldSync.changedProducts);
+      if (hasActiveAdminContext) {
+        final soldSync = _reconcileProductSoldWithOrders(
+          products: state.products,
+          orders: nextOrders,
+          shouldPersistRemotely: true,
+        );
+        if (soldSync.changedProducts.isNotEmpty) {
+          state = state.copyWith(products: soldSync.products);
+          await _persist();
+          await _firestoreCatalog.saveProducts(soldSync.changedProducts);
+        }
       }
     } catch (_) {
       // Keep local cached orders when the network fetch fails.
