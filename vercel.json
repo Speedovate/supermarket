@@ -1,53 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "routes": [
+  "outputDirectory": "build/web",
+  "rewrites": [
     {
-      "src": "/assets/(.*)",
-      "dest": "/build/web/assets/$1"
-    },
-    {
-      "src": "/canvaskit/(.*)",
-      "dest": "/build/web/canvaskit/$1"
-    },
-    {
-      "src": "/icons/(.*)",
-      "dest": "/build/web/icons/$1"
-    },
-    {
-      "src": "/favicon.png",
-      "dest": "/build/web/favicon.png"
-    },
-    {
-      "src": "/flutter.js",
-      "dest": "/build/web/flutter.js"
-    },
-    {
-      "src": "/flutter_bootstrap.js",
-      "dest": "/build/web/flutter_bootstrap.js"
-    },
-    {
-      "src": "/flutter_service_worker.js",
-      "dest": "/build/web/flutter_service_worker.js"
-    },
-    {
-      "src": "/main.dart.js",
-      "dest": "/build/web/main.dart.js"
-    },
-    {
-      "src": "/manifest.json",
-      "dest": "/build/web/manifest.json"
-    },
-    {
-      "src": "/social-preview.png",
-      "dest": "/build/web/social-preview.png"
-    },
-    {
-      "src": "/version.json",
-      "dest": "/build/web/version.json"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/build/web/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
