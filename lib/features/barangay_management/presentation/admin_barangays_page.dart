@@ -220,26 +220,11 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                                   color: AppColors.logoBlue,
                                   borderRadius: BorderRadius.circular(16),
                                 ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(
-                                      Icons.filter_list_rounded,
-                                      size: 18,
-                                      color: Colors.white,
-                                    ),
-                                    if (activeFilterCount > 0) ...[
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        '$activeFilterCount',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                          height: 1.15,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.filter_list_rounded,
+                                  size: 18,
+                                  color: Colors.white,
                                 ),
                               ),
                             );

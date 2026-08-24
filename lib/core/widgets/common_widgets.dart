@@ -854,6 +854,11 @@ class AppModalFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final maxDialogHeight =
+        mediaQuery.size.height -
+        mediaQuery.viewInsets.bottom -
+        (24 * 2);
     final dialog = Dialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
@@ -862,7 +867,10 @@ class AppModalFrame extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
       ),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
+        constraints: BoxConstraints(
+          maxWidth: maxWidth,
+          maxHeight: math.max(0, maxDialogHeight),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(contentPadding),
           child: Column(
@@ -889,7 +897,10 @@ class AppModalFrame extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              child,
+              Flexible(
+                fit: FlexFit.loose,
+                child: SingleChildScrollView(child: child),
+              ),
               if (actions != null && actions!.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Row(children: actions!),

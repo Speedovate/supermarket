@@ -35,6 +35,8 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
   final TextEditingController _queryController = TextEditingController();
   final GlobalKey _mobileFiltersAnchorKey = GlobalKey();
   final GlobalKey _desktopFiltersAnchorKey = GlobalKey();
+  final LayerLink _mobileFiltersLayerLink = LayerLink();
+  final LayerLink _desktopFiltersLayerLink = LayerLink();
   String query = '';
   DateTime? createdAtFilter;
   DateTime? updatedAtFilter;
@@ -566,6 +568,116 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     soldSort = _normalizeNullable(uri.queryParameters['filters[sold]']);
   }
 
+  Future<void> _showFiltersMenu({
+    required GlobalKey anchorKey,
+    required LayerLink anchorLink,
+    required List<Product> products,
+    required List<Category> categories,
+  }) async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      return;
+    }
+    final anchorBox = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+    final overlayState = Overlay.of(context);
+    final overlayBox = overlayState.context.findRenderObject() as RenderBox?;
+    if (anchorBox == null ||
+        overlayBox == null ||
+        !anchorBox.hasSize ||
+        !overlayBox.hasSize) {
+      return;
+    }
+    final mediaQuery = MediaQuery.of(context);
+    final anchorTopLeft = anchorBox.localToGlobal(
+      Offset.zero,
+      ancestor: overlayBox,
+    );
+    final anchorBottom = anchorTopLeft.dy + anchorBox.size.height;
+    final horizontalInset = 0.0;
+    final menuWidth = math.min(
+      _filtersMenuWidth,
+      math.max(0.0, overlayBox.size.width - (horizontalInset * 2)),
+    );
+    final desiredLeft = anchorTopLeft.dx.clamp(
+      horizontalInset,
+      math.max(horizontalInset, overlayBox.size.width - menuWidth - horizontalInset),
+    );
+    final followerOffsetX = desiredLeft - anchorTopLeft.dx;
+    final maxMenuHeight = math.max(
+      0.0,
+      overlayBox.size.height -
+          mediaQuery.padding.bottom -
+          anchorBottom -
+          28,
+    );
+
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close filters',
+      barrierColor: Colors.transparent,
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () => Navigator.of(dialogContext).pop(),
+                ),
+              ),
+              CompositedTransformFollower(
+                link: anchorLink,
+                showWhenUnlinked: false,
+                targetAnchor: Alignment.bottomLeft,
+                followerAnchor: Alignment.topLeft,
+                offset: Offset(followerOffsetX, 0),
+                child: Material(
+                  color: Colors.transparent,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: menuWidth,
+                      maxHeight: maxMenuHeight <= 0
+                          ? overlayBox.size.height
+                          : maxMenuHeight,
+                    ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x14000000),
+                            blurRadius: 24,
+                            offset: Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: SingleChildScrollView(
+                        child: SizedBox(
+                          width: menuWidth,
+                          child: _buildFiltersMenu(
+                            context: dialogContext,
+                            anchorKey: anchorKey,
+                            products: products,
+                            categories: categories,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      transitionDuration: Duration.zero,
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          child,
+    );
+  }
+
   void _setFilters(VoidCallback update) {
     setState(update);
     _updateRouteFilters();
@@ -766,61 +878,32 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        MenuAnchor(
-                          style: const MenuStyle(
-                            backgroundColor: WidgetStatePropertyAll(
-                              Colors.white,
-                            ),
-                            surfaceTintColor: WidgetStatePropertyAll(
-                              Colors.white,
-                            ),
-                            padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                            shape: WidgetStatePropertyAll(
-                              RoundedRectangleBorder(
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(16),
-                                ),
+                        MousePressable(
+                          onTap: () => _showFiltersMenu(
+                            anchorKey: _mobileFiltersAnchorKey,
+                            anchorLink: _mobileFiltersLayerLink,
+                            products: products,
+                            categories: categories,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          child: CompositedTransformTarget(
+                            link: _mobileFiltersLayerLink,
+                            child: Container(
+                              key: _mobileFiltersAnchorKey,
+                              width: toolbarActionSize,
+                              height: toolbarActionSize,
+                              decoration: BoxDecoration(
+                                color: AppColors.logoBlue,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              alignment: Alignment.center,
+                              child: const Icon(
+                                Icons.filter_list_rounded,
+                                size: 18,
+                                color: Colors.white,
                               ),
                             ),
                           ),
-                          menuChildren: [
-                            SizedBox(
-                              width: _filtersMenuWidth,
-                              child: _buildFiltersMenu(
-                                context: context,
-                                anchorKey: _mobileFiltersAnchorKey,
-                                products: products,
-                                categories: categories,
-                              ),
-                            ),
-                          ],
-                          builder: (context, controller, child) {
-                            return MousePressable(
-                              onTap: () {
-                                if (controller.isOpen) {
-                                  controller.close();
-                                } else {
-                                  controller.open();
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(16),
-                              child: Container(
-                                key: _mobileFiltersAnchorKey,
-                                width: toolbarActionSize,
-                                height: toolbarActionSize,
-                                decoration: BoxDecoration(
-                                  color: AppColors.logoBlue,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                alignment: Alignment.center,
-                                child: const Icon(
-                                  Icons.filter_list_rounded,
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            );
-                          },
                         ),
                       ],
                     )
@@ -857,95 +940,64 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                             ),
                           ),
                         ),
-                        MenuAnchor(
-                          style: const MenuStyle(
-                            backgroundColor: WidgetStatePropertyAll(
-                              Colors.white,
-                            ),
-                            surfaceTintColor: WidgetStatePropertyAll(
-                              Colors.white,
-                            ),
-                            padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                            shape: WidgetStatePropertyAll(
-                              RoundedRectangleBorder(
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(16),
-                                ),
-                              ),
-                            ),
+                        MousePressable(
+                          onTap: () => _showFiltersMenu(
+                            anchorKey: _desktopFiltersAnchorKey,
+                            anchorLink: _desktopFiltersLayerLink,
+                            products: products,
+                            categories: categories,
                           ),
-                          menuChildren: [
-                            SizedBox(
-                              width: _filtersMenuWidth,
-                              child: _buildFiltersMenu(
-                                context: context,
-                                anchorKey: _desktopFiltersAnchorKey,
-                                products: products,
-                                categories: categories,
+                          borderRadius: BorderRadius.circular(16),
+                          child: CompositedTransformTarget(
+                            link: _desktopFiltersLayerLink,
+                            child: Container(
+                              key: _desktopFiltersAnchorKey,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 14,
                               ),
-                            ),
-                          ],
-                          builder: (context, controller, child) {
-                            return MousePressable(
-                              onTap: () {
-                                if (controller.isOpen) {
-                                  controller.close();
-                                } else {
-                                  controller.open();
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(16),
-                              child: Container(
-                                key: _desktopFiltersAnchorKey,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.logoBlue,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.filter_list_rounded,
-                                      size: 18,
+                              decoration: BoxDecoration(
+                                color: AppColors.logoBlue,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.filter_list_rounded,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Filters',
+                                    style: TextStyle(
                                       color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.15,
                                     ),
+                                  ),
+                                  if (activeFilterCount > 0) ...[
                                     const SizedBox(width: 8),
-                                    const Text(
-                                      'Filters',
-                                      style: TextStyle(
+                                    Text(
+                                      '$activeFilterCount',
+                                      style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w700,
                                         height: 1.15,
                                       ),
                                     ),
-                                    if (activeFilterCount > 0) ...[
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '$activeFilterCount',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                          height: 1.15,
-                                        ),
-                                      ),
-                                    ],
-                                    const SizedBox(width: 8),
-                                    Icon(
-                                      controller.isOpen
-                                          ? Icons.keyboard_arrow_up_rounded
-                                          : Icons.keyboard_arrow_down_rounded,
-                                      size: 18,
-                                      color: Colors.white,
-                                    ),
                                   ],
-                                ),
+                                  const SizedBox(width: 8),
+                                  const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
+                                ],
                               ),
-                            );
-                          },
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -1533,32 +1585,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
         ),
       ],
     );
-    final anchorContext = anchorKey.currentContext;
-    final overlayBox =
-        Overlay.of(context).context.findRenderObject() as RenderBox?;
-    final anchorBox = anchorContext?.findRenderObject() as RenderBox?;
-    if (overlayBox == null ||
-        anchorBox == null ||
-        !overlayBox.hasSize ||
-        !anchorBox.hasSize) {
-      return menuContent;
-    }
-    final anchorTopLeft = anchorBox.localToGlobal(
-      Offset.zero,
-      ancestor: overlayBox,
-    );
-    final anchorBottom = anchorTopLeft.dy + anchorBox.size.height;
-    final maxMenuHeight = math.max(
-      0.0,
-      overlayBox.size.height - anchorBottom - 24,
-    );
-    if (maxMenuHeight <= 0) {
-      return menuContent;
-    }
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxMenuHeight),
-      child: SingleChildScrollView(child: menuContent),
-    );
+    return menuContent;
   }
 
   String? _normalizeNullable(String? value) =>
