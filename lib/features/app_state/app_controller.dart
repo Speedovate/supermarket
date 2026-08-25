@@ -471,10 +471,13 @@ class AppController extends Notifier<AppState> {
       final catalogMeta = await _firestoreCatalog.loadCatalogMeta();
       if (catalogMeta != null &&
           state.catalogHydrated &&
+          !_needsCatalogReconciliation(includeInactive: includeInactive) &&
           !_isPublicCatalogStale(catalogMeta)) {
         return;
       }
-      if (catalogMeta != null && state.catalogHydrated) {
+      if (catalogMeta != null &&
+          state.catalogHydrated &&
+          !_needsCatalogReconciliation(includeInactive: includeInactive)) {
         final syncedSelectively = await _syncCatalogFromMeta(
           catalogMeta,
           includeInactive: includeInactive,
@@ -540,6 +543,21 @@ class AppController extends Notifier<AppState> {
         state = state.copyWith(loading: false);
       }
     }
+  }
+
+  bool _needsCatalogReconciliation({required bool includeInactive}) {
+    if (!state.catalogHydrated) {
+      return true;
+    }
+
+    final hasCategories = includeInactive
+        ? state.categories.isNotEmpty
+        : publicCategories.isNotEmpty;
+    final hasProducts = includeInactive
+        ? state.products.isNotEmpty
+        : state.products.any((product) => product.isActive);
+
+    return !hasCategories || !hasProducts;
   }
 
   bool _isPublicCatalogStale(CatalogMetaSnapshot meta) {
