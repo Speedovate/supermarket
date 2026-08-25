@@ -434,7 +434,13 @@ int _requiredPriceCentavos(
   int rowIndex,
 ) {
   final raw = _optionalText(row, headers, 'price');
-  final value = double.tryParse(raw ?? '');
+  final normalized = (raw ?? '')
+      .trim()
+      .replaceAll(',', '')
+      .replaceAll('₱', '')
+      .replaceAll('PHP', '')
+      .replaceAll('php', '');
+  final value = double.tryParse(normalized);
   if (value == null) {
     throw CatalogWorkbookException(
       'Products row ${rowIndex + 1}: price must be a valid number.',
