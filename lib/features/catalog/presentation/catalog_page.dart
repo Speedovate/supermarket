@@ -15,6 +15,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/open_external_url.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
+import '../../product_management/presentation/admin_product_dialog.dart';
 import 'catalog_view_model.dart';
 
 typedef _CustomerControllers = ({
@@ -51,6 +52,25 @@ Future<void> _showProductDetailsModal(
       initialAdminQuantity: initialAdminQuantity,
       onAdminQuantitySaved: onAdminQuantitySaved,
     ),
+  );
+}
+
+bool _hasClientAdminProductEditAccess(WidgetRef ref) {
+  return ref.read(appControllerProvider).adminSession != null;
+}
+
+Future<Product?> _showClientAdminProductDialog(
+  BuildContext context,
+  WidgetRef ref,
+  Product product,
+) {
+  final latestProduct =
+      ref.read(appControllerProvider).products.where((item) => item.id == product.id).firstOrNull ??
+      product;
+  return showAdminProductDialog(
+    context,
+    ref,
+    initial: latestProduct,
   );
 }
 
@@ -838,6 +858,21 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                         product: sortedBestSellers[index],
                                         adaptiveSizing: true,
                                         showImage: columns != 1,
+                                        showModalEditAction:
+                                            _hasClientAdminProductEditAccess(
+                                              ref,
+                                            ),
+                                        onModalEditProduct:
+                                            _hasClientAdminProductEditAccess(
+                                              ref,
+                                            )
+                                            ? (context) =>
+                                                  _showClientAdminProductDialog(
+                                                    context,
+                                                    ref,
+                                                    sortedBestSellers[index],
+                                                  )
+                                            : null,
                                       ),
                                     ),
                                   ),
@@ -976,6 +1011,16 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                               product: sortedProducts[index],
                               adaptiveSizing: true,
                               showImage: columns != 1,
+                              showModalEditAction:
+                                  _hasClientAdminProductEditAccess(ref),
+                              onModalEditProduct:
+                                  _hasClientAdminProductEditAccess(ref)
+                                  ? (context) => _showClientAdminProductDialog(
+                                        context,
+                                        ref,
+                                        sortedProducts[index],
+                                      )
+                                  : null,
                             ),
                             childCount: sortedProducts.length,
                           ),
@@ -1309,6 +1354,12 @@ List<Product> _sortProducts(
 }
 
 int _catalogColumnsForWidth(double width) {
+  if (width >= 1860) {
+    return 8;
+  }
+  if (width >= 1580) {
+    return 7;
+  }
   if (width >= 1300) {
     return 6;
   }
@@ -4042,7 +4093,15 @@ class _CurrentCartItemCard extends ConsumerWidget {
         child: MousePressable(
           onTap: product == null
               ? null
-              : () => _showProductDetailsModal(context, product),
+              : () => _showProductDetailsModal(
+                  context,
+                  product,
+                  showEditAction: _hasClientAdminProductEditAccess(ref),
+                  onEditProduct: _hasClientAdminProductEditAccess(ref)
+                      ? (context) =>
+                            _showClientAdminProductDialog(context, ref, product)
+                      : null,
+                ),
           borderRadius: BorderRadius.circular(18),
           child: Container(
             width: width,
@@ -4181,7 +4240,15 @@ class _PreviousOrderItemCard extends ConsumerWidget {
     return MousePressable(
       onTap: product == null
           ? null
-          : () => _showProductDetailsModal(context, product),
+          : () => _showProductDetailsModal(
+              context,
+              product,
+              showEditAction: _hasClientAdminProductEditAccess(ref),
+              onEditProduct: _hasClientAdminProductEditAccess(ref)
+                  ? (context) =>
+                        _showClientAdminProductDialog(context, ref, product)
+                  : null,
+            ),
       borderRadius: BorderRadius.circular(18),
       child: Container(
         width: width,
