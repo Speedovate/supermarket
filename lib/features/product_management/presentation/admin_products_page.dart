@@ -1213,30 +1213,11 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                                             ref,
                                             initial: filteredProducts[i],
                                           ),
-                                          onToggleActive: () async {
-                                            final product = filteredProducts[i];
-                                            final nextIsActive =
-                                                !product.isActive;
-                                            final shouldToggle =
-                                                await _showToggleProductStatusDialog(
-                                                  context,
-                                                  product.name,
-                                                  nextIsActive,
-                                                );
-                                            if (shouldToggle == true) {
-                                              await ref
-                                                  .read(
-                                                    appControllerProvider
-                                                        .notifier,
-                                                  )
-                                                  .saveProduct(
-                                                    product.copyWith(
-                                                      isActive: nextIsActive,
-                                                      updatedAt: DateTime.now(),
-                                                    ),
-                                                  );
-                                            }
-                                          },
+                                          onToggleActive: () =>
+                                              _showToggleProductStatusDialog(
+                                                context,
+                                                filteredProducts[i],
+                                              ),
                                           onDelete: () => _deleteProduct(
                                             context,
                                             filteredProducts[i],
@@ -1279,32 +1260,11 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                                               ref,
                                               initial: filteredProducts[i],
                                             ),
-                                            onToggleActive: () async {
-                                              final product =
-                                                  filteredProducts[i];
-                                              final nextIsActive =
-                                                  !product.isActive;
-                                              final shouldToggle =
-                                                  await _showToggleProductStatusDialog(
-                                                    context,
-                                                    product.name,
-                                                    nextIsActive,
-                                                  );
-                                              if (shouldToggle == true) {
-                                                await ref
-                                                    .read(
-                                                      appControllerProvider
-                                                          .notifier,
-                                                    )
-                                                    .saveProduct(
-                                                      product.copyWith(
-                                                        isActive: nextIsActive,
-                                                        updatedAt:
-                                                            DateTime.now(),
-                                                      ),
-                                                    );
-                                              }
-                                            },
+                                            onToggleActive: () =>
+                                                _showToggleProductStatusDialog(
+                                                  context,
+                                                  filteredProducts[i],
+                                                ),
                                             onDelete: () => _deleteProduct(
                                               context,
                                               filteredProducts[i],
@@ -1788,59 +1748,104 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
   }
 
   Future<void> _deleteProduct(BuildContext context, Product product) async {
-    final shouldDelete = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AppModalFrame(
-          title: 'Remove Product?',
-          actions: [
-            AppModalButton(
-              label: 'Close',
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-            ),
-            const SizedBox(width: 10),
-            AppModalButton(
-              label: 'Delete',
-              isPrimary: true,
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-            ),
-          ],
-          child: AppModalBodyText('${product.name.trim()} will be deleted.'),
+        var isDeleting = false;
+        return StatefulBuilder(
+          builder: (context, setState) => AppModalFrame(
+            title: 'Remove Product?',
+            actions: [
+              AppModalButton(
+                label: 'Close',
+                onPressed: isDeleting
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+              ),
+              const SizedBox(width: 10),
+              AppModalButton(
+                label: 'Delete',
+                isPrimary: true,
+                isLoading: isDeleting,
+                onPressed: () async {
+                  if (isDeleting) {
+                    return;
+                  }
+                  setState(() => isDeleting = true);
+                  try {
+                    await ref
+                        .read(appControllerProvider.notifier)
+                        .deleteProduct(product.id);
+                    if (dialogContext.mounted) {
+                      Navigator.of(dialogContext).pop();
+                    }
+                  } finally {
+                    if (dialogContext.mounted) {
+                      setState(() => isDeleting = false);
+                    }
+                  }
+                },
+              ),
+            ],
+            child: AppModalBodyText('${product.name.trim()} will be deleted.'),
+          ),
         );
       },
     );
-    if (shouldDelete != true || !mounted) {
-      return;
-    }
-    await ref.read(appControllerProvider.notifier).deleteProduct(product.id);
   }
 
-  Future<bool?> _showToggleProductStatusDialog(
+  Future<void> _showToggleProductStatusDialog(
     BuildContext context,
-    String productName,
-    bool nextIsActive,
+    Product product,
   ) {
-    return showDialog<bool>(
+    final nextIsActive = !product.isActive;
+    return showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AppModalFrame(
-          title: nextIsActive ? 'Activate Product?' : 'Deactivate Product?',
-          actions: [
-            AppModalButton(
-              label: 'Close',
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+        var isSubmitting = false;
+        return StatefulBuilder(
+          builder: (context, setState) => AppModalFrame(
+            title: nextIsActive ? 'Activate Product?' : 'Deactivate Product?',
+            actions: [
+              AppModalButton(
+                label: 'Close',
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+              ),
+              const SizedBox(width: 10),
+              AppModalButton(
+                label: nextIsActive ? 'Activate' : 'Deactivate',
+                isPrimary: true,
+                isLoading: isSubmitting,
+                onPressed: () async {
+                  if (isSubmitting) {
+                    return;
+                  }
+                  setState(() => isSubmitting = true);
+                  try {
+                    await ref.read(appControllerProvider.notifier).saveProduct(
+                      product.copyWith(
+                        isActive: nextIsActive,
+                        updatedAt: DateTime.now(),
+                      ),
+                    );
+                    if (dialogContext.mounted) {
+                      Navigator.of(dialogContext).pop();
+                    }
+                  } finally {
+                    if (dialogContext.mounted) {
+                      setState(() => isSubmitting = false);
+                    }
+                  }
+                },
+              ),
+            ],
+            child: AppModalBodyText(
+              nextIsActive
+                  ? '${product.name.trim()} will be activated.'
+                  : '${product.name.trim()} will be deactivated.',
             ),
-            const SizedBox(width: 10),
-            AppModalButton(
-              label: nextIsActive ? 'Activate' : 'Deactivate',
-              isPrimary: true,
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-            ),
-          ],
-          child: AppModalBodyText(
-            nextIsActive
-                ? '${productName.trim()} will be activated.'
-                : '${productName.trim()} will be deactivated.',
           ),
         );
       },

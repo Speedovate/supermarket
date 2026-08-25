@@ -710,7 +710,14 @@ class AppController extends Notifier<AppState> {
       for (final item in visibleFetched) {
         nextById[item.id] = item;
       }
-      final next = nextById.values.toList()..sort((a, b) => a.id.compareTo(b.id));
+      final next = nextById.values.toList()
+        ..sort((a, b) {
+          final bySortOrder = a.sortOrder.compareTo(b.sortOrder);
+          if (bySortOrder != 0) {
+            return bySortOrder;
+          }
+          return a.id.compareTo(b.id);
+        });
       state = state.copyWith(
         categories: next,
         categoriesMetaUpdatedAt: remoteUpdatedAt,
@@ -1114,7 +1121,8 @@ class AppController extends Notifier<AppState> {
   }
 
   List<Product> get bestSellerProducts {
-    if (!state.settings.bestSellersEnabled) {
+    if (!state.settings.bestSellersEnabled ||
+        state.settings.bestSellersLimit <= 0) {
       return const [];
     }
 
@@ -1227,14 +1235,15 @@ class AppController extends Notifier<AppState> {
       barangay: barangay,
       reference: current,
     );
-    final effectiveCutoff = current.isAfter(currentWeekCutoff)
+    final hasReachedCutoff = !current.isBefore(currentWeekCutoff);
+    final effectiveCutoff = hasReachedCutoff
         ? currentWeekCutoff.add(const Duration(days: 7))
         : currentWeekCutoff;
     final nextDeliveryStart = effectiveCutoff.add(const Duration(days: 1));
     final nextDeliveryEnd = effectiveCutoff.add(const Duration(days: 2));
     final nextDeliveryLabel =
         '${displayWeekday(nextDeliveryStart.weekday)} or ${displayWeekday(nextDeliveryEnd.weekday)}';
-    if (!current.isAfter(currentWeekCutoff)) {
+    if (!hasReachedCutoff) {
       return '$cutoffLabel\n\nOrder will be delivered on $nextDeliveryLabel.';
     }
     return '$cutoffLabel\n\nOrder will be processed next ${displayWeekday(effectiveCutoff.weekday)} and will be delivered on $nextDeliveryLabel. You can select pickup to get your order faster.';
@@ -1250,7 +1259,7 @@ class AppController extends Notifier<AppState> {
       barangay: barangay,
       reference: current,
     );
-    return current.isAfter(currentWeekCutoff);
+    return !current.isBefore(currentWeekCutoff);
   }
 
   DateTime _currentWeekCutoff({
@@ -1694,12 +1703,17 @@ class AppController extends Notifier<AppState> {
     final next = [...state.categories];
     final index = next.indexWhere((item) => item.id == category.id);
     if (index == -1) {
-      next.insert(0, category);
+      next.insert(0, category.copyWith(sortOrder: 0));
     } else {
-      next[index] = category;
+      next[index] = category.copyWith(sortOrder: next[index].sortOrder);
     }
-    state = state.copyWith(categories: next, errorMessage: null);
-    await _firestoreCatalog.saveCategory(category, sortOrder: next.indexWhere((item) => item.id == category.id));
+    final normalized = [
+      for (var i = 0; i < next.length; i++) next[i].copyWith(sortOrder: i),
+    ];
+    state = state.copyWith(categories: normalized, errorMessage: null);
+    for (var i = 0; i < normalized.length; i++) {
+      await _firestoreCatalog.saveCategory(normalized[i], sortOrder: i);
+    }
     await _persist();
   }
 
@@ -1798,11 +1812,11 @@ class AppController extends Notifier<AppState> {
         .where((category) => !orderedIds.contains(category.id))
         .toList();
 
-    state = state.copyWith(
-      categories: [...ordered, ...remaining],
-      errorMessage: null,
-    );
-    final next = [...ordered, ...remaining];
+    final merged = [...ordered, ...remaining];
+    final next = [
+      for (var i = 0; i < merged.length; i++) merged[i].copyWith(sortOrder: i),
+    ];
+    state = state.copyWith(categories: next, errorMessage: null);
     for (var index = 0; index < next.length; index++) {
       await _firestoreCatalog.saveCategory(next[index], sortOrder: index);
     }

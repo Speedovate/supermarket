@@ -162,13 +162,13 @@ class FirestoreCatalogService {
 
   Future<List<Category>> loadCategories({bool includeInactive = true}) async {
     final query = includeInactive
-        ? _firestore.collection(FirebasePaths.categories).orderBy('id')
+        ? _firestore.collection(FirebasePaths.categories)
         : _firestore
               .collection(FirebasePaths.categories)
               .where('isActive', isEqualTo: true);
     final snapshot = await query.get();
     final categories = snapshot.docs.map(_categoryFromSnapshot).toList()
-      ..sort((a, b) => a.id.compareTo(b.id));
+      ..sort(_compareCategoriesBySortOrder);
     return categories;
   }
 
@@ -178,13 +178,13 @@ class FirestoreCatalogService {
       ids: ids,
       mapper: _categoryFromSnapshot,
     );
-    items.sort((a, b) => a.id.compareTo(b.id));
+    items.sort(_compareCategoriesBySortOrder);
     return items;
   }
 
   Stream<List<Category>> watchCategories({bool includeInactive = true}) {
     final query = includeInactive
-        ? _firestore.collection(FirebasePaths.categories).orderBy('id')
+        ? _firestore.collection(FirebasePaths.categories)
         : _firestore
               .collection(FirebasePaths.categories)
               .where('isActive', isEqualTo: true);
@@ -192,7 +192,7 @@ class FirestoreCatalogService {
         .snapshots()
         .map((snapshot) {
           final categories = snapshot.docs.map(_categoryFromSnapshot).toList()
-            ..sort((a, b) => a.id.compareTo(b.id));
+            ..sort(_compareCategoriesBySortOrder);
           return categories;
         });
   }
@@ -1023,7 +1023,19 @@ class FirestoreCatalogService {
     final map = _normalizeFirestoreMap(doc.data());
     map.putIfAbsent('id', () => int.tryParse(doc.id) ?? 0);
     map.putIfAbsent('normalizedName', () => '${map['name'] ?? ''}'.trim().toLowerCase());
+    map.putIfAbsent(
+      'sortOrder',
+      () => map['id'] is int ? map['id'] as int : int.tryParse('${map['id']}') ?? 0,
+    );
     return Category.fromMap(map);
+  }
+
+  int _compareCategoriesBySortOrder(Category a, Category b) {
+    final bySortOrder = a.sortOrder.compareTo(b.sortOrder);
+    if (bySortOrder != 0) {
+      return bySortOrder;
+    }
+    return a.id.compareTo(b.id);
   }
 
   Barangay _barangayFromSnapshot(QueryDocumentSnapshot<Map<String, dynamic>> doc) {

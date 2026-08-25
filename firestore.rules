@@ -64,10 +64,16 @@ service cloud.firestore {
       allow get: if
         documentId == 'orders_counter' ||
         documentId == 'catalog_meta' ||
+        documentId == 'categories_manifest' ||
+        documentId == 'barangays_manifest' ||
+        documentId == 'banners_manifest' ||
+        documentId == 'products_manifest' ||
         isAdmin();
       allow list: if isAdmin();
+      allow delete: if isAdmin();
 
       allow create, update: if
+        isAdmin() ||
         (
           documentId == 'orders_counter' &&
           request.resource.data.keys().hasOnly(['nextOrderId', 'updatedAt']) &&
@@ -81,10 +87,6 @@ service cloud.firestore {
               request.resource.data.nextOrderId == resource.data.nextOrderId + 1
             )
           )
-        ) ||
-        (
-          documentId == 'catalog_meta' &&
-          isAdmin()
         );
     }
 

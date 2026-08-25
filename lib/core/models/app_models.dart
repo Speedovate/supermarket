@@ -22,6 +22,7 @@ class Category {
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
+    this.sortOrder = 0,
   });
 
   final int id;
@@ -30,6 +31,7 @@ class Category {
   final bool isActive;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int sortOrder;
 
   Category copyWith({
     int? id,
@@ -38,6 +40,7 @@ class Category {
     bool? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? sortOrder,
   }) {
     return Category(
       id: id ?? this.id,
@@ -46,6 +49,7 @@ class Category {
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      sortOrder: sortOrder ?? this.sortOrder,
     );
   }
 
@@ -56,6 +60,7 @@ class Category {
     'isActive': isActive,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
+    'sortOrder': sortOrder,
   };
 
   factory Category.fromMap(Map<String, dynamic> map) {
@@ -73,6 +78,12 @@ class Category {
       updatedAt: map['updatedAt'] == null
           ? fallbackDate
           : DateTime.parse(map['updatedAt'] as String),
+      sortOrder: map['sortOrder'] is int
+          ? map['sortOrder'] as int
+          : int.tryParse('${map['sortOrder']}') ??
+              (map['id'] is int
+                  ? map['id'] as int
+                  : int.tryParse('${map['id']}') ?? 0),
     );
   }
 }
@@ -1114,18 +1125,16 @@ class AppSettings {
   };
 
   factory AppSettings.fromMap(Map<String, dynamic> map) {
+    final parsedMinSold = _parseInt(map['bestSellerMinSoldUnits']);
+    final parsedMaxShow = _parseInt(map['bestSellersLimit']);
     return AppSettings(
       id: map['id'] is int
           ? map['id'] as int
           : int.tryParse('${map['id']}') ?? 1,
       bestSellersEnabled: map['bestSellersEnabled'] as bool? ?? true,
       bestSellersShowAll: map['bestSellersShowAll'] as bool? ?? false,
-      bestSellerMinSoldUnits: _parseInt(map['bestSellerMinSoldUnits']) == 0
-          ? 1
-          : _parseInt(map['bestSellerMinSoldUnits']),
-      bestSellersLimit: _parseInt(map['bestSellersLimit']) == 0
-          ? 6
-          : _parseInt(map['bestSellersLimit']),
+      bestSellerMinSoldUnits: parsedMinSold < 0 ? 0 : parsedMinSold,
+      bestSellersLimit: parsedMaxShow < 0 ? 0 : parsedMaxShow,
       bestSellerBasis: _parseBestSellerBasis(map['bestSellerBasis'] as String?),
       storeName: (map['storeName'] as String?)?.trim().isNotEmpty == true
           ? (map['storeName'] as String).trim()

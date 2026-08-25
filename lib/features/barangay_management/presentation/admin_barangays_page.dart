@@ -530,43 +530,11 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                                                         context,
                                                         barangay: barangay,
                                                       ),
-                                                  onToggleStatus: () async {
-                                                    final nextIsActive =
-                                                        !barangay.isActive;
-                                                    final shouldToggle =
-                                                        await _showToggleBarangayStatusDialog(
-                                                          context,
-                                                          barangay.name,
-                                                          nextIsActive,
-                                                        );
-                                                    if (shouldToggle != true) {
-                                                      return;
-                                                    }
-                                                    await ref
-                                                        .read(
-                                                          appControllerProvider
-                                                              .notifier,
-                                                        )
-                                                        .saveBarangay(
-                                                          barangay.copyWith(
-                                                            isActive:
-                                                                nextIsActive,
-                                                          ),
-                                                        );
-                                                    if (!mounted) {
-                                                      return;
-                                                    }
-                                                    final messenger =
-                                                        ScaffoldMessenger.of(
-                                                          this.context,
-                                                        );
-                                                    messenger.clearSnackBars();
-                                                    messenger.showSnackBar(
-                                                      successSnackBar(
-                                                        '${barangay.name} marked ${barangay.isActive ? 'inactive' : 'active'}.',
+                                                  onToggleStatus: () =>
+                                                      _showToggleBarangayStatusDialog(
+                                                        context,
+                                                        barangay,
                                                       ),
-                                                    );
-                                                  },
                                                   onDelete: () =>
                                                       _confirmDeleteBarangay(
                                                         context,
@@ -605,45 +573,11 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                                                         barangay:
                                                             filteredBarangays[i],
                                                       ),
-                                                  onToggleStatus: () async {
-                                                    final barangay =
-                                                        filteredBarangays[i];
-                                                    final nextIsActive =
-                                                        !barangay.isActive;
-                                                    final shouldToggle =
-                                                        await _showToggleBarangayStatusDialog(
-                                                          context,
-                                                          barangay.name,
-                                                          nextIsActive,
-                                                        );
-                                                    if (shouldToggle != true) {
-                                                      return;
-                                                    }
-                                                    await ref
-                                                        .read(
-                                                          appControllerProvider
-                                                              .notifier,
-                                                        )
-                                                        .saveBarangay(
-                                                          barangay.copyWith(
-                                                            isActive:
-                                                                nextIsActive,
-                                                          ),
-                                                        );
-                                                    if (!mounted) {
-                                                      return;
-                                                    }
-                                                    final messenger =
-                                                        ScaffoldMessenger.of(
-                                                          this.context,
-                                                        );
-                                                    messenger.clearSnackBars();
-                                                    messenger.showSnackBar(
-                                                      successSnackBar(
-                                                        '${barangay.name} marked ${barangay.isActive ? 'inactive' : 'active'}.',
+                                                  onToggleStatus: () =>
+                                                      _showToggleBarangayStatusDialog(
+                                                        context,
+                                                        filteredBarangays[i],
                                                       ),
-                                                    );
-                                                  },
                                                   onDelete: () =>
                                                       _confirmDeleteBarangay(
                                                         context,
@@ -845,12 +779,16 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
     );
     var selectedActive = barangay?.isActive ?? true;
 
-    final shouldSave = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) {
+        var isSubmitting = false;
         return StatefulBuilder(
           builder: (context, setState) {
             Future<void> pickTime() async {
+              if (isSubmitting) {
+                return;
+              }
               final nextTime = await showTimePicker(
                 context: context,
                 initialTime: selectedTime,
@@ -861,18 +799,92 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
               setState(() => selectedTime = nextTime);
             }
 
+            Future<void> submit() async {
+              if (isSubmitting) {
+                return;
+              }
+
+              final trimmedName = nameController.text.trim();
+              if (trimmedName.isEmpty) {
+                final messenger = ScaffoldMessenger.of(this.context);
+                messenger.clearSnackBars();
+                messenger.showSnackBar(errorSnackBar('Please enter a name.'));
+                return;
+              }
+
+              final existingDuplicate = ref
+                  .read(appControllerProvider)
+                  .barangays
+                  .where((item) => item.id != barangay?.id)
+                  .any(
+                    (item) =>
+                        item.name.trim().toLowerCase() ==
+                        trimmedName.toLowerCase(),
+                  );
+              if (existingDuplicate) {
+                final messenger = ScaffoldMessenger.of(this.context);
+                messenger.clearSnackBars();
+                messenger.showSnackBar(
+                  errorSnackBar('A barangay with that name already exists.'),
+                );
+                return;
+              }
+
+              final now = DateTime.now();
+              final currentBarangays = ref.read(appControllerProvider).barangays;
+              final nextId =
+                  (currentBarangays.map((item) => item.id).fold<int>(0, _mathMax)) + 1;
+              final cutoffMinutes = (selectedTime.hour * 60) + selectedTime.minute;
+
+              setState(() => isSubmitting = true);
+              try {
+                await ref.read(appControllerProvider.notifier).saveBarangay(
+                  Barangay(
+                    id: barangay?.id ?? nextId,
+                    name: trimmedName,
+                    isActive: selectedActive,
+                    cutoffWeekday: selectedWeekday,
+                    cutoffMinutes: cutoffMinutes,
+                    createdAt: barangay?.createdAt ?? now,
+                    updatedAt: now,
+                  ),
+                );
+                if (!dialogContext.mounted) {
+                  return;
+                }
+                Navigator.of(dialogContext).pop();
+                if (!mounted) {
+                  return;
+                }
+                final messenger = ScaffoldMessenger.of(this.context);
+                messenger.clearSnackBars();
+                messenger.showSnackBar(
+                  successSnackBar(
+                    barangay == null ? 'Barangay added.' : 'Barangay updated.',
+                  ),
+                );
+              } finally {
+                if (dialogContext.mounted) {
+                  setState(() => isSubmitting = false);
+                }
+              }
+            }
+
             return AppModalFrame(
               title: barangay == null ? 'New Barangay' : 'Edit Barangay',
               actions: [
                 AppModalButton(
                   label: 'Cancel',
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  onPressed: isSubmitting
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
                 ),
                 const SizedBox(width: 10),
                 AppModalButton(
                   label: 'Save',
                   isPrimary: true,
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  isLoading: isSubmitting,
+                  onPressed: submit,
                 ),
               ],
               child: Column(
@@ -956,97 +968,131 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
       },
     );
 
-    if (shouldSave != true || !mounted) {
-      return;
-    }
-
-    final trimmedName = nameController.text.trim();
-    if (trimmedName.isEmpty) {
-      final messenger = ScaffoldMessenger.of(this.context);
-      messenger.clearSnackBars();
-      messenger.showSnackBar(errorSnackBar('Please enter a name.'));
-      return;
-    }
-
-    final existingDuplicate = ref
-        .read(appControllerProvider)
-        .barangays
-        .where((item) => item.id != barangay?.id)
-        .any(
-          (item) => item.name.trim().toLowerCase() == trimmedName.toLowerCase(),
-        );
-    if (existingDuplicate) {
-      final messenger = ScaffoldMessenger.of(this.context);
-      messenger.clearSnackBars();
-      messenger.showSnackBar(errorSnackBar('A barangay with that name already exists.'));
-      return;
-    }
-
-    final now = DateTime.now();
-    final currentBarangays = ref.read(appControllerProvider).barangays;
-    final nextId =
-        (currentBarangays.map((item) => item.id).fold<int>(0, _mathMax)) + 1;
-    final cutoffMinutes = (selectedTime.hour * 60) + selectedTime.minute;
-
-    await ref.read(appControllerProvider.notifier).saveBarangay(
-      Barangay(
-        id: barangay?.id ?? nextId,
-        name: trimmedName,
-        isActive: selectedActive,
-        cutoffWeekday: selectedWeekday,
-        cutoffMinutes: cutoffMinutes,
-        createdAt: barangay?.createdAt ?? now,
-        updatedAt: now,
-      ),
-    );
-    if (!mounted) {
-      return;
-    }
-    final messenger = ScaffoldMessenger.of(this.context);
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      successSnackBar(
-        barangay == null ? 'Barangay added.' : 'Barangay updated.',
-      ),
-    );
   }
 
   Future<void> _confirmDeleteBarangay(
     BuildContext context,
     Barangay barangay,
   ) async {
-    final shouldDelete = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AppModalFrame(
-        title: 'Delete Barangay',
-        actions: [
-          AppModalButton(
-            label: 'Cancel',
-            onPressed: () => Navigator.of(dialogContext).pop(false),
+      builder: (dialogContext) {
+        var isDeleting = false;
+        return StatefulBuilder(
+          builder: (context, setState) => AppModalFrame(
+            title: 'Delete Barangay',
+            actions: [
+              AppModalButton(
+                label: 'Cancel',
+                onPressed: isDeleting
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+              ),
+              const SizedBox(width: 10),
+              AppModalButton(
+                label: 'Delete',
+                isPrimary: true,
+                isLoading: isDeleting,
+                onPressed: () async {
+                  if (isDeleting) {
+                    return;
+                  }
+                  setState(() => isDeleting = true);
+                  try {
+                    await ref
+                        .read(appControllerProvider.notifier)
+                        .deleteBarangay(barangay.id);
+                    if (!dialogContext.mounted) {
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop();
+                    if (!mounted) {
+                      return;
+                    }
+                    final messenger = ScaffoldMessenger.of(this.context);
+                    messenger.clearSnackBars();
+                    messenger.showSnackBar(successSnackBar('Barangay deleted.'));
+                  } finally {
+                    if (dialogContext.mounted) {
+                      setState(() => isDeleting = false);
+                    }
+                  }
+                },
+              ),
+            ],
+            child: AppModalBodyText(
+              'Remove ${barangay.name}? Existing orders will keep their saved barangay text.',
+            ),
           ),
-          const SizedBox(width: 10),
-          AppModalButton(
-            label: 'Delete',
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-          ),
-        ],
-        child: AppModalBodyText(
-          'Remove ${barangay.name}? Existing orders will keep their saved barangay text.',
-        ),
-      ),
+        );
+      },
     );
+  }
 
-    if (shouldDelete != true || !mounted) {
-      return;
-    }
-
-    await ref.read(appControllerProvider.notifier).deleteBarangay(barangay.id);
-    if (!mounted) {
-      return;
-    }
-    final messenger = ScaffoldMessenger.of(this.context);
-    messenger.clearSnackBars();
-    messenger.showSnackBar(successSnackBar('Barangay deleted.'));
+  Future<void> _showToggleBarangayStatusDialog(
+    BuildContext context,
+    Barangay barangay,
+  ) {
+    final nextIsActive = !barangay.isActive;
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        var isSubmitting = false;
+        return StatefulBuilder(
+          builder: (context, setState) => AppModalFrame(
+            title: nextIsActive ? 'Activate Barangay?' : 'Deactivate Barangay?',
+            actions: [
+              AppModalButton(
+                label: 'Close',
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+              ),
+              const SizedBox(width: 10),
+              AppModalButton(
+                label: nextIsActive ? 'Activate' : 'Deactivate',
+                isPrimary: true,
+                isLoading: isSubmitting,
+                onPressed: () async {
+                  if (isSubmitting) {
+                    return;
+                  }
+                  setState(() => isSubmitting = true);
+                  try {
+                    await ref.read(appControllerProvider.notifier).saveBarangay(
+                      barangay.copyWith(isActive: nextIsActive),
+                    );
+                    if (!dialogContext.mounted) {
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop();
+                    if (!mounted) {
+                      return;
+                    }
+                    final messenger = ScaffoldMessenger.of(this.context);
+                    messenger.clearSnackBars();
+                    messenger.showSnackBar(
+                      successSnackBar(
+                        '${barangay.name} marked ${barangay.isActive ? 'inactive' : 'active'}.',
+                      ),
+                    );
+                  } finally {
+                    if (dialogContext.mounted) {
+                      setState(() => isSubmitting = false);
+                    }
+                  }
+                },
+              ),
+            ],
+            child: AppModalBodyText(
+              nextIsActive
+                  ? '${barangay.name.trim()} will be activated.'
+                  : '${barangay.name.trim()} will be deactivated.',
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showBarangayPreviewDialog(
@@ -1098,35 +1144,6 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
     );
   }
 
-  Future<bool?> _showToggleBarangayStatusDialog(
-    BuildContext context,
-    String barangayName,
-    bool nextIsActive,
-  ) {
-    return showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AppModalFrame(
-        title: nextIsActive ? 'Activate Barangay?' : 'Deactivate Barangay?',
-        actions: [
-          AppModalButton(
-            label: 'Close',
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-          ),
-          const SizedBox(width: 10),
-          AppModalButton(
-            label: nextIsActive ? 'Activate' : 'Deactivate',
-            isPrimary: true,
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-          ),
-        ],
-        child: AppModalBodyText(
-          nextIsActive
-              ? '${barangayName.trim()} will be activated.'
-              : '${barangayName.trim()} will be deactivated.',
-        ),
-      ),
-    );
-  }
 }
 
 class _BarangayHeaderRow extends StatelessWidget {

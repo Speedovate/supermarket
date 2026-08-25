@@ -79,17 +79,17 @@ class AdminProfilePage extends ConsumerWidget {
                   );
                   return;
                 }
-                if (minSold < 1) {
+                if (minSold < 0) {
                   messenger.clearSnackBars();
                   messenger.showSnackBar(
-                    errorSnackBar('Minimum sold should be at least 1.'),
+                    errorSnackBar('Min sold cannot be negative.'),
                   );
                   return;
                 }
-                if (maxShow < 1) {
+                if (maxShow < 0) {
                   messenger.clearSnackBars();
                   messenger.showSnackBar(
-                    errorSnackBar('Max show should be at least 1.'),
+                    errorSnackBar('Max show cannot be negative.'),
                   );
                   return;
                 }
@@ -186,6 +186,38 @@ class AdminProfilePage extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    TextField(
+                      controller: minSoldController,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        labelText: 'Min sold',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: maxShowController,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        labelText: 'Max show',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: minAmountController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => unawaited(submit()),
+                      decoration: const InputDecoration(
+                        labelText: 'Min Order Amount',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         const Expanded(
@@ -207,47 +239,6 @@ class AdminProfilePage extends ConsumerWidget {
                           activeThumbColor: Colors.white,
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: minSoldController,
-                      keyboardType: TextInputType.number,
-                      textInputAction: TextInputAction.next,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                        labelText: 'Min sold',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: maxShowController,
-                      keyboardType: TextInputType.number,
-                      textInputAction: TextInputAction.next,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                        labelText: 'Max show',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Orders',
-                      style: TextStyle(
-                        color: Color(0xFF172033),
-                        fontWeight: FontWeight.w600,
-                        height: 1.15,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: minAmountController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => unawaited(submit()),
-                      decoration: const InputDecoration(
-                        labelText: 'Min Order Amount',
-                      ),
                     ),
                   ],
                 ),

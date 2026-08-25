@@ -528,28 +528,11 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                                             ref,
                                             initial: filteredBanners[i],
                                           ),
-                                          onToggleActive: () async {
-                                            final banner = filteredBanners[i];
-                                            final nextIsActive = !banner.isActive;
-                                            final shouldToggle =
-                                                await _showToggleBannerStatusDialog(
-                                                  context,
-                                                  banner.id,
-                                                  nextIsActive,
-                                                );
-                                            if (shouldToggle == true) {
-                                              await ref
-                                                  .read(
-                                                    appControllerProvider.notifier,
-                                                  )
-                                                  .saveBanner(
-                                                    banner.copyWith(
-                                                      isActive: nextIsActive,
-                                                      updatedAt: DateTime.now(),
-                                                    ),
-                                                  );
-                                            }
-                                          },
+                                          onToggleActive: () =>
+                                              _showToggleBannerStatusDialog(
+                                                context,
+                                                filteredBanners[i],
+                                              ),
                                           onDelete: () => _deleteBanner(
                                             context,
                                             filteredBanners[i],
@@ -580,31 +563,11 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                                               ref,
                                               initial: filteredBanners[i],
                                             ),
-                                            onToggleActive: () async {
-                                              final banner = filteredBanners[i];
-                                              final nextIsActive =
-                                                  !banner.isActive;
-                                              final shouldToggle =
-                                                  await _showToggleBannerStatusDialog(
-                                                    context,
-                                                    banner.id,
-                                                    nextIsActive,
-                                                  );
-                                              if (shouldToggle == true) {
-                                                await ref
-                                                    .read(
-                                                      appControllerProvider
-                                                          .notifier,
-                                                    )
-                                                    .saveBanner(
-                                                      banner.copyWith(
-                                                        isActive: nextIsActive,
-                                                        updatedAt:
-                                                            DateTime.now(),
-                                                      ),
-                                                    );
-                                              }
-                                            },
+                                            onToggleActive: () =>
+                                                _showToggleBannerStatusDialog(
+                                                  context,
+                                                  filteredBanners[i],
+                                                ),
                                             onDelete: () => _deleteBanner(
                                               context,
                                               filteredBanners[i],
@@ -969,59 +932,104 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
   }
 
   Future<void> _deleteBanner(BuildContext context, AppBanner banner) async {
-    final shouldDelete = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AppModalFrame(
-          title: 'Remove Banner?',
-          actions: [
-            AppModalButton(
-              label: 'Close',
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-            ),
-            const SizedBox(width: 10),
-            AppModalButton(
-              label: 'Delete',
-              isPrimary: true,
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-            ),
-          ],
-          child: AppModalBodyText('Banner #${banner.id} will be deleted.'),
+        var isDeleting = false;
+        return StatefulBuilder(
+          builder: (context, setState) => AppModalFrame(
+            title: 'Remove Banner?',
+            actions: [
+              AppModalButton(
+                label: 'Close',
+                onPressed: isDeleting
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+              ),
+              const SizedBox(width: 10),
+              AppModalButton(
+                label: 'Delete',
+                isPrimary: true,
+                isLoading: isDeleting,
+                onPressed: () async {
+                  if (isDeleting) {
+                    return;
+                  }
+                  setState(() => isDeleting = true);
+                  try {
+                    await ref
+                        .read(appControllerProvider.notifier)
+                        .deleteBanner(banner.id);
+                    if (dialogContext.mounted) {
+                      Navigator.of(dialogContext).pop();
+                    }
+                  } finally {
+                    if (dialogContext.mounted) {
+                      setState(() => isDeleting = false);
+                    }
+                  }
+                },
+              ),
+            ],
+            child: AppModalBodyText('Banner #${banner.id} will be deleted.'),
+          ),
         );
       },
     );
-    if (shouldDelete != true || !mounted) {
-      return;
-    }
-    await ref.read(appControllerProvider.notifier).deleteBanner(banner.id);
   }
 
-  Future<bool?> _showToggleBannerStatusDialog(
+  Future<void> _showToggleBannerStatusDialog(
     BuildContext context,
-    int bannerId,
-    bool nextIsActive,
+    AppBanner banner,
   ) {
-    return showDialog<bool>(
+    final nextIsActive = !banner.isActive;
+    return showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AppModalFrame(
-          title: nextIsActive ? 'Activate Banner?' : 'Deactivate Banner?',
-          actions: [
-            AppModalButton(
-              label: 'Close',
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+        var isSubmitting = false;
+        return StatefulBuilder(
+          builder: (context, setState) => AppModalFrame(
+            title: nextIsActive ? 'Activate Banner?' : 'Deactivate Banner?',
+            actions: [
+              AppModalButton(
+                label: 'Close',
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+              ),
+              const SizedBox(width: 10),
+              AppModalButton(
+                label: nextIsActive ? 'Activate' : 'Deactivate',
+                isPrimary: true,
+                isLoading: isSubmitting,
+                onPressed: () async {
+                  if (isSubmitting) {
+                    return;
+                  }
+                  setState(() => isSubmitting = true);
+                  try {
+                    await ref.read(appControllerProvider.notifier).saveBanner(
+                      banner.copyWith(
+                        isActive: nextIsActive,
+                        updatedAt: DateTime.now(),
+                      ),
+                    );
+                    if (dialogContext.mounted) {
+                      Navigator.of(dialogContext).pop();
+                    }
+                  } finally {
+                    if (dialogContext.mounted) {
+                      setState(() => isSubmitting = false);
+                    }
+                  }
+                },
+              ),
+            ],
+            child: AppModalBodyText(
+              nextIsActive
+                  ? 'Banner #${banner.id} will be activated.'
+                  : 'Banner #${banner.id} will be deactivated.',
             ),
-            const SizedBox(width: 10),
-            AppModalButton(
-              label: nextIsActive ? 'Activate' : 'Deactivate',
-              isPrimary: true,
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-            ),
-          ],
-          child: AppModalBodyText(
-            nextIsActive
-                ? 'Banner #$bannerId will be activated.'
-                : 'Banner #$bannerId will be deactivated.',
           ),
         );
       },

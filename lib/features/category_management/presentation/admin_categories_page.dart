@@ -111,8 +111,7 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
     final isMobile = screenWidth < 700;
     final categoryColumnGap = _categoryColumnGapForWidth(screenWidth);
     final categoryTextScale = _categoryTextScaleForWidth(screenWidth);
-    final allCategories = [...appState.categories]
-      ..sort((a, b) => b.id.compareTo(a.id));
+    final allCategories = [...appState.categories];
     final headerTextStyle = TextStyle(
       fontWeight: FontWeight.w700,
       color: AppColors.logoBlue,
@@ -157,7 +156,7 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
           matchesCreatedAt &&
           matchesUpdatedAt &&
           matchesStatus;
-    }).toList()..sort((a, b) => b.id.compareTo(a.id));
+    }).toList();
     final columnWidths = _computeCategoryColumnWidths(
       screenWidth: screenWidth,
       categories: allCategories,
@@ -1343,52 +1342,16 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                                       initial:
                                                           categories[index],
                                                     ),
-                                                onToggleActive: () async {
-                                                  final category =
-                                                      categories[index];
-                                                  final nextIsActive =
-                                                      !category.isActive;
-                                                  final shouldToggle =
-                                                      await _showToggleCategoryStatusDialog(
-                                                        context,
-                                                        category.name,
-                                                        nextIsActive,
-                                                      );
-                                                  if (shouldToggle == true) {
-                                                    await ref
-                                                        .read(
-                                                          appControllerProvider
-                                                              .notifier,
-                                                        )
-                                                        .saveCategory(
-                                                          category.copyWith(
-                                                            isActive:
-                                                                nextIsActive,
-                                                            updatedAt:
-                                                                DateTime.now(),
-                                                          ),
-                                                        );
-                                                  }
-                                                },
-                                                onDelete: () async {
-                                                  final category =
-                                                      categories[index];
-                                                  final shouldDelete =
-                                                      await _showDeleteCategoryDialog(
-                                                        context,
-                                                        category.name,
-                                                      );
-                                                  if (shouldDelete == true) {
-                                                    await ref
-                                                        .read(
-                                                          appControllerProvider
-                                                              .notifier,
-                                                        )
-                                                        .deleteCategory(
-                                                          category.id,
-                                                        );
-                                                  }
-                                                },
+                                                onToggleActive: () =>
+                                                    _showToggleCategoryStatusDialog(
+                                                      context,
+                                                      categories[index],
+                                                    ),
+                                                onDelete: () =>
+                                                    _showDeleteCategoryDialog(
+                                                      context,
+                                                      categories[index],
+                                                    ),
                                                 dragChild: const Padding(
                                                   padding: EdgeInsets.only(
                                                     left: 8,
@@ -1436,49 +1399,16 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                               ref,
                                               initial: categories[index],
                                             ),
-                                            onToggleActive: () async {
-                                              final category =
-                                                  categories[index];
-                                              final nextIsActive =
-                                                  !category.isActive;
-                                              final shouldToggle =
-                                                  await _showToggleCategoryStatusDialog(
-                                                    context,
-                                                    category.name,
-                                                    nextIsActive,
-                                                  );
-                                              if (shouldToggle == true) {
-                                                await ref
-                                                    .read(
-                                                      appControllerProvider
-                                                          .notifier,
-                                                    )
-                                                    .saveCategory(
-                                                      category.copyWith(
-                                                        isActive: nextIsActive,
-                                                        updatedAt:
-                                                            DateTime.now(),
-                                                      ),
-                                                    );
-                                              }
-                                            },
-                                            onDelete: () async {
-                                              final shouldDelete =
-                                                  await _showDeleteCategoryDialog(
-                                                    context,
-                                                    categories[index].name,
-                                                  );
-                                              if (shouldDelete == true) {
-                                                await ref
-                                                    .read(
-                                                      appControllerProvider
-                                                          .notifier,
-                                                    )
-                                                    .deleteCategory(
-                                                      categories[index].id,
-                                                    );
-                                              }
-                                            },
+                                            onToggleActive: () =>
+                                                _showToggleCategoryStatusDialog(
+                                                  context,
+                                                  categories[index],
+                                                ),
+                                            onDelete: () =>
+                                                _showDeleteCategoryDialog(
+                                                  context,
+                                                  categories[index],
+                                                ),
                                             dragChild: const Padding(
                                               padding: EdgeInsets.only(left: 8),
                                               child: Icon(
@@ -1796,35 +1726,9 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
               trailingSpace: trailingSpace,
               onEdit: () =>
                   _showCategoryDialog(context, ref, initial: category),
-              onToggleActive: () async {
-                final nextIsActive = !category.isActive;
-                final shouldToggle = await _showToggleCategoryStatusDialog(
-                  context,
-                  category.name,
-                  nextIsActive,
-                );
-                if (shouldToggle == true) {
-                  await ref
-                      .read(appControllerProvider.notifier)
-                      .saveCategory(
-                        category.copyWith(
-                          isActive: nextIsActive,
-                          updatedAt: DateTime.now(),
-                        ),
-                      );
-                }
-              },
-              onDelete: () async {
-                final shouldDelete = await _showDeleteCategoryDialog(
-                  context,
-                  category.name,
-                );
-                if (shouldDelete == true) {
-                  await ref
-                      .read(appControllerProvider.notifier)
-                      .deleteCategory(category.id);
-                }
-              },
+              onToggleActive: () =>
+                  _showToggleCategoryStatusDialog(context, category),
+              onDelete: () => _showDeleteCategoryDialog(context, category),
               dragChild: ReorderableDragStartListener(
                 index: index,
                 child: const Padding(
@@ -2186,60 +2090,109 @@ class _CategoryColumnWidths {
 }
 
 extension on _AdminCategoriesPageState {
-  Future<bool?> _showToggleCategoryStatusDialog(
+  Future<void> _showToggleCategoryStatusDialog(
     BuildContext context,
-    String categoryName,
-    bool nextIsActive,
+    Category category,
   ) {
-    return showDialog<bool>(
+    final nextIsActive = !category.isActive;
+    return showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AppModalFrame(
-          title: nextIsActive ? 'Activate Category?' : 'Deactivate Category?',
-          actions: [
-            AppModalButton(
-              label: 'Close',
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+        var isSubmitting = false;
+        return StatefulBuilder(
+          builder: (context, setState) => AppModalFrame(
+            title: nextIsActive ? 'Activate Category?' : 'Deactivate Category?',
+            actions: [
+              AppModalButton(
+                label: 'Close',
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+              ),
+              const SizedBox(width: 10),
+              AppModalButton(
+                label: nextIsActive ? 'Activate' : 'Deactivate',
+                isPrimary: true,
+                isLoading: isSubmitting,
+                onPressed: () async {
+                  if (isSubmitting) {
+                    return;
+                  }
+                  setState(() => isSubmitting = true);
+                  try {
+                    await ref.read(appControllerProvider.notifier).saveCategory(
+                      category.copyWith(
+                        isActive: nextIsActive,
+                        updatedAt: DateTime.now(),
+                      ),
+                    );
+                    if (dialogContext.mounted) {
+                      Navigator.of(dialogContext).pop();
+                    }
+                  } finally {
+                    if (dialogContext.mounted) {
+                      setState(() => isSubmitting = false);
+                    }
+                  }
+                },
+              ),
+            ],
+            child: AppModalBodyText(
+              nextIsActive
+                  ? '${category.name.trim()} will be activated.'
+                  : '${category.name.trim()} will be deactivated.',
             ),
-            const SizedBox(width: 10),
-            AppModalButton(
-              label: nextIsActive ? 'Activate' : 'Deactivate',
-              isPrimary: true,
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-            ),
-          ],
-          child: AppModalBodyText(
-            nextIsActive
-                ? '${categoryName.trim()} will be activated.'
-                : '${categoryName.trim()} will be deactivated.',
           ),
         );
       },
     );
   }
 
-  Future<bool?> _showDeleteCategoryDialog(
+  Future<void> _showDeleteCategoryDialog(
     BuildContext context,
-    String categoryName,
+    Category category,
   ) {
-    return showDialog<bool>(
+    return showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AppModalFrame(
-          title: 'Remove Category?',
-          actions: [
-            AppModalButton(
-              label: 'Close',
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-            ),
-            const SizedBox(width: 10),
-            AppModalButton(
-              label: 'Delete',
-              isPrimary: true,
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-            ),
-          ],
-          child: AppModalBodyText('${categoryName.trim()} will be deleted.'),
+        var isDeleting = false;
+        return StatefulBuilder(
+          builder: (context, setState) => AppModalFrame(
+            title: 'Remove Category?',
+            actions: [
+              AppModalButton(
+                label: 'Close',
+                onPressed: isDeleting
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+              ),
+              const SizedBox(width: 10),
+              AppModalButton(
+                label: 'Delete',
+                isPrimary: true,
+                isLoading: isDeleting,
+                onPressed: () async {
+                  if (isDeleting) {
+                    return;
+                  }
+                  setState(() => isDeleting = true);
+                  try {
+                    await ref
+                        .read(appControllerProvider.notifier)
+                        .deleteCategory(category.id);
+                    if (dialogContext.mounted) {
+                      Navigator.of(dialogContext).pop();
+                    }
+                  } finally {
+                    if (dialogContext.mounted) {
+                      setState(() => isDeleting = false);
+                    }
+                  }
+                },
+              ),
+            ],
+            child: AppModalBodyText('${category.name.trim()} will be deleted.'),
+          ),
         );
       },
     );
