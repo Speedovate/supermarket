@@ -756,6 +756,9 @@ class AppController extends Notifier<AppState> {
       final next = await _firestoreCatalog.loadCategories(
         includeInactive: includeInactive,
       );
+      if (next.isEmpty && state.categories.isNotEmpty) {
+        return;
+      }
       state = state.copyWith(
         categories: next,
         categoriesMetaUpdatedAt: remoteUpdatedAt,
@@ -814,6 +817,9 @@ class AppController extends Notifier<AppState> {
       final next = await _firestoreCatalog.loadBarangays(
         includeInactive: includeInactive,
       );
+      if (next.isEmpty && state.barangays.isNotEmpty) {
+        return;
+      }
       state = state.copyWith(
         barangays: _normalizeBarangays(next, settings: state.settings),
         barangaysMetaUpdatedAt: remoteUpdatedAt,
@@ -871,6 +877,9 @@ class AppController extends Notifier<AppState> {
       final next = await _firestoreCatalog.loadBanners(
         includeInactive: includeInactive,
       );
+      if (next.isEmpty && state.banners.isNotEmpty) {
+        return;
+      }
       state = state.copyWith(
         banners: next,
         bannersMetaUpdatedAt: remoteUpdatedAt,

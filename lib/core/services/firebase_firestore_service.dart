@@ -1118,6 +1118,10 @@ class FirestoreCatalogService {
           .collection(FirebasePaths.categories)
           .where('active', isEqualTo: true)
           .get(),
+      _firestore
+          .collection(FirebasePaths.categories)
+          .where('status', isEqualTo: true)
+          .get(),
     ]);
     final byId = <int, Category>{};
     for (final snapshot in snapshots) {
@@ -1139,6 +1143,10 @@ class FirestoreCatalogService {
           .collection(FirebasePaths.banners)
           .where('active', isEqualTo: true)
           .get(),
+      _firestore
+          .collection(FirebasePaths.banners)
+          .where('status', isEqualTo: true)
+          .get(),
     ]);
     final byId = <int, AppBanner>{};
     for (final snapshot in snapshots) {
@@ -1159,6 +1167,10 @@ class FirestoreCatalogService {
       _firestore
           .collection(FirebasePaths.products)
           .where('active', isEqualTo: true)
+          .get(),
+      _firestore
+          .collection(FirebasePaths.products)
+          .where('status', isEqualTo: true)
           .get(),
     ]);
     final byId = <int, Product>{};

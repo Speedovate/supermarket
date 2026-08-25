@@ -96,6 +96,8 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
             details: row.details.trim(),
             price: row.priceCentavos,
             sold: 0,
+            photoUrl: row.photoUrl,
+            photoStoragePath: row.photoStoragePath,
           ),
         );
       }
@@ -155,6 +157,8 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
           details: row.details.trim(),
           price: row.priceCentavos,
           sold: 0,
+          photoUrl: row.photoUrl,
+          photoStoragePath: row.photoStoragePath,
         ),
       );
     }

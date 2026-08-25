@@ -19,6 +19,8 @@ class ImportedCatalogProductRow {
     required this.details,
     required this.categoryName,
     required this.priceCentavos,
+    this.photoUrl,
+    this.photoStoragePath,
     this.createdAt,
     this.updatedAt,
   });
@@ -27,6 +29,8 @@ class ImportedCatalogProductRow {
   final String details;
   final String categoryName;
   final int priceCentavos;
+  final String? photoUrl;
+  final String? photoStoragePath;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 }
@@ -61,6 +65,8 @@ Uint8List buildCatalogWorkbook({
     'details',
     'category',
     'price',
+    'photo url',
+    'photo storage path',
     'sold',
     'created at',
     'updated at',
@@ -72,6 +78,8 @@ Uint8List buildCatalogWorkbook({
       product.details,
       product.categoryId == 0 ? '' : (categoriesById[product.categoryId] ?? ''),
       _formatPricePesos(product.referencePriceCentavos),
+      product.photoUrl?.trim() ?? '',
+      product.photoStoragePath?.trim() ?? '',
       '${product.sold}',
       product.createdAt.toIso8601String(),
       product.updatedAt.toIso8601String(),
@@ -155,6 +163,12 @@ ImportedCatalogWorkbook parseCatalogWorkbook(Uint8List bytes) {
           details: details,
           categoryName: (_optionalText(row, header, 'category') ?? '').trim(),
           priceCentavos: _requiredPriceCentavos(row, header, rowIndex),
+          photoUrl: _normalizeOptionalCellText(
+            _optionalText(row, header, 'photo url'),
+          ),
+          photoStoragePath: _normalizeOptionalCellText(
+            _optionalText(row, header, 'photo storage path'),
+          ),
           createdAt: createdAt,
           updatedAt: updatedAt,
         ),
@@ -372,6 +386,17 @@ String? _optionalText(
       .firstWhere((_) => true, orElse: () => '')
       .trim();
   return value.isEmpty ? null : value;
+}
+
+String? _normalizeOptionalCellText(String? value) {
+  final normalized = value?.trim() ?? '';
+  if (normalized.isEmpty) {
+    return null;
+  }
+  if (normalized.toLowerCase() == 'null') {
+    return null;
+  }
+  return normalized;
 }
 
 int _requiredPriceCentavos(
