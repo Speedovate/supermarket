@@ -604,7 +604,7 @@ class AppController extends Notifier<AppState> {
     if (local == null) {
       return true;
     }
-    return remote.isAfter(local);
+    return !remote.isAtSameMomentAs(local);
   }
 
   DateTime? _latestCategoryUpdatedAt(List<Category> items) {
