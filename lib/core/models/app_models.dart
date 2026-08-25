@@ -65,19 +65,20 @@ class Category {
 
   factory Category.fromMap(Map<String, dynamic> map) {
     final fallbackDate = DateTime(2026, 7, 31);
+    final name = (map['name'] as String? ?? '').trim();
     return Category(
       id: map['id'] is int
           ? map['id'] as int
           : int.tryParse('${map['id']}') ?? 0,
-      name: map['name'] as String,
-      normalizedName: map['normalizedName'] as String,
-      isActive: map['isActive'] as bool,
-      createdAt: map['createdAt'] == null
-          ? fallbackDate
-          : DateTime.parse(map['createdAt'] as String),
-      updatedAt: map['updatedAt'] == null
-          ? fallbackDate
-          : DateTime.parse(map['updatedAt'] as String),
+      name: name,
+      normalizedName:
+          (map['normalizedName'] as String? ?? '').trim().isNotEmpty
+          ? (map['normalizedName'] as String).trim()
+          : name.toLowerCase(),
+      isActive:
+          (map['isActive'] ?? map['active'] ?? map['status']) as bool? ?? true,
+      createdAt: _parseDateTime(map['createdAt']) ?? fallbackDate,
+      updatedAt: _parseDateTime(map['updatedAt']) ?? fallbackDate,
       sortOrder: map['sortOrder'] is int
           ? map['sortOrder'] as int
           : int.tryParse('${map['sortOrder']}') ??
@@ -190,18 +191,16 @@ class Product {
       (map['type'] as String?)?.trim() ?? parsedLegacyUnit.type,
     ].where((item) => item.isNotEmpty).join(itemNeedsSpaceJoiner);
     final fallbackDate = DateTime(2026, 7, 31);
+    final name = (map['name'] as String? ?? '').trim();
     return Product(
       id: _parseInt(map['id']),
       active: (map['active'] ?? map['isActive']) as bool? ?? true,
-      createdAt: map['createdAt'] == null
-          ? fallbackDate
-          : DateTime.parse(map['createdAt'] as String),
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.parse(map['updatedAt'] as String)
-          : map['priceUpdatedAt'] != null
-          ? DateTime.parse(map['priceUpdatedAt'] as String)
-          : fallbackDate,
-      name: map['name'] as String,
+      createdAt: _parseDateTime(map['createdAt']) ?? fallbackDate,
+      updatedAt:
+          _parseDateTime(map['updatedAt']) ??
+          _parseDateTime(map['priceUpdatedAt']) ??
+          fallbackDate,
+      name: name,
       category: _parseInt(map['category'] ?? map['categoryId']),
       details: (map['details'] as String?)?.trim().isNotEmpty == true
           ? (map['details'] as String).trim()
@@ -270,13 +269,10 @@ class AppBanner {
     final fallbackDate = DateTime(2026, 8, 7);
     return AppBanner(
       id: _parseInt(map['id']),
-      active: (map['active'] ?? map['isActive']) as bool? ?? true,
-      createdAt: map['createdAt'] == null
-          ? fallbackDate
-          : DateTime.parse(map['createdAt'] as String),
-      updatedAt: map['updatedAt'] == null
-          ? fallbackDate
-          : DateTime.parse(map['updatedAt'] as String),
+      active:
+          (map['active'] ?? map['isActive'] ?? map['status']) as bool? ?? true,
+      createdAt: _parseDateTime(map['createdAt']) ?? fallbackDate,
+      updatedAt: _parseDateTime(map['updatedAt']) ?? fallbackDate,
       imageUrl: (map['imageUrl'] as String? ?? '').trim(),
       externalUrl: (map['externalUrl'] as String?)?.trim().isEmpty == true
           ? null
@@ -318,6 +314,13 @@ int _parseInt(Object? value) {
     return value;
   }
   return int.tryParse('$value') ?? 0;
+}
+
+DateTime? _parseDateTime(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  return DateTime.tryParse('$value');
 }
 
 const itemNeedsSpaceJoiner = ' ';

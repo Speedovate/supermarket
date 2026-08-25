@@ -16,23 +16,25 @@ service cloud.firestore {
     }
 
     match /categories/{categoryId} {
-      allow read: if isAdmin() || resource.data.isActive == true;
+      allow read: if isAdmin() || resource.data.isActive == true || resource.data.active == true || resource.data.status == true;
       allow write: if isAdmin();
     }
 
     match /barangays/{barangayId} {
-      allow read: if isAdmin() || resource.data.isActive == true || resource.data.active == true;
+      allow read: if isAdmin() || resource.data.isActive == true || resource.data.active == true || resource.data.status == true;
       allow write: if isAdmin();
     }
 
     match /banners/{bannerId} {
-      allow read: if isAdmin() || resource.data.isActive == true;
+      allow read: if isAdmin() || resource.data.isActive == true || resource.data.active == true || resource.data.status == true;
       allow write: if isAdmin();
     }
 
     match /products/{productId} {
       allow read: if isAdmin() || (
-        resource.data.isActive == true
+        resource.data.isActive == true ||
+        resource.data.active == true ||
+        resource.data.status == true
       );
       allow write: if isAdmin();
     }

@@ -161,13 +161,12 @@ class FirestoreCatalogService {
   }
 
   Future<List<Category>> loadCategories({bool includeInactive = true}) async {
-    final query = includeInactive
-        ? _firestore.collection(FirebasePaths.categories)
-        : _firestore
-              .collection(FirebasePaths.categories)
-              .where('isActive', isEqualTo: true);
-    final snapshot = await query.get();
-    final categories = snapshot.docs.map(_categoryFromSnapshot).toList()
+    final categories = (includeInactive
+        ? (await _firestore.collection(FirebasePaths.categories).get())
+              .docs
+              .map(_categoryFromSnapshot)
+              .toList()
+        : await _loadPublicCategories())
       ..sort(_compareCategoriesBySortOrder);
     return categories;
   }
@@ -235,13 +234,12 @@ class FirestoreCatalogService {
   }
 
   Future<List<AppBanner>> loadBanners({bool includeInactive = true}) async {
-    final query = includeInactive
-        ? _firestore.collection(FirebasePaths.banners).orderBy('id')
-        : _firestore
-              .collection(FirebasePaths.banners)
-              .where('isActive', isEqualTo: true);
-    final snapshot = await query.get();
-    final banners = snapshot.docs.map(_bannerFromSnapshot).toList()
+    final banners = (includeInactive
+        ? (await _firestore.collection(FirebasePaths.banners).orderBy('id').get())
+              .docs
+              .map(_bannerFromSnapshot)
+              .toList()
+        : await _loadPublicBanners())
       ..sort((a, b) => a.id.compareTo(b.id));
     return banners;
   }
@@ -272,13 +270,12 @@ class FirestoreCatalogService {
   }
 
   Future<List<Product>> loadProducts({bool includeInactive = true}) async {
-    final query = includeInactive
-        ? _firestore.collection(FirebasePaths.products).orderBy('id')
-        : _firestore
-              .collection(FirebasePaths.products)
-              .where('isActive', isEqualTo: true);
-    final snapshot = await query.get();
-    final products = snapshot.docs.map(_productFromSnapshot).toList()
+    final products = (includeInactive
+        ? (await _firestore.collection(FirebasePaths.products).orderBy('id').get())
+              .docs
+              .map(_productFromSnapshot)
+              .toList()
+        : await _loadPublicProducts())
       ..sort((a, b) => a.id.compareTo(b.id));
     return products;
   }
@@ -1072,6 +1069,8 @@ class FirestoreCatalogService {
     return {
       ...category.toMap(),
       'isActive': category.isActive,
+      'active': category.isActive,
+      'status': category.isActive,
       'sortOrder': sortOrder,
     };
   }
@@ -1088,6 +1087,8 @@ class FirestoreCatalogService {
     return {
       ...banner.toMap(),
       'isActive': banner.isActive,
+      'active': banner.isActive,
+      'status': banner.isActive,
     };
   }
 
@@ -1096,7 +1097,72 @@ class FirestoreCatalogService {
       ...product.toMap(),
       'categoryId': product.categoryId,
       'isActive': product.isActive,
+      'active': product.isActive,
+      'status': product.isActive,
     };
+  }
+
+  Future<List<Category>> _loadPublicCategories() async {
+    final snapshots = await Future.wait([
+      _firestore
+          .collection(FirebasePaths.categories)
+          .where('isActive', isEqualTo: true)
+          .get(),
+      _firestore
+          .collection(FirebasePaths.categories)
+          .where('active', isEqualTo: true)
+          .get(),
+    ]);
+    final byId = <int, Category>{};
+    for (final snapshot in snapshots) {
+      for (final doc in snapshot.docs) {
+        final category = _categoryFromSnapshot(doc);
+        byId[category.id] = category;
+      }
+    }
+    return byId.values.toList();
+  }
+
+  Future<List<AppBanner>> _loadPublicBanners() async {
+    final snapshots = await Future.wait([
+      _firestore
+          .collection(FirebasePaths.banners)
+          .where('isActive', isEqualTo: true)
+          .get(),
+      _firestore
+          .collection(FirebasePaths.banners)
+          .where('active', isEqualTo: true)
+          .get(),
+    ]);
+    final byId = <int, AppBanner>{};
+    for (final snapshot in snapshots) {
+      for (final doc in snapshot.docs) {
+        final banner = _bannerFromSnapshot(doc);
+        byId[banner.id] = banner;
+      }
+    }
+    return byId.values.toList();
+  }
+
+  Future<List<Product>> _loadPublicProducts() async {
+    final snapshots = await Future.wait([
+      _firestore
+          .collection(FirebasePaths.products)
+          .where('isActive', isEqualTo: true)
+          .get(),
+      _firestore
+          .collection(FirebasePaths.products)
+          .where('active', isEqualTo: true)
+          .get(),
+    ]);
+    final byId = <int, Product>{};
+    for (final snapshot in snapshots) {
+      for (final doc in snapshot.docs) {
+        final product = _productFromSnapshot(doc);
+        byId[product.id] = product;
+      }
+    }
+    return byId.values.toList();
   }
 
   Map<String, dynamic> _settingsData(AppSettings settings) {
