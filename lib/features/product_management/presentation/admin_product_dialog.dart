@@ -170,7 +170,7 @@ Future<Product?> showAdminProductDialog(
                                 : nameController.text.trim(),
                             imageUrl: photoUrl,
                             fullRounded: true,
-                            imageFit: BoxFit.contain,
+                            imageFit: BoxFit.cover,
                           ),
                         ),
                       ),

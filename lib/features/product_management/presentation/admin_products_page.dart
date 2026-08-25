@@ -1897,7 +1897,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                     label: product.name,
                     posterMode: true,
                     imageUrl: product.photoUrl,
-                    imageFit: BoxFit.contain,
+                    imageFit: BoxFit.cover,
                   ),
                 ),
               ),

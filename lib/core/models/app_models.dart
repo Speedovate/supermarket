@@ -1246,11 +1246,16 @@ class PersistedData {
   const PersistedData({
     this.id = 1,
     required this.categories,
+    this.categoriesMetaUpdatedAt,
     required this.barangays,
+    this.barangaysMetaUpdatedAt,
     required this.banners,
+    this.bannersMetaUpdatedAt,
     required this.products,
+    this.productsMetaUpdatedAt,
     required this.orders,
     required this.settings,
+    this.settingsMetaUpdatedAt,
     required this.cart,
     required this.customerDraft,
     this.adminSession,
@@ -1260,11 +1265,16 @@ class PersistedData {
 
   final int id;
   final List<Category> categories;
+  final DateTime? categoriesMetaUpdatedAt;
   final List<Barangay> barangays;
+  final DateTime? barangaysMetaUpdatedAt;
   final List<AppBanner> banners;
+  final DateTime? bannersMetaUpdatedAt;
   final List<Product> products;
+  final DateTime? productsMetaUpdatedAt;
   final List<OrderRequest> orders;
   final AppSettings settings;
+  final DateTime? settingsMetaUpdatedAt;
   final List<CartItem> cart;
   final CustomerDraft customerDraft;
   final AdminSession? adminSession;
@@ -1274,11 +1284,16 @@ class PersistedData {
   Map<String, dynamic> toMap() => {
     'id': id,
     'categories': categories.map((item) => item.toMap()).toList(),
+    'categoriesMetaUpdatedAt': categoriesMetaUpdatedAt?.toIso8601String(),
     'barangays': barangays.map((item) => item.toMap()).toList(),
+    'barangaysMetaUpdatedAt': barangaysMetaUpdatedAt?.toIso8601String(),
     'banners': banners.map((item) => item.toMap()).toList(),
+    'bannersMetaUpdatedAt': bannersMetaUpdatedAt?.toIso8601String(),
     'products': products.map((item) => item.toMap()).toList(),
+    'productsMetaUpdatedAt': productsMetaUpdatedAt?.toIso8601String(),
     'orders': orders.map((item) => item.toMap()).toList(),
     'settings': settings.toMap(),
+    'settingsMetaUpdatedAt': settingsMetaUpdatedAt?.toIso8601String(),
     'cart': cart.map((item) => item.toMap()).toList(),
     'customerDraft': customerDraft.toMap(),
     'adminSession': adminSession?.toMap(),
@@ -1299,21 +1314,33 @@ class PersistedData {
             (item) => Category.fromMap(Map<String, dynamic>.from(item as Map)),
           )
           .toList(),
+      categoriesMetaUpdatedAt: map['categoriesMetaUpdatedAt'] == null
+          ? null
+          : DateTime.parse(map['categoriesMetaUpdatedAt'] as String),
       barangays: ((map['barangays'] as List<dynamic>?) ?? const <dynamic>[])
           .map(
             (item) => Barangay.fromMap(Map<String, dynamic>.from(item as Map)),
           )
           .toList(),
+      barangaysMetaUpdatedAt: map['barangaysMetaUpdatedAt'] == null
+          ? null
+          : DateTime.parse(map['barangaysMetaUpdatedAt'] as String),
       banners: ((map['banners'] as List<dynamic>?) ?? const <dynamic>[])
           .map(
             (item) => AppBanner.fromMap(Map<String, dynamic>.from(item as Map)),
           )
           .toList(),
+      bannersMetaUpdatedAt: map['bannersMetaUpdatedAt'] == null
+          ? null
+          : DateTime.parse(map['bannersMetaUpdatedAt'] as String),
       products: (map['products'] as List<dynamic>)
           .map(
             (item) => Product.fromMap(Map<String, dynamic>.from(item as Map)),
           )
           .toList(),
+      productsMetaUpdatedAt: map['productsMetaUpdatedAt'] == null
+          ? null
+          : DateTime.parse(map['productsMetaUpdatedAt'] as String),
       orders: (map['orders'] as List<dynamic>)
           .map(
             (item) =>
@@ -1323,6 +1350,9 @@ class PersistedData {
       settings: AppSettings.fromMap(
         Map<String, dynamic>.from(map['settings'] as Map),
       ),
+      settingsMetaUpdatedAt: map['settingsMetaUpdatedAt'] == null
+          ? null
+          : DateTime.parse(map['settingsMetaUpdatedAt'] as String),
       cart: (map['cart'] as List<dynamic>)
           .map(
             (item) => CartItem.fromMap(Map<String, dynamic>.from(item as Map)),

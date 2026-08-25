@@ -44,12 +44,17 @@ class AppState {
     this.errorMessage,
     this.lastSubmittedOrderId,
     this.categories = const [],
+    this.categoriesMetaUpdatedAt,
     this.barangays = const [],
+    this.barangaysMetaUpdatedAt,
     this.banners = const [],
+    this.bannersMetaUpdatedAt,
     this.products = const [],
+    this.productsMetaUpdatedAt,
     this.cart = const [],
     this.orders = const [],
     this.settings = const AppSettings(),
+    this.settingsMetaUpdatedAt,
     this.customerDraft = const CustomerDraft(),
     this.adminSession,
   });
@@ -62,12 +67,17 @@ class AppState {
   final String? errorMessage;
   final int? lastSubmittedOrderId;
   final List<Category> categories;
+  final DateTime? categoriesMetaUpdatedAt;
   final List<Barangay> barangays;
+  final DateTime? barangaysMetaUpdatedAt;
   final List<AppBanner> banners;
+  final DateTime? bannersMetaUpdatedAt;
   final List<Product> products;
+  final DateTime? productsMetaUpdatedAt;
   final List<CartItem> cart;
   final List<OrderRequest> orders;
   final AppSettings settings;
+  final DateTime? settingsMetaUpdatedAt;
   final CustomerDraft customerDraft;
   final AdminSession? adminSession;
 
@@ -84,12 +94,17 @@ class AppState {
     Object? errorMessage = _sentinel,
     Object? lastSubmittedOrderId = _sentinel,
     List<Category>? categories,
+    Object? categoriesMetaUpdatedAt = _sentinel,
     List<Barangay>? barangays,
+    Object? barangaysMetaUpdatedAt = _sentinel,
     List<AppBanner>? banners,
+    Object? bannersMetaUpdatedAt = _sentinel,
     List<Product>? products,
+    Object? productsMetaUpdatedAt = _sentinel,
     List<CartItem>? cart,
     List<OrderRequest>? orders,
     AppSettings? settings,
+    Object? settingsMetaUpdatedAt = _sentinel,
     CustomerDraft? customerDraft,
     Object? adminSession = _sentinel,
   }) {
@@ -106,12 +121,27 @@ class AppState {
           ? this.lastSubmittedOrderId
           : lastSubmittedOrderId as int?,
       categories: categories ?? this.categories,
+      categoriesMetaUpdatedAt: categoriesMetaUpdatedAt == _sentinel
+          ? this.categoriesMetaUpdatedAt
+          : categoriesMetaUpdatedAt as DateTime?,
       barangays: barangays ?? this.barangays,
+      barangaysMetaUpdatedAt: barangaysMetaUpdatedAt == _sentinel
+          ? this.barangaysMetaUpdatedAt
+          : barangaysMetaUpdatedAt as DateTime?,
       banners: banners ?? this.banners,
+      bannersMetaUpdatedAt: bannersMetaUpdatedAt == _sentinel
+          ? this.bannersMetaUpdatedAt
+          : bannersMetaUpdatedAt as DateTime?,
       products: products ?? this.products,
+      productsMetaUpdatedAt: productsMetaUpdatedAt == _sentinel
+          ? this.productsMetaUpdatedAt
+          : productsMetaUpdatedAt as DateTime?,
       cart: cart ?? this.cart,
       orders: orders ?? this.orders,
       settings: settings ?? this.settings,
+      settingsMetaUpdatedAt: settingsMetaUpdatedAt == _sentinel
+          ? this.settingsMetaUpdatedAt
+          : settingsMetaUpdatedAt as DateTime?,
       customerDraft: customerDraft ?? this.customerDraft,
       adminSession: adminSession == _sentinel
           ? this.adminSession
@@ -131,8 +161,11 @@ class AppController extends Notifier<AppState> {
   StreamSubscription<List<Product>>? _productsSubscription;
   StreamSubscription<AppSettings?>? _settingsSubscription;
   StreamSubscription<List<OrderRequest>>? _ordersSubscription;
+  StreamSubscription<CatalogMetaSnapshot?>? _catalogMetaSubscription;
+  String? _ordersRealtimeScopeKey;
   bool? _catalogRealtimeIncludesInactive;
   bool _realtimeSyncScheduled = false;
+  bool _disposeSyncRegistered = false;
   static const _defaultStoreContactNumber = '09064493206';
   static const _defaultFacebookMessengerUrl =
       'https://www.facebook.com/andrew.s.supermarket.2024';
@@ -170,13 +203,19 @@ class AppController extends Notifier<AppState> {
       await _syncAdminSessionFromFirebase();
       unawaited(_hydratePublicDataFromFirebase());
       _scheduleRealtimeSync();
-      unawaited(_refreshOrdersFromFirebase());
+      _restartOrdersRealtimeSync();
+      if (!_hasOrdersRealtimeCoverage()) {
+        unawaited(_refreshOrdersFromFirebase());
+      }
     } catch (_) {
       _applyDefaultState();
       await _syncAdminSessionFromFirebase();
       unawaited(_hydratePublicDataFromFirebase());
       _scheduleRealtimeSync();
-      unawaited(_refreshOrdersFromFirebase());
+      _restartOrdersRealtimeSync();
+      if (!_hasOrdersRealtimeCoverage()) {
+        unawaited(_refreshOrdersFromFirebase());
+      }
     }
   }
 
@@ -190,7 +229,10 @@ class AppController extends Notifier<AppState> {
       await _syncAdminSessionFromFirebase();
       unawaited(_hydratePublicDataFromFirebase());
       _scheduleRealtimeSync();
-      unawaited(_refreshOrdersFromFirebase());
+      _restartOrdersRealtimeSync();
+      if (!_hasOrdersRealtimeCoverage()) {
+        unawaited(_refreshOrdersFromFirebase());
+      }
     } catch (_) {
       // Keep the current in-memory state if refresh fails.
     }
@@ -201,6 +243,10 @@ class AppController extends Notifier<AppState> {
     await _syncAdminSessionFromFirebase();
     await _hydratePublicDataFromFirebase();
     _startRealtimeSync();
+    if (_hasOrdersRealtimeCoverage()) {
+      state = state.copyWith(loading: false);
+      return;
+    }
     await _refreshOrdersFromFirebase();
   }
 
@@ -208,63 +254,42 @@ class AppController extends Notifier<AppState> {
     _realtimeSyncScheduled = false;
     final includeInactive = _hasActiveAdminContext(state.adminSession);
     if (_catalogRealtimeIncludesInactive != includeInactive) {
-      unawaited(_categoriesSubscription?.cancel());
-      unawaited(_barangaysSubscription?.cancel());
-      unawaited(_bannersSubscription?.cancel());
-      unawaited(_productsSubscription?.cancel());
-      _categoriesSubscription = null;
-      _barangaysSubscription = null;
-      _bannersSubscription = null;
-      _productsSubscription = null;
       _catalogRealtimeIncludesInactive = includeInactive;
     }
-    _categoriesSubscription ??= _firestoreCatalog.watchCategories(
-      includeInactive: includeInactive,
-    ).listen((categories) async {
-      state = state.copyWith(categories: categories);
-      await _persist();
-    }, onError: _handleRealtimeSyncError);
-    _barangaysSubscription ??= _firestoreCatalog.watchBarangays(
-      includeInactive: includeInactive,
-    ).listen((barangays) async {
-      state = state.copyWith(
-        barangays: _normalizeBarangays(barangays, settings: state.settings),
-      );
-      await _persist();
-    }, onError: _handleRealtimeSyncError);
-    _bannersSubscription ??= _firestoreCatalog.watchBanners(
-      includeInactive: includeInactive,
-    ).listen((banners) async {
-      state = state.copyWith(banners: banners);
-      await _persist();
-    }, onError: _handleRealtimeSyncError);
-    _productsSubscription ??= _firestoreCatalog.watchProducts(
-      includeInactive: includeInactive,
-    ).listen((products) async {
-      state = state.copyWith(
-        products: products,
-        cart: _syncCartWithProducts(products: products),
-      );
-      await _persist();
-    }, onError: _handleRealtimeSyncError);
-    _settingsSubscription ??= _firestoreCatalog.watchSettings().listen((
-      settings,
+    unawaited(_categoriesSubscription?.cancel());
+    unawaited(_barangaysSubscription?.cancel());
+    unawaited(_bannersSubscription?.cancel());
+    unawaited(_productsSubscription?.cancel());
+    unawaited(_settingsSubscription?.cancel());
+    _categoriesSubscription = null;
+    _barangaysSubscription = null;
+    _bannersSubscription = null;
+    _productsSubscription = null;
+    _settingsSubscription = null;
+    _catalogMetaSubscription ??= _firestoreCatalog.watchCatalogMeta().listen((
+      meta,
     ) async {
-      if (settings == null) {
+      if (meta == null) {
         return;
       }
-      state = state.copyWith(settings: _normalizeSettings(settings));
-      await _persist();
+      await _syncCatalogFromMeta(
+        meta,
+        includeInactive: _hasActiveAdminContext(state.adminSession),
+      );
     }, onError: _handleRealtimeSyncError);
     _restartOrdersRealtimeSync();
-    ref.onDispose(() {
-      unawaited(_categoriesSubscription?.cancel());
-      unawaited(_barangaysSubscription?.cancel());
-      unawaited(_bannersSubscription?.cancel());
-      unawaited(_productsSubscription?.cancel());
-      unawaited(_settingsSubscription?.cancel());
-      unawaited(_ordersSubscription?.cancel());
-    });
+    if (!_disposeSyncRegistered) {
+      _disposeSyncRegistered = true;
+      ref.onDispose(() {
+        unawaited(_catalogMetaSubscription?.cancel());
+        unawaited(_categoriesSubscription?.cancel());
+        unawaited(_barangaysSubscription?.cancel());
+        unawaited(_bannersSubscription?.cancel());
+        unawaited(_productsSubscription?.cancel());
+        unawaited(_settingsSubscription?.cancel());
+        unawaited(_ordersSubscription?.cancel());
+      });
+    }
   }
 
   void _scheduleRealtimeSync() {
@@ -280,10 +305,18 @@ class AppController extends Notifier<AppState> {
   }
 
   void _restartOrdersRealtimeSync() {
-    unawaited(_ordersSubscription?.cancel());
     final adminSession = state.adminSession;
     final hasActiveAdminContext = _hasActiveAdminContext(adminSession);
     final trackedPhones = _customerLookupPhones();
+    final nextScopeKey = _buildOrdersRealtimeScopeKey(
+      hasActiveAdminContext: hasActiveAdminContext,
+      trackedPhones: trackedPhones,
+    );
+    if (_ordersSubscription != null && _ordersRealtimeScopeKey == nextScopeKey) {
+      return;
+    }
+    unawaited(_ordersSubscription?.cancel());
+    _ordersRealtimeScopeKey = nextScopeKey;
     final stream = hasActiveAdminContext
         ? _firestoreCatalog.watchOrders()
         : _firestoreCatalog.watchOrdersForNormalizedPhones(
@@ -323,6 +356,19 @@ class AppController extends Notifier<AppState> {
     }, onError: _handleRealtimeSyncError);
   }
 
+  bool _hasOrdersRealtimeCoverage() {
+    if (_ordersSubscription == null) {
+      return false;
+    }
+    final hasActiveAdminContext = _hasActiveAdminContext(state.adminSession);
+    final trackedPhones = _customerLookupPhones();
+    return _ordersRealtimeScopeKey ==
+        _buildOrdersRealtimeScopeKey(
+          hasActiveAdminContext: hasActiveAdminContext,
+          trackedPhones: trackedPhones,
+        );
+  }
+
   void _handleRealtimeSyncError(Object error, StackTrace stackTrace) {
     if (error is FirebaseException && error.code == 'permission-denied') {
       state = state.copyWith(loading: false);
@@ -342,11 +388,16 @@ class AppController extends Notifier<AppState> {
     state = state.copyWith(
       initialized: true,
       categories: const [],
+      categoriesMetaUpdatedAt: null,
       barangays: const [],
+      barangaysMetaUpdatedAt: null,
       banners: const [],
+      bannersMetaUpdatedAt: null,
       products: const [],
+      productsMetaUpdatedAt: null,
       orders: const [],
       settings: const AppSettings(),
+      settingsMetaUpdatedAt: null,
       cart: const [],
       customerDraft: const CustomerDraft(),
       adminSession: null,
@@ -376,14 +427,30 @@ class AppController extends Notifier<AppState> {
     state = state.copyWith(
       initialized: true,
       categories: persisted.categories,
+      categoriesMetaUpdatedAt:
+          persisted.categoriesMetaUpdatedAt ??
+          _latestCategoryUpdatedAt(persisted.categories),
       barangays: _normalizeBarangays(
         persisted.barangays,
         settings: persisted.settings,
       ),
+      barangaysMetaUpdatedAt:
+          persisted.barangaysMetaUpdatedAt ??
+          _latestBarangayUpdatedAt(persisted.barangays),
       banners: persisted.banners,
+      bannersMetaUpdatedAt:
+          persisted.bannersMetaUpdatedAt ??
+          _latestBannerUpdatedAt(persisted.banners),
       products: persisted.products,
+      productsMetaUpdatedAt:
+          persisted.productsMetaUpdatedAt ??
+          _latestProductUpdatedAt(persisted.products),
       orders: sanitizedOrders,
       settings: _normalizeSettings(persisted.settings),
+      settingsMetaUpdatedAt:
+          persisted.settingsMetaUpdatedAt ??
+          persisted.settings.updatedAt ??
+          persisted.settings.createdAt,
       cart: syncedCart,
       customerDraft: _resolveAutofillDraft(
         currentDraft: persisted.customerDraft,
@@ -406,6 +473,15 @@ class AppController extends Notifier<AppState> {
           state.catalogHydrated &&
           !_isPublicCatalogStale(catalogMeta)) {
         return;
+      }
+      if (catalogMeta != null && state.catalogHydrated) {
+        final syncedSelectively = await _syncCatalogFromMeta(
+          catalogMeta,
+          includeInactive: includeInactive,
+        );
+        if (syncedSelectively) {
+          return;
+        }
       }
 
       var snapshot = await _firestoreCatalog.loadCatalogSnapshot(
@@ -431,18 +507,29 @@ class AppController extends Notifier<AppState> {
         categories: snapshot.categories.isNotEmpty
             ? snapshot.categories
             : state.categories,
+        categoriesMetaUpdatedAt:
+            catalogMeta?.categoriesUpdatedAt ?? state.categoriesMetaUpdatedAt,
         barangays: snapshot.barangays.isNotEmpty
             ? _normalizeBarangays(
                 snapshot.barangays,
                 settings: snapshot.settings ?? state.settings,
               )
             : state.barangays,
+        barangaysMetaUpdatedAt:
+            catalogMeta?.barangaysUpdatedAt ?? state.barangaysMetaUpdatedAt,
         banners: snapshot.banners.isNotEmpty ? snapshot.banners : state.banners,
+        bannersMetaUpdatedAt:
+            catalogMeta?.bannersUpdatedAt ?? state.bannersMetaUpdatedAt,
         products: snapshot.products,
+        productsMetaUpdatedAt:
+            catalogMeta?.productsUpdatedAt ??
+            _latestProductUpdatedAt(snapshot.products),
         cart: _syncCartWithProducts(products: snapshot.products),
         settings: snapshot.settings == null
             ? state.settings
             : _normalizeSettings(snapshot.settings!),
+        settingsMetaUpdatedAt:
+            catalogMeta?.settingsUpdatedAt ?? state.settingsMetaUpdatedAt,
         catalogHydrated: true,
       );
       await _persist();
@@ -458,23 +545,23 @@ class AppController extends Notifier<AppState> {
   bool _isPublicCatalogStale(CatalogMetaSnapshot meta) {
     return _isRemoteCollectionNewer(
           remote: meta.categoriesUpdatedAt,
-          local: _latestCategoryUpdatedAt(state.categories),
+          local: state.categoriesMetaUpdatedAt,
         ) ||
         _isRemoteCollectionNewer(
           remote: meta.barangaysUpdatedAt,
-          local: _latestBarangayUpdatedAt(state.barangays),
+          local: state.barangaysMetaUpdatedAt,
         ) ||
         _isRemoteCollectionNewer(
           remote: meta.bannersUpdatedAt,
-          local: _latestBannerUpdatedAt(state.banners),
+          local: state.bannersMetaUpdatedAt,
         ) ||
         _isRemoteCollectionNewer(
           remote: meta.productsUpdatedAt,
-          local: _latestProductUpdatedAt(state.products),
+          local: state.productsMetaUpdatedAt,
         ) ||
         _isRemoteCollectionNewer(
           remote: meta.settingsUpdatedAt,
-          local: state.settings.updatedAt ?? state.settings.createdAt,
+          local: state.settingsMetaUpdatedAt,
         );
   }
 
@@ -525,6 +612,344 @@ class AppController extends Notifier<AppState> {
     return items
         .map((item) => item.updatedAt)
         .reduce((a, b) => a.isAfter(b) ? a : b);
+  }
+
+  Future<bool> _syncCatalogFromMeta(
+    CatalogMetaSnapshot meta, {
+    required bool includeInactive,
+  }) async {
+    var didSync = false;
+    if (_isRemoteCollectionNewer(
+      remote: meta.categoriesUpdatedAt,
+      local: state.categoriesMetaUpdatedAt,
+    )) {
+      await _syncCategoriesFromManifest(
+        remoteUpdatedAt: meta.categoriesUpdatedAt!,
+        includeInactive: includeInactive,
+      );
+      didSync = true;
+    }
+    if (_isRemoteCollectionNewer(
+      remote: meta.barangaysUpdatedAt,
+      local: state.barangaysMetaUpdatedAt,
+    )) {
+      await _syncBarangaysFromManifest(
+        remoteUpdatedAt: meta.barangaysUpdatedAt!,
+        includeInactive: includeInactive,
+      );
+      didSync = true;
+    }
+    if (_isRemoteCollectionNewer(
+      remote: meta.bannersUpdatedAt,
+      local: state.bannersMetaUpdatedAt,
+    )) {
+      await _syncBannersFromManifest(
+        remoteUpdatedAt: meta.bannersUpdatedAt!,
+        includeInactive: includeInactive,
+      );
+      didSync = true;
+    }
+    if (_isRemoteCollectionNewer(
+      remote: meta.productsUpdatedAt,
+      local: state.productsMetaUpdatedAt,
+    )) {
+      await _syncProductsFromManifest(
+        remoteProductsUpdatedAt: meta.productsUpdatedAt!,
+        includeInactive: includeInactive,
+      );
+      didSync = true;
+    }
+    if (_isRemoteCollectionNewer(
+      remote: meta.settingsUpdatedAt,
+      local: state.settingsMetaUpdatedAt,
+    )) {
+      await _syncSettingsFromFirebase(
+        remoteUpdatedAt: meta.settingsUpdatedAt!,
+      );
+      didSync = true;
+    }
+    return didSync;
+  }
+
+  Future<void> _syncCategoriesFromManifest({
+    required DateTime remoteUpdatedAt,
+    required bool includeInactive,
+  }) async {
+    try {
+      final manifest = await _firestoreCatalog.loadCategoriesManifest();
+      if (manifest == null) {
+        throw StateError('Missing categories manifest.');
+      }
+      final localById = {for (final item in state.categories) item.id: item};
+      final remoteIds = manifest.itemUpdatedAts.keys.toSet();
+      final localIds = localById.keys.toSet();
+      final idsToRemove = localIds.difference(remoteIds);
+      final idsToFetch = <int>{};
+      for (final entry in manifest.itemUpdatedAts.entries) {
+        final local = localById[entry.key];
+        if (local == null || local.updatedAt.isBefore(entry.value)) {
+          idsToFetch.add(entry.key);
+        }
+      }
+      final fetched = idsToFetch.isEmpty
+          ? const <Category>[]
+          : await _firestoreCatalog.loadCategoriesByIds(idsToFetch);
+      final visibleFetched = includeInactive
+          ? fetched
+          : fetched.where((item) => item.isActive).toList();
+      final hiddenFetchedIds = includeInactive
+          ? const <int>{}
+          : idsToFetch.difference(visibleFetched.map((item) => item.id).toSet());
+      final nextById = <int, Category>{};
+      for (final item in state.categories) {
+        if (idsToRemove.contains(item.id) || hiddenFetchedIds.contains(item.id)) {
+          continue;
+        }
+        nextById[item.id] = item;
+      }
+      for (final item in visibleFetched) {
+        nextById[item.id] = item;
+      }
+      final next = nextById.values.toList()..sort((a, b) => a.id.compareTo(b.id));
+      state = state.copyWith(
+        categories: next,
+        categoriesMetaUpdatedAt: remoteUpdatedAt,
+      );
+      await _persist();
+    } catch (_) {
+      final next = await _firestoreCatalog.loadCategories(
+        includeInactive: includeInactive,
+      );
+      state = state.copyWith(
+        categories: next,
+        categoriesMetaUpdatedAt: remoteUpdatedAt,
+      );
+      await _persist();
+    }
+  }
+
+  Future<void> _syncBarangaysFromManifest({
+    required DateTime remoteUpdatedAt,
+    required bool includeInactive,
+  }) async {
+    try {
+      final manifest = await _firestoreCatalog.loadBarangaysManifest();
+      if (manifest == null) {
+        throw StateError('Missing barangays manifest.');
+      }
+      final localById = {for (final item in state.barangays) item.id: item};
+      final remoteIds = manifest.itemUpdatedAts.keys.toSet();
+      final localIds = localById.keys.toSet();
+      final idsToRemove = localIds.difference(remoteIds);
+      final idsToFetch = <int>{};
+      for (final entry in manifest.itemUpdatedAts.entries) {
+        final local = localById[entry.key];
+        if (local == null || local.updatedAt.isBefore(entry.value)) {
+          idsToFetch.add(entry.key);
+        }
+      }
+      final fetched = idsToFetch.isEmpty
+          ? const <Barangay>[]
+          : await _firestoreCatalog.loadBarangaysByIds(idsToFetch);
+      final visibleFetched = includeInactive
+          ? fetched
+          : fetched.where((item) => item.isActive).toList();
+      final hiddenFetchedIds = includeInactive
+          ? const <int>{}
+          : idsToFetch.difference(visibleFetched.map((item) => item.id).toSet());
+      final nextById = <int, Barangay>{};
+      for (final item in state.barangays) {
+        if (idsToRemove.contains(item.id) || hiddenFetchedIds.contains(item.id)) {
+          continue;
+        }
+        nextById[item.id] = item;
+      }
+      for (final item in visibleFetched) {
+        nextById[item.id] = item;
+      }
+      final next = nextById.values.toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      state = state.copyWith(
+        barangays: _normalizeBarangays(next, settings: state.settings),
+        barangaysMetaUpdatedAt: remoteUpdatedAt,
+      );
+      await _persist();
+    } catch (_) {
+      final next = await _firestoreCatalog.loadBarangays(
+        includeInactive: includeInactive,
+      );
+      state = state.copyWith(
+        barangays: _normalizeBarangays(next, settings: state.settings),
+        barangaysMetaUpdatedAt: remoteUpdatedAt,
+      );
+      await _persist();
+    }
+  }
+
+  Future<void> _syncBannersFromManifest({
+    required DateTime remoteUpdatedAt,
+    required bool includeInactive,
+  }) async {
+    try {
+      final manifest = await _firestoreCatalog.loadBannersManifest();
+      if (manifest == null) {
+        throw StateError('Missing banners manifest.');
+      }
+      final localById = {for (final item in state.banners) item.id: item};
+      final remoteIds = manifest.itemUpdatedAts.keys.toSet();
+      final localIds = localById.keys.toSet();
+      final idsToRemove = localIds.difference(remoteIds);
+      final idsToFetch = <int>{};
+      for (final entry in manifest.itemUpdatedAts.entries) {
+        final local = localById[entry.key];
+        if (local == null || local.updatedAt.isBefore(entry.value)) {
+          idsToFetch.add(entry.key);
+        }
+      }
+      final fetched = idsToFetch.isEmpty
+          ? const <AppBanner>[]
+          : await _firestoreCatalog.loadBannersByIds(idsToFetch);
+      final visibleFetched = includeInactive
+          ? fetched
+          : fetched.where((item) => item.isActive).toList();
+      final hiddenFetchedIds = includeInactive
+          ? const <int>{}
+          : idsToFetch.difference(visibleFetched.map((item) => item.id).toSet());
+      final nextById = <int, AppBanner>{};
+      for (final item in state.banners) {
+        if (idsToRemove.contains(item.id) || hiddenFetchedIds.contains(item.id)) {
+          continue;
+        }
+        nextById[item.id] = item;
+      }
+      for (final item in visibleFetched) {
+        nextById[item.id] = item;
+      }
+      final next = nextById.values.toList()..sort((a, b) => a.id.compareTo(b.id));
+      state = state.copyWith(
+        banners: next,
+        bannersMetaUpdatedAt: remoteUpdatedAt,
+      );
+      await _persist();
+    } catch (_) {
+      final next = await _firestoreCatalog.loadBanners(
+        includeInactive: includeInactive,
+      );
+      state = state.copyWith(
+        banners: next,
+        bannersMetaUpdatedAt: remoteUpdatedAt,
+      );
+      await _persist();
+    }
+  }
+
+  Future<void> _syncProductsFromManifest({
+    required DateTime remoteProductsUpdatedAt,
+    required bool includeInactive,
+  }) async {
+    if (!_isRemoteCollectionNewer(
+      remote: remoteProductsUpdatedAt,
+      local: state.productsMetaUpdatedAt,
+    )) {
+      return;
+    }
+    if (includeInactive) {
+      await _syncProductsByFullFetch(
+        includeInactive: true,
+        remoteProductsUpdatedAt: remoteProductsUpdatedAt,
+      );
+      return;
+    }
+
+    try {
+      final manifest = await _firestoreCatalog.loadProductsManifest();
+      if (manifest == null) {
+        await _syncProductsByFullFetch(
+          includeInactive: false,
+          remoteProductsUpdatedAt: remoteProductsUpdatedAt,
+        );
+        return;
+      }
+
+      final localById = {for (final product in state.products) product.id: product};
+      final remoteIds = manifest.itemUpdatedAts.keys.toSet();
+      final localIds = localById.keys.toSet();
+      final idsToRemove = localIds.difference(remoteIds);
+      final idsToFetch = <int>{};
+
+      for (final entry in manifest.itemUpdatedAts.entries) {
+        final local = localById[entry.key];
+        if (local == null || local.updatedAt.isBefore(entry.value)) {
+          idsToFetch.add(entry.key);
+        }
+      }
+
+      final fetchedProducts = idsToFetch.isEmpty
+          ? const <Product>[]
+          : await _firestoreCatalog.loadProductsByIds(idsToFetch);
+      final visibleFetchedProducts = fetchedProducts
+          .where((product) => product.isActive)
+          .toList();
+      final fetchedVisibleIds = visibleFetchedProducts.map((item) => item.id).toSet();
+      final idsHiddenOrMissing = idsToFetch.difference(fetchedVisibleIds);
+
+      final nextById = <int, Product>{};
+      for (final product in state.products) {
+        if (idsToRemove.contains(product.id) ||
+            idsHiddenOrMissing.contains(product.id)) {
+          continue;
+        }
+        nextById[product.id] = product;
+      }
+      for (final product in visibleFetchedProducts) {
+        nextById[product.id] = product;
+      }
+
+      final nextProducts = nextById.values.toList()
+        ..sort((a, b) => a.id.compareTo(b.id));
+      state = state.copyWith(
+        products: nextProducts,
+        productsMetaUpdatedAt: remoteProductsUpdatedAt,
+        cart: _syncCartWithProducts(products: nextProducts),
+        catalogHydrated: true,
+      );
+      await _persist();
+    } catch (_) {
+      await _syncProductsByFullFetch(
+        includeInactive: false,
+        remoteProductsUpdatedAt: remoteProductsUpdatedAt,
+      );
+    }
+  }
+
+  Future<void> _syncSettingsFromFirebase({
+    required DateTime remoteUpdatedAt,
+  }) async {
+    final settings = await _firestoreCatalog.loadSettings();
+    if (settings == null) {
+      return;
+    }
+    state = state.copyWith(
+      settings: _normalizeSettings(settings),
+      settingsMetaUpdatedAt: remoteUpdatedAt,
+    );
+    await _persist();
+  }
+
+  Future<void> _syncProductsByFullFetch({
+    required bool includeInactive,
+    required DateTime remoteProductsUpdatedAt,
+  }) async {
+    final products = await _firestoreCatalog.loadProducts(
+      includeInactive: includeInactive,
+    );
+    state = state.copyWith(
+      products: products,
+      productsMetaUpdatedAt: remoteProductsUpdatedAt,
+      cart: _syncCartWithProducts(products: products),
+      catalogHydrated: true,
+    );
+    await _persist();
   }
 
   Future<void> _syncAdminSessionFromFirebase() async {
@@ -946,16 +1371,21 @@ class AppController extends Notifier<AppState> {
 
   Future<void> updateCustomerDraft(CustomerDraft draft) async {
     final now = DateTime.now();
+    final previousNormalizedMobileNumber = normalizePhoneNumber(
+      state.customerDraft.mobileNumber,
+    );
+    final nextNormalizedMobileNumber = normalizePhoneNumber(draft.mobileNumber);
     state = state.copyWith(
       customerDraft: draft.copyWith(
-        normalizedMobileNumber: normalizePhoneNumber(draft.mobileNumber),
+        normalizedMobileNumber: nextNormalizedMobileNumber,
         createdAt: draft.createdAt ?? state.customerDraft.createdAt ?? now,
         updatedAt: now,
       ),
     );
     await _persist();
-    _restartOrdersRealtimeSync();
-    unawaited(_refreshOrdersFromFirebase());
+    if (previousNormalizedMobileNumber != nextNormalizedMobileNumber) {
+      _restartOrdersRealtimeSync();
+    }
   }
 
   String? validateCheckoutDraft(CustomerDraft draft) {
@@ -1064,7 +1494,10 @@ class AppController extends Notifier<AppState> {
           updatedAt: now,
         ),
       );
-      await _refreshOrdersFromFirebase();
+      _restartOrdersRealtimeSync();
+      if (!_hasOrdersRealtimeCoverage()) {
+        await _refreshOrdersFromFirebase();
+      }
       state = state.copyWith(submittingOrder: false);
       await _persist();
       return orderId;
@@ -1118,8 +1551,9 @@ class AppController extends Notifier<AppState> {
       );
       await _persist();
       _startRealtimeSync();
-      _restartOrdersRealtimeSync();
-      await _refreshOrdersFromFirebase();
+      if (!_hasOrdersRealtimeCoverage()) {
+        await _refreshOrdersFromFirebase();
+      }
       return true;
     } on FirebaseAuthException catch (error) {
       state = state.copyWith(
@@ -1151,8 +1585,9 @@ class AppController extends Notifier<AppState> {
     );
     await _persist();
     _startRealtimeSync();
-    _restartOrdersRealtimeSync();
-    await _refreshOrdersFromFirebase();
+    if (!_hasOrdersRealtimeCoverage()) {
+      await _refreshOrdersFromFirebase();
+    }
   }
 
   Future<void> saveProduct(Product product) async {
@@ -1540,6 +1975,17 @@ class AppController extends Notifier<AppState> {
     return _clientScopedPhoneSeeds();
   }
 
+  String _buildOrdersRealtimeScopeKey({
+    required bool hasActiveAdminContext,
+    required Set<String> trackedPhones,
+  }) {
+    if (hasActiveAdminContext) {
+      return 'admin';
+    }
+    final phones = [...trackedPhones]..sort();
+    return 'client:${phones.join(',')}';
+  }
+
   Set<String> _clientScopedPhoneSeeds({
     List<OrderRequest>? orders,
     CustomerDraft? draft,
@@ -1729,11 +2175,16 @@ class AppController extends Notifier<AppState> {
       await _store.save(
         PersistedData(
           categories: state.categories,
+          categoriesMetaUpdatedAt: state.categoriesMetaUpdatedAt,
           barangays: state.barangays,
+          barangaysMetaUpdatedAt: state.barangaysMetaUpdatedAt,
           banners: state.banners,
+          bannersMetaUpdatedAt: state.bannersMetaUpdatedAt,
           products: state.products,
+          productsMetaUpdatedAt: state.productsMetaUpdatedAt,
           orders: state.orders,
           settings: state.settings,
+          settingsMetaUpdatedAt: state.settingsMetaUpdatedAt,
           cart: state.cart,
           customerDraft: state.customerDraft,
           adminSession: state.adminSession,

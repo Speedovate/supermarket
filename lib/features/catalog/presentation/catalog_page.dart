@@ -4997,7 +4997,7 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                       posterMode: true,
                       fullRounded: true,
                       imageUrl: _livePhotoUrl ?? liveProduct.photoUrl,
-                      imageFit: BoxFit.contain,
+                      imageFit: BoxFit.cover,
                     ),
                   ),
                 ),

@@ -62,6 +62,18 @@ class CatalogMetaSnapshot {
       settingsUpdatedAt != null;
 }
 
+class ProductManifestSnapshot {
+  const ProductManifestSnapshot({
+    this.updatedAt,
+    required this.itemUpdatedAts,
+  });
+
+  final DateTime? updatedAt;
+  final Map<int, DateTime> itemUpdatedAts;
+
+  bool get hasAnyData => updatedAt != null || itemUpdatedAts.isNotEmpty;
+}
+
 class FirestoreCatalogService {
   FirestoreCatalogService(this._firestore);
 
@@ -70,6 +82,22 @@ class FirestoreCatalogService {
   DocumentReference<Map<String, dynamic>> get _catalogMetaRef => _firestore
       .collection(FirebasePaths.system)
       .doc(FirebasePaths.catalogMetaDocumentId);
+
+  DocumentReference<Map<String, dynamic>> get _categoriesManifestRef => _firestore
+      .collection(FirebasePaths.system)
+      .doc(FirebasePaths.categoriesManifestDocumentId);
+
+  DocumentReference<Map<String, dynamic>> get _barangaysManifestRef => _firestore
+      .collection(FirebasePaths.system)
+      .doc(FirebasePaths.barangaysManifestDocumentId);
+
+  DocumentReference<Map<String, dynamic>> get _bannersManifestRef => _firestore
+      .collection(FirebasePaths.system)
+      .doc(FirebasePaths.bannersManifestDocumentId);
+
+  DocumentReference<Map<String, dynamic>> get _productsManifestRef => _firestore
+      .collection(FirebasePaths.system)
+      .doc(FirebasePaths.productsManifestDocumentId);
 
   Future<FirestoreCatalogSnapshot?> loadCatalogSnapshot({
     bool includeInactive = false,
@@ -114,6 +142,24 @@ class FirestoreCatalogService {
     return meta.hasAnyData ? meta : null;
   }
 
+  Stream<CatalogMetaSnapshot?> watchCatalogMeta() {
+    return _catalogMetaRef.snapshots().map((snapshot) {
+      final data = snapshot.data();
+      if (data == null) {
+        return null;
+      }
+      final normalized = _normalizeFirestoreMap(data);
+      final meta = CatalogMetaSnapshot(
+        categoriesUpdatedAt: _parseMetaDate(normalized['categoriesUpdatedAt']),
+        barangaysUpdatedAt: _parseMetaDate(normalized['barangaysUpdatedAt']),
+        bannersUpdatedAt: _parseMetaDate(normalized['bannersUpdatedAt']),
+        productsUpdatedAt: _parseMetaDate(normalized['productsUpdatedAt']),
+        settingsUpdatedAt: _parseMetaDate(normalized['settingsUpdatedAt']),
+      );
+      return meta.hasAnyData ? meta : null;
+    });
+  }
+
   Future<List<Category>> loadCategories({bool includeInactive = true}) async {
     final query = includeInactive
         ? _firestore.collection(FirebasePaths.categories).orderBy('id')
@@ -124,6 +170,16 @@ class FirestoreCatalogService {
     final categories = snapshot.docs.map(_categoryFromSnapshot).toList()
       ..sort((a, b) => a.id.compareTo(b.id));
     return categories;
+  }
+
+  Future<List<Category>> loadCategoriesByIds(Iterable<int> ids) async {
+    final items = await _loadDocumentsByIds(
+      collectionPath: FirebasePaths.categories,
+      ids: ids,
+      mapper: _categoryFromSnapshot,
+    );
+    items.sort((a, b) => a.id.compareTo(b.id));
+    return items;
   }
 
   Stream<List<Category>> watchCategories({bool includeInactive = true}) {
@@ -153,6 +209,16 @@ class FirestoreCatalogService {
     return barangays;
   }
 
+  Future<List<Barangay>> loadBarangaysByIds(Iterable<int> ids) async {
+    final items = await _loadDocumentsByIds(
+      collectionPath: FirebasePaths.barangays,
+      ids: ids,
+      mapper: _barangayFromSnapshot,
+    );
+    items.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return items;
+  }
+
   Stream<List<Barangay>> watchBarangays({bool includeInactive = true}) {
     final query = includeInactive
         ? _firestore.collection(FirebasePaths.barangays).orderBy('name')
@@ -180,6 +246,16 @@ class FirestoreCatalogService {
     return banners;
   }
 
+  Future<List<AppBanner>> loadBannersByIds(Iterable<int> ids) async {
+    final items = await _loadDocumentsByIds(
+      collectionPath: FirebasePaths.banners,
+      ids: ids,
+      mapper: _bannerFromSnapshot,
+    );
+    items.sort((a, b) => a.id.compareTo(b.id));
+    return items;
+  }
+
   Stream<List<AppBanner>> watchBanners({bool includeInactive = true}) {
     final query = includeInactive
         ? _firestore.collection(FirebasePaths.banners).orderBy('id')
@@ -205,6 +281,46 @@ class FirestoreCatalogService {
     final products = snapshot.docs.map(_productFromSnapshot).toList()
       ..sort((a, b) => a.id.compareTo(b.id));
     return products;
+  }
+
+  Future<List<Product>> loadProductsByIds(Iterable<int> ids) async {
+    final productIds = ids.toSet().toList()..sort();
+    if (productIds.isEmpty) {
+      return const [];
+    }
+
+    final products = <Product>[];
+    for (var index = 0; index < productIds.length; index += 10) {
+      final end = math.min(index + 10, productIds.length);
+      final group = productIds.sublist(index, end);
+      final snapshot = await _firestore
+          .collection(FirebasePaths.products)
+          .where(FieldPath.documentId, whereIn: group.map((id) => '$id').toList())
+          .get();
+      products.addAll(snapshot.docs.map(_productFromSnapshot));
+    }
+    products.sort((a, b) => a.id.compareTo(b.id));
+    return products;
+  }
+
+  Future<ProductManifestSnapshot?> loadProductsManifest() async {
+    final snapshot = await _productsManifestRef.get();
+    return _productManifestFromSnapshot(snapshot);
+  }
+
+  Future<ProductManifestSnapshot?> loadCategoriesManifest() async {
+    final snapshot = await _categoriesManifestRef.get();
+    return _productManifestFromSnapshot(snapshot);
+  }
+
+  Future<ProductManifestSnapshot?> loadBarangaysManifest() async {
+    final snapshot = await _barangaysManifestRef.get();
+    return _productManifestFromSnapshot(snapshot);
+  }
+
+  Future<ProductManifestSnapshot?> loadBannersManifest() async {
+    final snapshot = await _bannersManifestRef.get();
+    return _productManifestFromSnapshot(snapshot);
   }
 
   Stream<List<Product>> watchProducts({bool includeInactive = true}) {
@@ -431,16 +547,40 @@ class FirestoreCatalogService {
       ),
       SetOptions(merge: true),
     );
+    batch.set(
+      _categoriesManifestRef,
+      _manifestData(categories.map((item) => (item.id, item.updatedAt))),
+    );
+    batch.set(
+      _barangaysManifestRef,
+      _manifestData(barangays.map((item) => (item.id, item.updatedAt))),
+    );
+    batch.set(
+      _bannersManifestRef,
+      _manifestData(banners.map((item) => (item.id, item.updatedAt))),
+    );
+    batch.set(_productsManifestRef, _productsManifestData(products));
 
     await batch.commit();
   }
 
   Future<void> saveProduct(Product product) async {
-    await _firestore
-        .collection(FirebasePaths.products)
-        .doc('${product.id}')
-        .set(_productData(product));
-    await _touchCatalogMeta(products: true);
+    final batch = _firestore.batch();
+    batch.set(
+      _firestore.collection(FirebasePaths.products).doc('${product.id}'),
+      _productData(product),
+    );
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(products: true),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _productsManifestRef,
+      _productsManifestEntryData(product),
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   Future<void> saveProducts(Iterable<Product> products) async {
@@ -460,27 +600,63 @@ class FirestoreCatalogService {
       _catalogMetaData(products: true),
       SetOptions(merge: true),
     );
+    batch.set(
+      _productsManifestRef,
+      _productsManifestEntriesData(items),
+      SetOptions(merge: true),
+    );
     await batch.commit();
   }
 
   Future<void> deleteProduct(int productId) async {
-    await _firestore.collection(FirebasePaths.products).doc('$productId').delete();
-    await _touchCatalogMeta(products: true);
+    final batch = _firestore.batch();
+    batch.delete(_firestore.collection(FirebasePaths.products).doc('$productId'));
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(products: true),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _productsManifestRef,
+      _deleteProductManifestEntryData(productId),
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   Future<void> saveCategory(Category category, {int? sortOrder}) async {
-    await _firestore.collection(FirebasePaths.categories).doc('${category.id}').set(
+    final batch = _firestore.batch();
+    batch.set(
+      _firestore.collection(FirebasePaths.categories).doc('${category.id}'),
       _categoryData(category, sortOrder: sortOrder ?? category.id),
     );
-    await _touchCatalogMeta(categories: true);
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(categories: true),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _categoriesManifestRef,
+      _manifestEntryData(category.id, category.updatedAt),
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   Future<void> deleteCategory(int categoryId) async {
-    await _firestore
-        .collection(FirebasePaths.categories)
-        .doc('$categoryId')
-        .delete();
-    await _touchCatalogMeta(categories: true);
+    final batch = _firestore.batch();
+    batch.delete(_firestore.collection(FirebasePaths.categories).doc('$categoryId'));
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(categories: true),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _categoriesManifestRef,
+      _deleteManifestEntryData(categoryId),
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   Future<void> replaceCategoriesAndProducts({
@@ -520,36 +696,88 @@ class FirestoreCatalogService {
       }
       await batch.commit();
     }
-    await _touchCatalogMeta(categories: true, products: true);
+    final batch = _firestore.batch();
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(categories: true, products: true),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _categoriesManifestRef,
+      _manifestData(categories.map((item) => (item.id, item.updatedAt))),
+    );
+    batch.set(_productsManifestRef, _productsManifestData(products));
+    await batch.commit();
   }
 
   Future<void> saveBarangay(Barangay barangay) async {
-    await _firestore
-        .collection(FirebasePaths.barangays)
-        .doc('${barangay.id}')
-        .set(_barangayData(barangay));
-    await _touchCatalogMeta(barangays: true);
+    final batch = _firestore.batch();
+    batch.set(
+      _firestore.collection(FirebasePaths.barangays).doc('${barangay.id}'),
+      _barangayData(barangay),
+    );
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(barangays: true),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _barangaysManifestRef,
+      _manifestEntryData(barangay.id, barangay.updatedAt),
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   Future<void> deleteBarangay(int barangayId) async {
-    await _firestore
-        .collection(FirebasePaths.barangays)
-        .doc('$barangayId')
-        .delete();
-    await _touchCatalogMeta(barangays: true);
+    final batch = _firestore.batch();
+    batch.delete(_firestore.collection(FirebasePaths.barangays).doc('$barangayId'));
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(barangays: true),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _barangaysManifestRef,
+      _deleteManifestEntryData(barangayId),
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   Future<void> saveBanner(AppBanner banner) async {
-    await _firestore
-        .collection(FirebasePaths.banners)
-        .doc('${banner.id}')
-        .set(_bannerData(banner));
-    await _touchCatalogMeta(banners: true);
+    final batch = _firestore.batch();
+    batch.set(
+      _firestore.collection(FirebasePaths.banners).doc('${banner.id}'),
+      _bannerData(banner),
+    );
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(banners: true),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _bannersManifestRef,
+      _manifestEntryData(banner.id, banner.updatedAt),
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   Future<void> deleteBanner(int bannerId) async {
-    await _firestore.collection(FirebasePaths.banners).doc('$bannerId').delete();
-    await _touchCatalogMeta(banners: true);
+    final batch = _firestore.batch();
+    batch.delete(_firestore.collection(FirebasePaths.banners).doc('$bannerId'));
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(banners: true),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _bannersManifestRef,
+      _deleteManifestEntryData(bannerId),
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   Future<void> saveSettings(AppSettings settings) async {
@@ -653,6 +881,111 @@ class FirestoreCatalogService {
       data['settingsUpdatedAt'] = now;
     }
     return data;
+  }
+
+  Future<List<T>> _loadDocumentsByIds<T>({
+    required String collectionPath,
+    required Iterable<int> ids,
+    required T Function(QueryDocumentSnapshot<Map<String, dynamic>> doc) mapper,
+  }) async {
+    final itemIds = ids.toSet().toList()..sort();
+    if (itemIds.isEmpty) {
+      return const [];
+    }
+
+    final items = <T>[];
+    for (var index = 0; index < itemIds.length; index += 10) {
+      final end = math.min(index + 10, itemIds.length);
+      final group = itemIds.sublist(index, end);
+      final snapshot = await _firestore
+          .collection(collectionPath)
+          .where(
+            FieldPath.documentId,
+            whereIn: group.map((id) => '$id').toList(),
+          )
+          .get();
+      items.addAll(snapshot.docs.map(mapper));
+    }
+    return items;
+  }
+
+  ProductManifestSnapshot? _productManifestFromSnapshot(
+    DocumentSnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    final data = snapshot.data();
+    if (data == null) {
+      return null;
+    }
+    final normalized = _normalizeFirestoreMap(data);
+    final itemsRaw = normalized['items'];
+    final itemUpdatedAts = <int, DateTime>{};
+    if (itemsRaw is Map<String, dynamic>) {
+      for (final entry in itemsRaw.entries) {
+        final id = int.tryParse(entry.key);
+        final updatedAt = _parseMetaDate(entry.value);
+        if (id == null || updatedAt == null) {
+          continue;
+        }
+        itemUpdatedAts[id] = updatedAt;
+      }
+    }
+    final manifest = ProductManifestSnapshot(
+      updatedAt: _parseMetaDate(normalized['updatedAt']),
+      itemUpdatedAts: itemUpdatedAts,
+    );
+    return manifest.hasAnyData ? manifest : null;
+  }
+
+  Map<String, dynamic> _productsManifestData(Iterable<Product> products) {
+    return _manifestData(products.map((product) => (product.id, product.updatedAt)));
+  }
+
+  Map<String, dynamic> _productsManifestEntryData(Product product) {
+    return _manifestEntryData(product.id, product.updatedAt);
+  }
+
+  Map<String, dynamic> _productsManifestEntriesData(Iterable<Product> products) {
+    return _manifestEntriesData(
+      products.map((product) => (product.id, product.updatedAt)),
+    );
+  }
+
+  Map<String, dynamic> _deleteProductManifestEntryData(int productId) {
+    return _deleteManifestEntryData(productId);
+  }
+
+  Map<String, dynamic> _manifestData(Iterable<(int, DateTime)> entries) {
+    final now = DateTime.now().toIso8601String();
+    return {
+      'updatedAt': now,
+      'items': {
+        for (final entry in entries) '${entry.$1}': entry.$2.toIso8601String(),
+      },
+    };
+  }
+
+  Map<String, dynamic> _manifestEntryData(int id, DateTime updatedAt) {
+    return {
+      'updatedAt': DateTime.now().toIso8601String(),
+      'items.$id': updatedAt.toIso8601String(),
+    };
+  }
+
+  Map<String, dynamic> _manifestEntriesData(Iterable<(int, DateTime)> entries) {
+    final data = <String, dynamic>{
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
+    for (final entry in entries) {
+      data['items.${entry.$1}'] = entry.$2.toIso8601String();
+    }
+    return data;
+  }
+
+  Map<String, dynamic> _deleteManifestEntryData(int id) {
+    return {
+      'updatedAt': DateTime.now().toIso8601String(),
+      'items.$id': FieldValue.delete(),
+    };
   }
 
   DateTime? _parseMetaDate(Object? value) {
