@@ -506,28 +506,39 @@ class AppController extends Notifier<AppState> {
         return;
       }
 
+      final resolvedProducts = snapshot.products.isNotEmpty
+          ? snapshot.products
+          : state.products;
+      final resolvedCategories = snapshot.categories.isNotEmpty
+          ? snapshot.categories
+          : state.categories;
+      final resolvedBarangays = snapshot.barangays.isNotEmpty
+          ? snapshot.barangays
+          : state.barangays;
+      final resolvedBanners = snapshot.banners.isNotEmpty
+          ? snapshot.banners
+          : state.banners;
+
       state = state.copyWith(
-        categories: snapshot.categories.isNotEmpty
-            ? snapshot.categories
-            : state.categories,
+        categories: resolvedCategories,
         categoriesMetaUpdatedAt:
             catalogMeta?.categoriesUpdatedAt ?? state.categoriesMetaUpdatedAt,
-        barangays: snapshot.barangays.isNotEmpty
+        barangays: resolvedBarangays.isNotEmpty
             ? _normalizeBarangays(
-                snapshot.barangays,
+                resolvedBarangays,
                 settings: snapshot.settings ?? state.settings,
               )
             : state.barangays,
         barangaysMetaUpdatedAt:
             catalogMeta?.barangaysUpdatedAt ?? state.barangaysMetaUpdatedAt,
-        banners: snapshot.banners.isNotEmpty ? snapshot.banners : state.banners,
+        banners: resolvedBanners,
         bannersMetaUpdatedAt:
             catalogMeta?.bannersUpdatedAt ?? state.bannersMetaUpdatedAt,
-        products: snapshot.products,
+        products: resolvedProducts,
         productsMetaUpdatedAt:
             catalogMeta?.productsUpdatedAt ??
-            _latestProductUpdatedAt(snapshot.products),
-        cart: _syncCartWithProducts(products: snapshot.products),
+            _latestProductUpdatedAt(resolvedProducts),
+        cart: _syncCartWithProducts(products: resolvedProducts),
         settings: snapshot.settings == null
             ? state.settings
             : _normalizeSettings(snapshot.settings!),
@@ -968,6 +979,9 @@ class AppController extends Notifier<AppState> {
     final products = await _firestoreCatalog.loadProducts(
       includeInactive: includeInactive,
     );
+    if (products.isEmpty && state.products.isNotEmpty) {
+      return;
+    }
     state = state.copyWith(
       products: products,
       productsMetaUpdatedAt: remoteProductsUpdatedAt,
@@ -2207,16 +2221,48 @@ class AppController extends Notifier<AppState> {
 
   Future<void> _persist() async {
     try {
+      final existing = await _store.load();
+      final shouldProtectExistingCatalog =
+          existing != null &&
+          existing.products.isNotEmpty &&
+          state.products.isEmpty &&
+          state.catalogHydrated;
+
+      final persistedCategories = shouldProtectExistingCatalog
+          ? existing.categories
+          : state.categories;
+      final persistedCategoriesMetaUpdatedAt = shouldProtectExistingCatalog
+          ? existing.categoriesMetaUpdatedAt
+          : state.categoriesMetaUpdatedAt;
+      final persistedBarangays = shouldProtectExistingCatalog
+          ? existing.barangays
+          : state.barangays;
+      final persistedBarangaysMetaUpdatedAt = shouldProtectExistingCatalog
+          ? existing.barangaysMetaUpdatedAt
+          : state.barangaysMetaUpdatedAt;
+      final persistedBanners = shouldProtectExistingCatalog
+          ? existing.banners
+          : state.banners;
+      final persistedBannersMetaUpdatedAt = shouldProtectExistingCatalog
+          ? existing.bannersMetaUpdatedAt
+          : state.bannersMetaUpdatedAt;
+      final persistedProducts = shouldProtectExistingCatalog
+          ? existing.products
+          : state.products;
+      final persistedProductsMetaUpdatedAt = shouldProtectExistingCatalog
+          ? existing.productsMetaUpdatedAt
+          : state.productsMetaUpdatedAt;
+
       await _store.save(
         PersistedData(
-          categories: state.categories,
-          categoriesMetaUpdatedAt: state.categoriesMetaUpdatedAt,
-          barangays: state.barangays,
-          barangaysMetaUpdatedAt: state.barangaysMetaUpdatedAt,
-          banners: state.banners,
-          bannersMetaUpdatedAt: state.bannersMetaUpdatedAt,
-          products: state.products,
-          productsMetaUpdatedAt: state.productsMetaUpdatedAt,
+          categories: persistedCategories,
+          categoriesMetaUpdatedAt: persistedCategoriesMetaUpdatedAt,
+          barangays: persistedBarangays,
+          barangaysMetaUpdatedAt: persistedBarangaysMetaUpdatedAt,
+          banners: persistedBanners,
+          bannersMetaUpdatedAt: persistedBannersMetaUpdatedAt,
+          products: persistedProducts,
+          productsMetaUpdatedAt: persistedProductsMetaUpdatedAt,
           orders: state.orders,
           settings: state.settings,
           settingsMetaUpdatedAt: state.settingsMetaUpdatedAt,

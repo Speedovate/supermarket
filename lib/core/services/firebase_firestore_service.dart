@@ -182,18 +182,20 @@ class FirestoreCatalogService {
   }
 
   Stream<List<Category>> watchCategories({bool includeInactive = true}) {
-    final query = includeInactive
-        ? _firestore.collection(FirebasePaths.categories)
-        : _firestore
-              .collection(FirebasePaths.categories)
-              .where('isActive', isEqualTo: true);
-    return query
-        .snapshots()
-        .map((snapshot) {
-          final categories = snapshot.docs.map(_categoryFromSnapshot).toList()
-            ..sort(_compareCategoriesBySortOrder);
-          return categories;
-        });
+    if (includeInactive) {
+      return _firestore
+          .collection(FirebasePaths.categories)
+          .snapshots()
+          .map((snapshot) {
+            final categories = snapshot.docs.map(_categoryFromSnapshot).toList()
+              ..sort(_compareCategoriesBySortOrder);
+            return categories;
+          });
+    }
+
+    return Stream.fromFuture(_loadPublicCategories()).asyncExpand((items) async* {
+      yield items..sort(_compareCategoriesBySortOrder);
+    });
   }
 
   Future<List<Barangay>> loadBarangays({bool includeInactive = true}) async {
@@ -224,13 +226,11 @@ class FirestoreCatalogService {
         : _firestore
               .collection(FirebasePaths.barangays)
               .where('active', isEqualTo: true);
-    return query
-        .snapshots()
-        .map((snapshot) {
-          final barangays = snapshot.docs.map(_barangayFromSnapshot).toList()
-            ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-          return barangays;
-        });
+    return query.snapshots().map((snapshot) {
+      final barangays = snapshot.docs.map(_barangayFromSnapshot).toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return barangays;
+    });
   }
 
   Future<List<AppBanner>> loadBanners({bool includeInactive = true}) async {
@@ -255,18 +255,21 @@ class FirestoreCatalogService {
   }
 
   Stream<List<AppBanner>> watchBanners({bool includeInactive = true}) {
-    final query = includeInactive
-        ? _firestore.collection(FirebasePaths.banners).orderBy('id')
-        : _firestore
-              .collection(FirebasePaths.banners)
-              .where('isActive', isEqualTo: true);
-    return query
-        .snapshots()
-        .map((snapshot) {
-          final banners = snapshot.docs.map(_bannerFromSnapshot).toList()
-            ..sort((a, b) => a.id.compareTo(b.id));
-          return banners;
-        });
+    if (includeInactive) {
+      return _firestore
+          .collection(FirebasePaths.banners)
+          .orderBy('id')
+          .snapshots()
+          .map((snapshot) {
+            final banners = snapshot.docs.map(_bannerFromSnapshot).toList()
+              ..sort((a, b) => a.id.compareTo(b.id));
+            return banners;
+          });
+    }
+
+    return Stream.fromFuture(_loadPublicBanners()).asyncExpand((items) async* {
+      yield items..sort((a, b) => a.id.compareTo(b.id));
+    });
   }
 
   Future<List<Product>> loadProducts({bool includeInactive = true}) async {
@@ -321,18 +324,21 @@ class FirestoreCatalogService {
   }
 
   Stream<List<Product>> watchProducts({bool includeInactive = true}) {
-    final query = includeInactive
-        ? _firestore.collection(FirebasePaths.products).orderBy('id')
-        : _firestore
-              .collection(FirebasePaths.products)
-              .where('isActive', isEqualTo: true);
-    return query
-        .snapshots()
-        .map((snapshot) {
-          final products = snapshot.docs.map(_productFromSnapshot).toList()
-            ..sort((a, b) => a.id.compareTo(b.id));
-          return products;
-        });
+    if (includeInactive) {
+      return _firestore
+          .collection(FirebasePaths.products)
+          .orderBy('id')
+          .snapshots()
+          .map((snapshot) {
+            final products = snapshot.docs.map(_productFromSnapshot).toList()
+              ..sort((a, b) => a.id.compareTo(b.id));
+            return products;
+          });
+    }
+
+    return Stream.fromFuture(_loadPublicProducts()).asyncExpand((items) async* {
+      yield items..sort((a, b) => a.id.compareTo(b.id));
+    });
   }
 
   Future<List<OrderRequest>> loadOrders() async {
