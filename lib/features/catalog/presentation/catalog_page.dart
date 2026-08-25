@@ -714,8 +714,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         vm.categories.isNotEmpty ||
         appState.products.isNotEmpty ||
         activeBanners.isNotEmpty;
+    final isDefaultCatalogView =
+        _query.trim().isEmpty && _categoryId == 'all';
     final showCatalogLoading =
-        !appState.catalogHydrated && !hasAnyCatalogContent;
+        (!appState.catalogHydrated && !hasAnyCatalogContent) ||
+        (isDefaultCatalogView && sortedProducts.isEmpty);
+    final showProductsEmptyState =
+        sortedProducts.isEmpty && !showCatalogLoading;
 
     final mainPane = MediaQuery(
       data: media.copyWith(size: Size(mainContentWidth, media.size.height)),
@@ -922,7 +927,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                         ),
                       ),
                     ),
-                    if (sortedProducts.isEmpty)
+                    if (showProductsEmptyState)
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.fromLTRB(
