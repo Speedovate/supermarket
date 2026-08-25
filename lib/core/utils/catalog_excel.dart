@@ -5,6 +5,7 @@ import 'package:excel/excel.dart';
 import 'package:xml/xml.dart';
 
 import '../models/app_models.dart';
+import 'formatters.dart';
 
 class ImportedCatalogWorkbook {
   const ImportedCatalogWorkbook({required this.products});
@@ -298,14 +299,7 @@ List<CellValue?> _textRow(List<String> values) {
 }
 
 String _formatPricePesos(int centavos) {
-  final pesos = centavos / 100;
-  if (centavos % 100 == 0) {
-    return pesos.toStringAsFixed(0);
-  }
-  if (centavos % 10 == 0) {
-    return pesos.toStringAsFixed(1);
-  }
-  return pesos.toStringAsFixed(2);
+  return formatPesosValue(centavos);
 }
 
 Map<String, int> _headerMap(List<_SheetCell> headerRow) {

@@ -1232,10 +1232,12 @@ class AppController extends Notifier<AppState> {
         : currentWeekCutoff;
     final nextDeliveryStart = effectiveCutoff.add(const Duration(days: 1));
     final nextDeliveryEnd = effectiveCutoff.add(const Duration(days: 2));
+    final nextDeliveryLabel =
+        '${displayWeekday(nextDeliveryStart.weekday)} or ${displayWeekday(nextDeliveryEnd.weekday)}';
     if (!current.isAfter(currentWeekCutoff)) {
-      return '$cutoffLabel\n\nOrder will be delivered on ${displayWeekday(nextDeliveryStart.weekday)} or ${displayWeekday(nextDeliveryEnd.weekday)}.';
+      return '$cutoffLabel\n\nOrder will be delivered on $nextDeliveryLabel.';
     }
-    return '$cutoffLabel. Your order will be processed next ${displayWeekday(effectiveCutoff.weekday)} or you can select pickup instead to get your order faster.\n\nOrder will be delivered on ${displayWeekday(nextDeliveryStart.weekday)} or ${displayWeekday(nextDeliveryEnd.weekday)}.';
+    return '$cutoffLabel\n\nOrder will be processed next ${displayWeekday(effectiveCutoff.weekday)} and will be delivered on $nextDeliveryLabel. You can select pickup to get your order faster.';
   }
 
   bool isBarangayCutoffReached(String name, {DateTime? now}) {
@@ -1410,9 +1412,10 @@ class AppController extends Notifier<AppState> {
         draft.addressStreet.trim().isEmpty) {
       return 'Please enter your street/landmark';
     }
-    if (state.settings.minimumDeliveryOrderAmount > 0 &&
+    if (draft.fulfillmentMethod == FulfillmentMethod.delivery &&
+        state.settings.minimumDeliveryOrderAmount > 0 &&
         state.cartTotalCentavos < state.settings.minimumDeliveryOrderAmount) {
-      return 'Minimum order amount is ${formatPesos(state.settings.minimumDeliveryOrderAmount)}';
+      return '${formatPesos(state.settings.minimumDeliveryOrderAmount)} min order amount for delivery.';
     }
     if (state.cart.isEmpty) {
       return 'Add at least one product before submitting.';

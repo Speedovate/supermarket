@@ -3,19 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/utils/product_image_upload.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
 
 String _formatEditablePrice(int priceCentavos) {
-  final pesos = priceCentavos / 100;
-  if (priceCentavos % 100 == 0) {
-    return pesos.toStringAsFixed(0);
-  }
-  if (priceCentavos % 10 == 0) {
-    return pesos.toStringAsFixed(1);
-  }
-  return pesos.toStringAsFixed(2);
+  return formatPesosValue(priceCentavos);
 }
 
 Future<Product?> showAdminProductDialog(
@@ -58,7 +52,7 @@ Future<Product?> showAdminProductDialog(
     isSubmitting = true;
     try {
       final parsedPrice =
-          (double.tryParse(priceController.text.trim()) ?? 0) * 100;
+          parsePesosValueToCentavos(priceController.text.trim()) ?? 0;
       final product = Product(
         active: isActive,
         createdAt: initial?.createdAt ?? DateTime.now(),
@@ -72,7 +66,7 @@ Future<Product?> showAdminProductDialog(
         name: nameController.text.trim(),
         category: selectedCategory ?? 0,
         details: detailsController.text.trim(),
-        price: parsedPrice.round(),
+        price: parsedPrice,
         sold: initial?.sold ?? 0,
         photoUrl: photoUrl,
         photoStoragePath: initial?.photoStoragePath,

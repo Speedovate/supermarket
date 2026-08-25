@@ -41,7 +41,7 @@ class AdminProfilePage extends ConsumerWidget {
         text: '${settings.bestSellersLimit}',
       );
       final minAmountController = TextEditingController(
-        text: '${settings.minimumDeliveryOrderAmount ~/ 100}',
+        text: formatPesosValue(settings.minimumDeliveryOrderAmount),
       );
       var showBanners = settings.bestSellersEnabled;
       var isSaving = false;
@@ -61,8 +61,9 @@ class AdminProfilePage extends ConsumerWidget {
                 final nextFacebook = facebookController.text.trim();
                 final minSold = int.tryParse(minSoldController.text.trim()) ?? 0;
                 final maxShow = int.tryParse(maxShowController.text.trim()) ?? 0;
-                final minAmountPesos =
-                    int.tryParse(minAmountController.text.trim()) ?? 0;
+                final minAmountCentavos =
+                    parsePesosValueToCentavos(minAmountController.text.trim()) ??
+                    0;
 
                 if (nextName.isEmpty) {
                   messenger.clearSnackBars();
@@ -92,7 +93,7 @@ class AdminProfilePage extends ConsumerWidget {
                   );
                   return;
                 }
-                if (minAmountPesos < 0) {
+                if (minAmountCentavos < 0) {
                   messenger.clearSnackBars();
                   messenger.showSnackBar(
                     errorSnackBar('Min amount cannot be negative.'),
@@ -109,7 +110,7 @@ class AdminProfilePage extends ConsumerWidget {
                       bestSellersEnabled: showBanners,
                       bestSellerMinSoldUnits: minSold,
                       bestSellersLimit: maxShow,
-                      minimumDeliveryOrderAmount: minAmountPesos * 100,
+                      minimumDeliveryOrderAmount: minAmountCentavos,
                       storeContactNumber: nextPhone,
                       facebookMessengerUrl: nextFacebook,
                     ),
@@ -239,12 +240,13 @@ class AdminProfilePage extends ConsumerWidget {
                     const SizedBox(height: 12),
                     TextField(
                       controller: minAmountController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       textInputAction: TextInputAction.done,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       onSubmitted: (_) => unawaited(submit()),
                       decoration: const InputDecoration(
-                        labelText: 'Min Amount',
+                        labelText: 'Min Order Amount',
                       ),
                     ),
                   ],
@@ -557,7 +559,7 @@ class _ProfileHeaderRow extends StatelessWidget {
         SizedBox(
           width: widths.minimumAmount,
           child: Text(
-            'Min Amount',
+            'Min Order Amount',
             style: labelStyle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -842,7 +844,7 @@ _ProfileSummaryWidths _computeProfileSummaryWidths(
           max: screenWidth < 700 ? 120 : 132,
         ) +
         _profileSummaryStatusBadgeHorizontalPadding,
-    minimumAmount: maxWidth('Min Amount', formatPesos(minimumAmount)),
+    minimumAmount: maxWidth('Min Order Amount', formatPesos(minimumAmount)),
     createdAt: maxWidth('Created at', createdAtValue),
     updatedAt: maxWidth('Updated at', updatedAtValue),
     actions: maxWidth('Actions', '') > _profileSummaryActionsWidth

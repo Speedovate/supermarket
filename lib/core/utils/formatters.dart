@@ -2,16 +2,7 @@ import 'package:intl/intl.dart';
 
 import '../models/app_models.dart';
 
-final _currency = NumberFormat.currency(
-  locale: 'en_PH',
-  symbol: 'PHP ',
-  decimalDigits: 1,
-);
-final _currencyWhole = NumberFormat.currency(
-  locale: 'en_PH',
-  symbol: 'PHP ',
-  decimalDigits: 0,
-);
+final _pesoValue = NumberFormat('#,##0.##', 'en_PH');
 final _shortDate = DateFormat('MMM d, yyyy');
 final _orderThreadDateTime = DateFormat('MMM d, yyyy - hh:mm:ss a');
 final _orderDate = DateFormat('MMM d, yyyy');
@@ -19,11 +10,25 @@ final _orderTime = DateFormat('h:mm a');
 final _orderTimeWithSeconds = DateFormat('hh:mm:ss a');
 final _cutoffTime = DateFormat('hh:mm a');
 
-String formatPesos(int centavos) {
+String formatPesosValue(int centavos) {
   final pesos = centavos / 100;
-  final hasDecimal = centavos % 100 != 0;
-  final formatted = (hasDecimal ? _currency : _currencyWhole).format(pesos);
-  return formatted.replaceFirst('PHP ', '₱');
+  return _pesoValue.format(pesos);
+}
+
+int? parsePesosValueToCentavos(String input) {
+  final normalized = input.trim().replaceAll(',', '');
+  if (normalized.isEmpty) {
+    return 0;
+  }
+  final value = double.tryParse(normalized);
+  if (value == null) {
+    return null;
+  }
+  return (value * 100).round();
+}
+
+String formatPesos(int centavos) {
+  return '₱${formatPesosValue(centavos)}';
 }
 
 String formatAsOfDate(DateTime date) => _shortDate.format(date);

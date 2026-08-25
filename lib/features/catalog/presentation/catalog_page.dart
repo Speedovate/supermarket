@@ -3052,6 +3052,28 @@ class _DesktopCartCustomerCardState
             now: cutoffReference,
           )
         : false;
+    final minimumDeliveryOrderAmount = settings.minimumDeliveryOrderAmount;
+    final showMinimumDeliveryNote =
+        !isReadOnly &&
+        effectiveDraft.fulfillmentMethod == FulfillmentMethod.delivery &&
+        minimumDeliveryOrderAmount > 0;
+    final isBelowMinimumDeliveryAmount =
+        showMinimumDeliveryNote &&
+        ref.read(appControllerProvider).cartTotalCentavos <
+            minimumDeliveryOrderAmount;
+    final minimumDeliveryMessage =
+        '${formatPesos(minimumDeliveryOrderAmount)} min order amount for delivery.';
+    final deliveryAdvisoryMessage = switch ((
+      cutoffMessage,
+      showMinimumDeliveryNote,
+    )) {
+      (String message, true) => '$message\n\n$minimumDeliveryMessage',
+      (String message, false) => message,
+      (null, true) => minimumDeliveryMessage,
+      (null, false) => null,
+    };
+    final isDeliveryAdvisoryHighlighted =
+        isCutoffReached || isBelowMinimumDeliveryAmount;
 
     return Container(
       decoration: BoxDecoration(
@@ -3166,18 +3188,6 @@ class _DesktopCartCustomerCardState
                     labelText: hideStreetLabel ? null : 'Street/Landmark',
                   ),
                 ),
-              if (cutoffMessage != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  cutoffMessage,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: isCutoffReached
-                        ? const Color(0xFFE31E24)
-                        : const Color(0xFF667085),
-                    height: 1.25,
-                  ),
-                ),
-              ],
             ],
           ],
           const SizedBox(height: 12),
@@ -3185,11 +3195,11 @@ class _DesktopCartCustomerCardState
             ignoring: isReadOnly,
             child: Opacity(
               opacity: isReadOnly ? 0.72 : 1,
-                child: RadioGroup<FulfillmentMethod>(
-                  groupValue: effectiveDraft.fulfillmentMethod,
-                  onChanged: (value) async {
-                    await widget.onDraftChanged(method: value);
-                  },
+              child: RadioGroup<FulfillmentMethod>(
+                groupValue: effectiveDraft.fulfillmentMethod,
+                onChanged: (value) async {
+                  await widget.onDraftChanged(method: value);
+                },
                 child: Row(
                   children: [
                     Expanded(
@@ -3223,6 +3233,18 @@ class _DesktopCartCustomerCardState
               ),
             ),
           ),
+          if (deliveryAdvisoryMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              deliveryAdvisoryMessage,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: isDeliveryAdvisoryHighlighted
+                    ? const Color(0xFFE31E24)
+                    : const Color(0xFF667085),
+                height: 1.25,
+              ),
+            ),
+          ],
         ],
       ),
     );
