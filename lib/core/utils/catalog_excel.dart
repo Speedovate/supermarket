@@ -96,6 +96,7 @@ Uint8List buildCatalogWorkbook({
 ImportedCatalogWorkbook parseCatalogWorkbook(Uint8List bytes) {
   try {
     final archive = ZipDecoder().decodeBytes(bytes);
+    final sharedStrings = _parseSharedStrings(archive);
     final workbookFile = archive.files.firstWhere(
       (file) => file.name == 'xl/workbook.xml',
       orElse: () => throw const CatalogWorkbookException(
@@ -127,7 +128,7 @@ ImportedCatalogWorkbook parseCatalogWorkbook(Uint8List bytes) {
     final sheetDocument = XmlDocument.parse(
       _archiveText(sheetFile),
     );
-    final rows = _sheetRows(sheetDocument);
+    final rows = _sheetRows(sheetDocument, sharedStrings: sharedStrings);
     if (rows.isEmpty) {
       throw const CatalogWorkbookException(
         'The file must contain a Products sheet with product rows.',
@@ -191,6 +192,23 @@ ImportedCatalogWorkbook parseCatalogWorkbook(Uint8List bytes) {
   }
 }
 
+List<String> _parseSharedStrings(Archive archive) {
+  final file = archive.files.firstWhere(
+    (item) => item.name == 'xl/sharedStrings.xml',
+    orElse: () => ArchiveFile.noCompress('', 0, []),
+  );
+  if (file.name.isEmpty) {
+    return const [];
+  }
+
+  final document = XmlDocument.parse(_archiveText(file));
+  return _findElementsByLocalName(document, 'si').map((item) {
+    return _findElementsByLocalName(item, 't')
+        .map((text) => text.innerText)
+        .join();
+  }).toList();
+}
+
 String _archiveText(ArchiveFile file) {
   final content = file.content;
   if (content is List<int>) {
@@ -251,7 +269,10 @@ String _resolveProductsSheetPath({
   );
 }
 
-List<List<_SheetCell>> _sheetRows(XmlDocument sheetDocument) {
+List<List<_SheetCell>> _sheetRows(
+  XmlDocument sheetDocument, {
+  required List<String> sharedStrings,
+}) {
   final rows = <List<_SheetCell>>[];
   for (final row in _findElementsByLocalName(sheetDocument, 'row')) {
     final cells = <_SheetCell>[];
@@ -265,6 +286,14 @@ List<List<_SheetCell>> _sheetRows(XmlDocument sheetDocument) {
             .map((item) => item.innerText)
             .join()
             .trim();
+      } else if (cellType == 's') {
+        final sharedStringIndex =
+            int.tryParse((_firstChildByLocalName(cell, 'v')?.innerText ?? '').trim());
+        if (sharedStringIndex != null &&
+            sharedStringIndex >= 0 &&
+            sharedStringIndex < sharedStrings.length) {
+          value = sharedStrings[sharedStringIndex].trim();
+        }
       } else {
         value = (_firstChildByLocalName(cell, 'v')?.innerText ?? '').trim();
       }
