@@ -1752,9 +1752,7 @@ class AppController extends Notifier<AppState> {
       for (var i = 0; i < next.length; i++) next[i].copyWith(sortOrder: i),
     ];
     state = state.copyWith(categories: normalized, errorMessage: null);
-    for (var i = 0; i < normalized.length; i++) {
-      await _firestoreCatalog.saveCategory(normalized[i], sortOrder: i);
-    }
+    await _firestoreCatalog.saveCategories(normalized);
     await _persist();
   }
 
@@ -1775,9 +1773,10 @@ class AppController extends Notifier<AppState> {
       errorMessage: null,
     );
     await _firestoreCatalog.deleteCategory(categoryId);
-    for (final product in nextProducts.where((item) => item.category == 0)) {
-      await _firestoreCatalog.saveProduct(product);
-    }
+    final reassignedProducts = nextProducts
+        .where((item) => item.category == 0)
+        .toList();
+    await _firestoreCatalog.saveProducts(reassignedProducts);
     await _persist();
   }
 
@@ -1834,10 +1833,12 @@ class AppController extends Notifier<AppState> {
 
     final moved = next.removeAt(oldIndex);
     next.insert(newIndex, moved);
-    state = state.copyWith(categories: next, errorMessage: null);
-    for (var index = 0; index < next.length; index++) {
-      await _firestoreCatalog.saveCategory(next[index], sortOrder: index);
-    }
+    final normalized = [
+      for (var index = 0; index < next.length; index++)
+        next[index].copyWith(sortOrder: index),
+    ];
+    state = state.copyWith(categories: normalized, errorMessage: null);
+    await _firestoreCatalog.saveCategories(normalized);
     await _persist();
   }
 
@@ -1858,9 +1859,7 @@ class AppController extends Notifier<AppState> {
       for (var i = 0; i < merged.length; i++) merged[i].copyWith(sortOrder: i),
     ];
     state = state.copyWith(categories: next, errorMessage: null);
-    for (var index = 0; index < next.length; index++) {
-      await _firestoreCatalog.saveCategory(next[index], sortOrder: index);
-    }
+    await _firestoreCatalog.saveCategories(next);
     await _persist();
   }
 
@@ -1931,6 +1930,7 @@ class AppController extends Notifier<AppState> {
   }
 
   Future<void> updateOrder(OrderRequest nextOrder) async {
+    final previousProducts = state.products;
     final currentOrder = state.orders
         .where((item) => item.id == nextOrder.id)
         .firstOrNull;
@@ -1970,17 +1970,13 @@ class AppController extends Notifier<AppState> {
 
     state = state.copyWith(orders: updatedOrders, products: nextProducts);
     await _firestoreCatalog.saveOrder(nextOrder);
-    for (final product in nextProducts) {
-      if (state.products.any((item) => item.id == product.id)) {
-        continue;
-      }
-    }
-    for (final product in nextProducts.where((item) {
-      final previous = state.products.where((product) => product.id == item.id).firstOrNull;
+    final changedProducts = nextProducts.where((item) {
+      final previous = previousProducts
+          .where((product) => product.id == item.id)
+          .firstOrNull;
       return previous?.sold != item.sold;
-    })) {
-      await _firestoreCatalog.saveProduct(product);
-    }
+    }).toList();
+    await _firestoreCatalog.saveProducts(changedProducts);
     await _persist();
   }
 

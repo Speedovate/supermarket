@@ -646,6 +646,41 @@ class FirestoreCatalogService {
     await batch.commit();
   }
 
+  Future<void> saveCategories(Iterable<Category> categories) async {
+    final items = categories.toList()
+      ..sort((a, b) {
+        final bySortOrder = a.sortOrder.compareTo(b.sortOrder);
+        if (bySortOrder != 0) {
+          return bySortOrder;
+        }
+        return a.id.compareTo(b.id);
+      });
+    if (items.isEmpty) {
+      return;
+    }
+
+    final batch = _firestore.batch();
+    for (var index = 0; index < items.length; index++) {
+      final category = items[index].copyWith(sortOrder: index);
+      batch.set(
+        _firestore.collection(FirebasePaths.categories).doc('${category.id}'),
+        _categoryData(category, sortOrder: index),
+      );
+    }
+    batch.set(
+      _catalogMetaRef,
+      _catalogMetaData(categories: true),
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _categoriesManifestRef,
+      _manifestData(
+        items.map((item) => (item.id, item.updatedAt)),
+      ),
+    );
+    await batch.commit();
+  }
+
   Future<void> deleteCategory(int categoryId) async {
     final batch = _firestore.batch();
     batch.delete(_firestore.collection(FirebasePaths.categories).doc('$categoryId'));
