@@ -348,9 +348,15 @@ class AppController extends Notifier<AppState> {
           shouldPersistRemotely: true,
         );
         if (soldSync.changedProducts.isNotEmpty) {
-          state = state.copyWith(products: soldSync.products);
+          final now = DateTime.now();
+          state = state.copyWith(
+            products: soldSync.products,
+            productsMetaUpdatedAt: now,
+            catalogHydrated: true,
+          );
           await _persist();
           await _firestoreCatalog.saveProducts(soldSync.changedProducts);
+          await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
         }
       }
     }, onError: _handleRealtimeSyncError);
@@ -1000,6 +1006,64 @@ class AppController extends Notifier<AppState> {
     await _persist();
   }
 
+  Future<void> _reconcileProductsAfterMutation({
+    required DateTime fallbackUpdatedAt,
+  }) async {
+    final includeInactive = _hasActiveAdminContext(state.adminSession);
+    final catalogMeta = await _firestoreCatalog.loadCatalogMeta();
+    final remoteUpdatedAt = catalogMeta?.productsUpdatedAt ?? fallbackUpdatedAt;
+    await _syncProductsFromManifest(
+      remoteProductsUpdatedAt: remoteUpdatedAt,
+      includeInactive: includeInactive,
+    );
+  }
+
+  Future<void> _reconcileCategoriesAfterMutation({
+    required DateTime fallbackUpdatedAt,
+  }) async {
+    final includeInactive = _hasActiveAdminContext(state.adminSession);
+    final catalogMeta = await _firestoreCatalog.loadCatalogMeta();
+    final remoteUpdatedAt =
+        catalogMeta?.categoriesUpdatedAt ?? fallbackUpdatedAt;
+    await _syncCategoriesFromManifest(
+      remoteUpdatedAt: remoteUpdatedAt,
+      includeInactive: includeInactive,
+    );
+  }
+
+  Future<void> _reconcileBarangaysAfterMutation({
+    required DateTime fallbackUpdatedAt,
+  }) async {
+    final includeInactive = _hasActiveAdminContext(state.adminSession);
+    final catalogMeta = await _firestoreCatalog.loadCatalogMeta();
+    final remoteUpdatedAt =
+        catalogMeta?.barangaysUpdatedAt ?? fallbackUpdatedAt;
+    await _syncBarangaysFromManifest(
+      remoteUpdatedAt: remoteUpdatedAt,
+      includeInactive: includeInactive,
+    );
+  }
+
+  Future<void> _reconcileBannersAfterMutation({
+    required DateTime fallbackUpdatedAt,
+  }) async {
+    final includeInactive = _hasActiveAdminContext(state.adminSession);
+    final catalogMeta = await _firestoreCatalog.loadCatalogMeta();
+    final remoteUpdatedAt = catalogMeta?.bannersUpdatedAt ?? fallbackUpdatedAt;
+    await _syncBannersFromManifest(
+      remoteUpdatedAt: remoteUpdatedAt,
+      includeInactive: includeInactive,
+    );
+  }
+
+  Future<void> _reconcileSettingsAfterMutation({
+    required DateTime fallbackUpdatedAt,
+  }) async {
+    final catalogMeta = await _firestoreCatalog.loadCatalogMeta();
+    final remoteUpdatedAt = catalogMeta?.settingsUpdatedAt ?? fallbackUpdatedAt;
+    await _syncSettingsFromFirebase(remoteUpdatedAt: remoteUpdatedAt);
+  }
+
   Future<void> _syncAdminSessionFromFirebase() async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -1106,8 +1170,18 @@ class AppController extends Notifier<AppState> {
     );
   }
 
-  List<Category> get publicCategories =>
-      state.categories.where((item) => item.isActive).toList();
+  List<Category> get publicCategories {
+    final assignedCategoryIds = state.products
+        .where((product) => product.isActive && product.categoryId > 0)
+        .map((product) => product.categoryId)
+        .toSet();
+    return state.categories
+        .where(
+          (category) =>
+              category.isActive && assignedCategoryIds.contains(category.id),
+        )
+        .toList();
+  }
 
   List<CartItem> _syncCartWithProducts({
     required List<Product> products,
@@ -1670,6 +1744,7 @@ class AppController extends Notifier<AppState> {
     } else {
       next[index] = updated;
     }
+    next.sort((a, b) => a.id.compareTo(b.id));
     final nextCart = state.cart
         .map(
           (item) => item.productId == updated.id
@@ -1683,8 +1758,17 @@ class AppController extends Notifier<AppState> {
               : item,
         )
         .toList();
-    state = state.copyWith(products: next, cart: nextCart, errorMessage: null);
+    state = state.copyWith(
+      products: next,
+      productsMetaUpdatedAt: updated.updatedAt,
+      cart: nextCart,
+      catalogHydrated: true,
+      errorMessage: null,
+    );
     await _firestoreCatalog.saveProduct(updated);
+    await _reconcileProductsAfterMutation(
+      fallbackUpdatedAt: updated.updatedAt,
+    );
     await _persist();
     if (previousProduct?.photoStoragePath != null &&
         previousProduct!.photoStoragePath != updated.photoStoragePath &&
@@ -1712,17 +1796,28 @@ class AppController extends Notifier<AppState> {
     } else {
       next[index] = updated;
     }
-    state = state.copyWith(banners: next, errorMessage: null);
+    next.sort((a, b) => a.id.compareTo(b.id));
+    state = state.copyWith(
+      banners: next,
+      bannersMetaUpdatedAt: now,
+      catalogHydrated: true,
+      errorMessage: null,
+    );
     await _firestoreCatalog.saveBanner(updated);
+    await _reconcileBannersAfterMutation(fallbackUpdatedAt: now);
     await _persist();
   }
 
   Future<void> deleteBanner(int bannerId) async {
+    final now = DateTime.now();
     state = state.copyWith(
       banners: state.banners.where((item) => item.id != bannerId).toList(),
+      bannersMetaUpdatedAt: now,
+      catalogHydrated: true,
       errorMessage: null,
     );
     await _firestoreCatalog.deleteBanner(bannerId);
+    await _reconcileBannersAfterMutation(fallbackUpdatedAt: now);
     await _persist();
   }
 
@@ -1730,33 +1825,84 @@ class AppController extends Notifier<AppState> {
     final removedProduct = state.products
         .where((item) => item.id == productId)
         .firstOrNull;
+    final now = DateTime.now();
     state = state.copyWith(
       products: state.products.where((item) => item.id != productId).toList(),
+      productsMetaUpdatedAt: now,
       cart: state.cart.where((item) => item.productId != productId).toList(),
+      catalogHydrated: true,
       errorMessage: null,
     );
     await _firestoreCatalog.deleteProduct(productId);
+    await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
     await _persist();
     unawaited(_productImageStorage.deleteByPath(removedProduct?.photoStoragePath));
   }
 
   Future<void> saveCategory(Category category) async {
+    final now = DateTime.now();
     final next = [...state.categories];
     final index = next.indexWhere((item) => item.id == category.id);
+    final previousCategory = index == -1 ? null : next[index];
     if (index == -1) {
-      next.insert(0, category.copyWith(sortOrder: 0));
+      next.insert(
+        0,
+        category.copyWith(
+          sortOrder: 0,
+          createdAt: category.createdAt,
+          updatedAt: now,
+        ),
+      );
     } else {
-      next[index] = category.copyWith(sortOrder: next[index].sortOrder);
+      next[index] = category.copyWith(
+        sortOrder: next[index].sortOrder,
+        updatedAt: now,
+      );
     }
     final normalized = [
       for (var i = 0; i < next.length; i++) next[i].copyWith(sortOrder: i),
     ];
-    state = state.copyWith(categories: normalized, errorMessage: null);
+    final shouldUnassignProducts =
+        previousCategory != null &&
+        previousCategory.isActive &&
+        !category.isActive;
+    final nextProducts = shouldUnassignProducts
+        ? state.products.map((product) {
+            if (product.category != category.id) {
+              return product;
+            }
+            return product.copyWith(category: 0, updatedAt: now);
+          }).toList()
+        : state.products;
+    state = state.copyWith(
+      categories: normalized,
+      categoriesMetaUpdatedAt: now,
+      products: nextProducts,
+      productsMetaUpdatedAt: shouldUnassignProducts
+          ? now
+          : state.productsMetaUpdatedAt,
+      cart: shouldUnassignProducts
+          ? _syncCartWithProducts(products: nextProducts)
+          : state.cart,
+      catalogHydrated: true,
+      errorMessage: null,
+    );
     await _firestoreCatalog.saveCategories(normalized);
+    if (shouldUnassignProducts) {
+      final reassignedProducts = nextProducts
+          .where((item) => item.category == 0)
+          .toList();
+      await _firestoreCatalog.saveProducts(reassignedProducts);
+    }
+    await _reconcileCategoriesAfterMutation(fallbackUpdatedAt: now);
+    if (shouldUnassignProducts) {
+      await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
+    }
     await _persist();
   }
 
   Future<void> deleteCategory(int categoryId) async {
+    final now = DateTime.now();
     final nextCategories = state.categories
         .where((item) => item.id != categoryId)
         .toList();
@@ -1764,12 +1910,16 @@ class AppController extends Notifier<AppState> {
       if (product.category != categoryId) {
         return product;
       }
-      return product.copyWith(category: 0);
+      return product.copyWith(category: 0, updatedAt: now);
     }).toList();
 
     state = state.copyWith(
       categories: nextCategories,
+      categoriesMetaUpdatedAt: now,
       products: nextProducts,
+      productsMetaUpdatedAt: now,
+      cart: _syncCartWithProducts(products: nextProducts),
+      catalogHydrated: true,
       errorMessage: null,
     );
     await _firestoreCatalog.deleteCategory(categoryId);
@@ -1777,6 +1927,8 @@ class AppController extends Notifier<AppState> {
         .where((item) => item.category == 0)
         .toList();
     await _firestoreCatalog.saveProducts(reassignedProducts);
+    await _reconcileCategoriesAfterMutation(fallbackUpdatedAt: now);
+    await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
     await _persist();
   }
 
@@ -1805,16 +1957,22 @@ class AppController extends Notifier<AppState> {
       products: normalizedProducts,
       cart: state.cart,
     );
+    final now = DateTime.now();
     state = state.copyWith(
       categories: normalizedCategories,
+      categoriesMetaUpdatedAt: now,
       products: normalizedProducts,
+      productsMetaUpdatedAt: now,
       cart: syncedCart,
+      catalogHydrated: true,
       errorMessage: null,
     );
     await _firestoreCatalog.replaceCategoriesAndProducts(
       categories: normalizedCategories,
       products: normalizedProducts,
     );
+    await _reconcileCategoriesAfterMutation(fallbackUpdatedAt: now);
+    await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
     await _persist();
   }
 
@@ -1833,12 +1991,19 @@ class AppController extends Notifier<AppState> {
 
     final moved = next.removeAt(oldIndex);
     next.insert(newIndex, moved);
+    final now = DateTime.now();
     final normalized = [
       for (var index = 0; index < next.length; index++)
-        next[index].copyWith(sortOrder: index),
+        next[index].copyWith(sortOrder: index, updatedAt: now),
     ];
-    state = state.copyWith(categories: normalized, errorMessage: null);
+    state = state.copyWith(
+      categories: normalized,
+      categoriesMetaUpdatedAt: now,
+      catalogHydrated: true,
+      errorMessage: null,
+    );
     await _firestoreCatalog.saveCategories(normalized);
+    await _reconcileCategoriesAfterMutation(fallbackUpdatedAt: now);
     await _persist();
   }
 
@@ -1855,11 +2020,19 @@ class AppController extends Notifier<AppState> {
         .toList();
 
     final merged = [...ordered, ...remaining];
+    final now = DateTime.now();
     final next = [
-      for (var i = 0; i < merged.length; i++) merged[i].copyWith(sortOrder: i),
+      for (var i = 0; i < merged.length; i++)
+        merged[i].copyWith(sortOrder: i, updatedAt: now),
     ];
-    state = state.copyWith(categories: next, errorMessage: null);
+    state = state.copyWith(
+      categories: next,
+      categoriesMetaUpdatedAt: now,
+      catalogHydrated: true,
+      errorMessage: null,
+    );
     await _firestoreCatalog.saveCategories(next);
+    await _reconcileCategoriesAfterMutation(fallbackUpdatedAt: now);
     await _persist();
   }
 
@@ -1870,8 +2043,10 @@ class AppController extends Notifier<AppState> {
         createdAt: settings.createdAt ?? state.settings.createdAt ?? now,
         updatedAt: now,
       ),
+      settingsMetaUpdatedAt: now,
     );
     await _firestoreCatalog.saveSettings(state.settings);
+    await _reconcileSettingsAfterMutation(fallbackUpdatedAt: now);
     await _persist();
   }
 
@@ -1890,16 +2065,29 @@ class AppController extends Notifier<AppState> {
       next[index] = updated;
     }
     next.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    state = state.copyWith(barangays: next, errorMessage: null);
+    state = state.copyWith(
+      barangays: next,
+      barangaysMetaUpdatedAt: now,
+      catalogHydrated: true,
+      errorMessage: null,
+    );
     await _firestoreCatalog.saveBarangay(updated);
+    await _reconcileBarangaysAfterMutation(fallbackUpdatedAt: now);
     await _persist();
   }
 
   Future<void> deleteBarangay(int barangayId) async {
+    final now = DateTime.now();
     final next = state.barangays.where((item) => item.id != barangayId).toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    state = state.copyWith(barangays: next, errorMessage: null);
+    state = state.copyWith(
+      barangays: next,
+      barangaysMetaUpdatedAt: now,
+      catalogHydrated: true,
+      errorMessage: null,
+    );
     await _firestoreCatalog.deleteBarangay(barangayId);
+    await _reconcileBarangaysAfterMutation(fallbackUpdatedAt: now);
     await _persist();
   }
 
@@ -1921,15 +2109,18 @@ class AppController extends Notifier<AppState> {
         createdAt: settings.createdAt ?? state.settings.createdAt ?? now,
         updatedAt: now,
       ),
+      settingsMetaUpdatedAt: now,
     );
     if (state.adminSession != null) {
       await _firestoreCatalog.saveAdminSession(state.adminSession!);
     }
     await _firestoreCatalog.saveSettings(state.settings);
+    await _reconcileSettingsAfterMutation(fallbackUpdatedAt: now);
     await _persist();
   }
 
   Future<void> updateOrder(OrderRequest nextOrder) async {
+    final now = DateTime.now();
     final previousProducts = state.products;
     final currentOrder = state.orders
         .where((item) => item.id == nextOrder.id)
@@ -1959,7 +2150,7 @@ class AppController extends Notifier<AppState> {
         }
         return product.copyWith(
           sold: math.max(0, product.sold + delta),
-          updatedAt: DateTime.now(),
+          updatedAt: now,
         );
       }).toList();
     }
@@ -1968,15 +2159,25 @@ class AppController extends Notifier<AppState> {
         .map((item) => item.id == nextOrder.id ? nextOrder : item)
         .toList();
 
-    state = state.copyWith(orders: updatedOrders, products: nextProducts);
-    await _firestoreCatalog.saveOrder(nextOrder);
     final changedProducts = nextProducts.where((item) {
       final previous = previousProducts
           .where((product) => product.id == item.id)
           .firstOrNull;
       return previous?.sold != item.sold;
     }).toList();
+    state = state.copyWith(
+      orders: updatedOrders,
+      products: nextProducts,
+      productsMetaUpdatedAt: changedProducts.isNotEmpty
+          ? now
+          : state.productsMetaUpdatedAt,
+      catalogHydrated: true,
+    );
+    await _firestoreCatalog.saveOrder(nextOrder);
     await _firestoreCatalog.saveProducts(changedProducts);
+    if (changedProducts.isNotEmpty) {
+      await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
+    }
     await _persist();
   }
 
@@ -2015,9 +2216,15 @@ class AppController extends Notifier<AppState> {
           shouldPersistRemotely: true,
         );
         if (soldSync.changedProducts.isNotEmpty) {
-          state = state.copyWith(products: soldSync.products);
+          final now = DateTime.now();
+          state = state.copyWith(
+            products: soldSync.products,
+            productsMetaUpdatedAt: now,
+            catalogHydrated: true,
+          );
           await _persist();
           await _firestoreCatalog.saveProducts(soldSync.changedProducts);
+          await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
         }
       }
     } catch (_) {

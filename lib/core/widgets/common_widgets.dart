@@ -465,24 +465,38 @@ class AppPopupMenuField<T> extends StatelessWidget {
 }
 
 class BrandLogo extends StatelessWidget {
-  const BrandLogo({super.key, this.compact = false, this.onDark = false});
+  const BrandLogo({
+    super.key,
+    this.compact = false,
+    this.onDark = false,
+    this.titleColor,
+    this.subtitleColor,
+    this.forceLightAsset = false,
+    this.logoBackgroundColor = Colors.white,
+  });
 
   final bool compact;
   final bool onDark;
+  final Color? titleColor;
+  final Color? subtitleColor;
+  final bool forceLightAsset;
+  final Color logoBackgroundColor;
 
   @override
   Widget build(BuildContext context) {
     final mainStyle = Theme.of(context).textTheme.titleLarge?.copyWith(
       fontFamily: 'Poppins',
       fontWeight: FontWeight.w800,
-      color: onDark ? Colors.white : AppColors.logoBlue,
+      color: titleColor ?? (onDark ? Colors.white : AppColors.logoBlue),
       height: 1,
       fontSize: compact ? 20 : 24,
     );
     final subStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
       fontFamily: 'Poppins',
       fontWeight: FontWeight.w800,
-      color: onDark ? const Color(0xFFFFB9BD) : const Color(0xFFE31E24),
+      color:
+          subtitleColor ??
+          (onDark ? const Color(0xFFFFB9BD) : const Color(0xFFE31E24)),
       height: 1,
       fontSize: compact ? 13 : 17,
     );
@@ -492,10 +506,10 @@ class BrandLogo extends StatelessWidget {
       children: [
         Container(
           height: compact ? 44 : 60,
-          decoration: BoxDecoration(color: Colors.white),
+          decoration: BoxDecoration(color: logoBackgroundColor),
           clipBehavior: Clip.antiAlias,
           child: Image.asset(
-            onDark
+            forceLightAsset || onDark
                 ? 'assets/branding/as_logo_lite.png'
                 : 'assets/branding/as_logo_dark.png',
             fit: BoxFit.cover,

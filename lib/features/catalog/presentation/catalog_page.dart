@@ -700,7 +700,6 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final mainContentWidth =
         width - (showDesktopCartPanel ? _kDesktopCartPanelWidth : 0);
     final isMobile = mainContentWidth < _kMobileBreakpoint;
-    const maxContentWidth = 1440.0;
     final gridPadding = _outerHorizontalPaddingForWidth(mainContentWidth);
     const gridSpacing = 16.0;
     final availableGridWidth = mainContentWidth - (gridPadding * 2);
@@ -749,26 +748,24 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
           children: [
             Align(
               alignment: Alignment.topLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: maxContentWidth),
-                child: _TopBar(
-                  searchController: _searchController,
-                  query: _query,
-                  onSearchChanged: (value) {
-                    _debounce?.cancel();
-                    _debounce = Timer(const Duration(milliseconds: 250), () {
-                      setState(() => _query = value.trim().toLowerCase());
-                    });
-                  },
-                  cartCount: vm.cartCount,
-                  loading: showCatalogLoading,
-                  hasOtherProducts: hasOtherProducts,
-                  categories: visibleCategories,
-                  selectedId: _categoryId,
-                  onSelected: (value) => setState(() => _categoryId = value),
-                  showCartPanelOpenState: showDesktopCartPanel,
-                  onCartTap: () => _handleCartTap(mainContentWidth),
-                ),
+              child: _TopBar(
+                searchController: _searchController,
+                query: _query,
+                onSearchChanged: (value) {
+                  _debounce?.cancel();
+                  _debounce = Timer(const Duration(milliseconds: 250), () {
+                    setState(() => _query = value.trim().toLowerCase());
+                  });
+                },
+                cartCount: vm.cartCount,
+                loading: showCatalogLoading,
+                hasOtherProducts: hasOtherProducts,
+                categories: visibleCategories,
+                selectedId: _categoryId,
+                onSelected: (value) => setState(() => _categoryId = value),
+                showCartPanelOpenState: showDesktopCartPanel,
+                onCartTap: () => _handleCartTap(mainContentWidth),
+                adminMode: appState.adminSession != null,
               ),
             ),
             Expanded(
@@ -1409,6 +1406,7 @@ class _Header extends StatelessWidget {
     required this.cartCount,
     required this.showCartPanelOpenState,
     required this.onCartTap,
+    required this.adminMode,
   });
 
   final TextEditingController searchController;
@@ -1417,6 +1415,7 @@ class _Header extends StatelessWidget {
   final int cartCount;
   final bool showCartPanelOpenState;
   final VoidCallback onCartTap;
+  final bool adminMode;
 
   @override
   Widget build(BuildContext context) {
@@ -1430,54 +1429,66 @@ class _Header extends StatelessWidget {
     final searchGap = stackSearch ? 0.0 : 40.0;
     final trailingSearchPadding = showCartPanelOpenState ? 0.0 : searchGap;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        horizontalInset,
-        16,
-        horizontalInset,
-        stackSearch ? 0 : 16,
-      ),
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onLongPress: () => context.go('/admin'),
-                child: const BrandLogo(),
-              ),
-              if (stackSearch) const Expanded(child: SizedBox()),
-              if (!stackSearch) SizedBox(width: searchGap),
-              if (!stackSearch)
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(right: trailingSearchPadding),
-                    child: _SearchField(
-                      searchController: searchController,
-                      query: query,
-                      onSearchChanged: onSearchChanged,
-                    ),
+    return ColoredBox(
+      color: adminMode ? AppColors.logoBlue : Colors.white,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          horizontalInset,
+          16,
+          horizontalInset,
+          stackSearch ? 0 : 16,
+        ),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onLongPress: () => context.go('/admin'),
+                  child: BrandLogo(
+                    forceLightAsset: adminMode,
+                    titleColor: adminMode ? Colors.white : null,
+                    subtitleColor: adminMode ? Colors.white : null,
+                    logoBackgroundColor: Colors.transparent,
                   ),
                 ),
-              if (!showCartPanelOpenState)
-                _CartButton(
-                  cartCount: cartCount,
-                  showLabel: !hideCartLabel,
-                  onTap: onCartTap,
-                ),
-            ],
-          ),
-          if (stackSearch) ...[
-            const SizedBox(height: 16),
-            _SearchField(
-              searchController: searchController,
-              query: query,
-              onSearchChanged: onSearchChanged,
+                if (stackSearch) const Expanded(child: SizedBox()),
+                if (!stackSearch) SizedBox(width: searchGap),
+                if (!stackSearch)
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(right: trailingSearchPadding),
+                      child: _SearchField(
+                        searchController: searchController,
+                        query: query,
+                        onSearchChanged: onSearchChanged,
+                      ),
+                    ),
+                  ),
+                if (!showCartPanelOpenState)
+                  _CartButton(
+                    cartCount: cartCount,
+                    showLabel: !hideCartLabel,
+                    onTap: onCartTap,
+                    iconColor: adminMode
+                        ? Colors.white
+                        : null,
+                    labelColor: adminMode ? Colors.white : null,
+                  ),
+              ],
             ),
-            const SizedBox(height: 18),
+            if (stackSearch) ...[
+              const SizedBox(height: 16),
+              _SearchField(
+                searchController: searchController,
+                query: query,
+                onSearchChanged: onSearchChanged,
+              ),
+              const SizedBox(height: 18),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1496,6 +1507,7 @@ class _TopBar extends StatelessWidget {
     required this.onSelected,
     required this.showCartPanelOpenState,
     required this.onCartTap,
+    required this.adminMode,
   });
 
   final TextEditingController searchController;
@@ -1509,6 +1521,7 @@ class _TopBar extends StatelessWidget {
   final ValueChanged<String> onSelected;
   final bool showCartPanelOpenState;
   final VoidCallback onCartTap;
+  final bool adminMode;
 
   @override
   Widget build(BuildContext context) {
@@ -1527,6 +1540,7 @@ class _TopBar extends StatelessWidget {
               cartCount: cartCount,
               showCartPanelOpenState: showCartPanelOpenState,
               onCartTap: onCartTap,
+              adminMode: adminMode,
             ),
             const Divider(height: 1, thickness: 1, color: Color(0xFFE4E7EC)),
             if (loading)
@@ -1585,11 +1599,15 @@ class _CartButton extends StatelessWidget {
     required this.cartCount,
     this.showLabel = true,
     required this.onTap,
+    this.iconColor,
+    this.labelColor,
   });
 
   final int cartCount;
   final bool showLabel;
   final VoidCallback onTap;
+  final Color? iconColor;
+  final Color? labelColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1630,14 +1648,22 @@ class _CartButton extends StatelessWidget {
                     badgeLabel,
                     style: badgeTextStyle,
                   ),
-                  child: const Icon(Icons.shopping_cart_outlined, size: 28),
+                  child: Icon(
+                    Icons.shopping_cart_outlined,
+                    size: 28,
+                    color: iconColor,
+                  ),
                 ),
               ),
               if (showLabel) ...[
                 const SizedBox(width: 8),
-                const Text(
+                Text(
                   'Cart',
-                  style: TextStyle(fontWeight: FontWeight.w700, height: 1.15),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    height: 1.15,
+                    color: labelColor,
+                  ),
                 ),
               ],
             ],
