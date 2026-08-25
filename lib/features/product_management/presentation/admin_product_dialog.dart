@@ -267,11 +267,12 @@ Future<Product?> showAdminProductDialog(
                         if (text.isEmpty) {
                           return 'Price is required.';
                         }
-                        final parsed = double.tryParse(text);
-                        if (parsed == null) {
+                        final parsedCentavos =
+                            parsePesosValueToCentavos(text);
+                        if (parsedCentavos == null) {
                           return 'Enter a valid price.';
                         }
-                        if (parsed <= 0) {
+                        if (parsedCentavos <= 0) {
                           return 'Price must be greater than 0.';
                         }
                         return null;
