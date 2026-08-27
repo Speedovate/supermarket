@@ -73,13 +73,16 @@ Future<Product?> _showClientAdminProductDialog(
     initial: latestProduct,
   );
   if (updatedProduct != null && context.mounted) {
-    _popAllRoutesUntilFirst(context);
+    _popAllModalRoutes(context);
   }
   return updatedProduct;
 }
 
-void _popAllRoutesUntilFirst(BuildContext context) {
-  Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
+void _popAllModalRoutes(BuildContext context) {
+  Navigator.of(
+    context,
+    rootNavigator: true,
+  ).popUntil((route) => route is! PopupRoute);
 }
 
 class _PhilippineMobileInputFormatter extends TextInputFormatter {
@@ -758,7 +761,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                 onSearchChanged: (value) {
                   _debounce?.cancel();
                   _debounce = Timer(const Duration(milliseconds: 250), () {
-                    setState(() => _query = value.trim().toLowerCase());
+                    final normalizedValue = value.trim().toLowerCase();
+                    setState(() => _query = normalizedValue);
                   });
                 },
                 cartCount: vm.cartCount,
@@ -4824,7 +4828,7 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                                           if (!context.mounted) {
                                             return;
                                           }
-                                          _popAllRoutesUntilFirst(context);
+                                          _popAllModalRoutes(context);
                                         } else {
                                           await controller.updateCartQuantity(
                                             widget.product.id,
@@ -4896,7 +4900,7 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                                           if (!context.mounted) {
                                             return;
                                           }
-                                          _popAllRoutesUntilFirst(context);
+                                          _popAllModalRoutes(context);
                                           return;
                                         }
                                         await controller.updateCartQuantity(
@@ -5238,14 +5242,14 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                           if (!context.mounted) {
                             return;
                           }
-                          _popAllRoutesUntilFirst(context);
+                          _popAllModalRoutes(context);
                           return;
                         }
                         setState(() => _draftQuantity = 0);
                         if (!mounted) {
                           return;
                         }
-                        _popAllRoutesUntilFirst(this.context);
+                        _popAllModalRoutes(this.context);
                         return;
                       }
                       setState(() => _draftQuantity = draftQuantity - 1);
@@ -5279,7 +5283,7 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                         if (!mounted) {
                           return;
                         }
-                        _popAllRoutesUntilFirst(this.context);
+                        _popAllModalRoutes(this.context);
                         return;
                       }
                       setState(() => _draftQuantity = nextQuantity);
@@ -5475,7 +5479,7 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                                     if (!mounted) {
                                       return;
                                     }
-                                    _popAllRoutesUntilFirst(this.context);
+                                    _popAllModalRoutes(this.context);
                                     return;
                                   } else if (cartQuantity <= 0) {
                                     await controller.addToCart(
