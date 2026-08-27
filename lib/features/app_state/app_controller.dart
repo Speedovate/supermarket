@@ -477,6 +477,27 @@ class AppController extends Notifier<AppState> {
       final catalogMeta = await _firestoreCatalog.loadCatalogMeta();
       if (catalogMeta != null &&
           state.catalogHydrated &&
+          !includeInactive &&
+          !_needsCatalogReconciliation(includeInactive: includeInactive) &&
+          !_isPublicCatalogStale(catalogMeta)) {
+        final manifest = await _firestoreCatalog.loadProductsManifest();
+        final remoteManifestCount = manifest?.itemUpdatedAts.length ?? 0;
+        if (_isPublicProductsCacheSuspicious(
+          remoteManifestCount: remoteManifestCount,
+          localProductCount: state.products.length,
+        )) {
+          await _syncProductsByFullFetch(
+            includeInactive: false,
+            remoteProductsUpdatedAt:
+                catalogMeta.productsUpdatedAt ??
+                state.productsMetaUpdatedAt ??
+                DateTime.now(),
+          );
+          return;
+        }
+      }
+      if (catalogMeta != null &&
+          state.catalogHydrated &&
           !_needsCatalogReconciliation(includeInactive: includeInactive) &&
           !_isPublicCatalogStale(catalogMeta)) {
         return;
@@ -614,6 +635,29 @@ class AppController extends Notifier<AppState> {
       return true;
     }
     return !remote.isAtSameMomentAs(local);
+  }
+
+  bool _isPublicProductsCacheSuspicious({
+    required int remoteManifestCount,
+    required int localProductCount,
+  }) {
+    if (remoteManifestCount <= 0) {
+      return false;
+    }
+    if (localProductCount <= 0) {
+      return true;
+    }
+    if (localProductCount > remoteManifestCount) {
+      return true;
+    }
+    final missingCount = remoteManifestCount - localProductCount;
+    if (localProductCount == 1 && remoteManifestCount > 1) {
+      return true;
+    }
+    if (missingCount >= 64) {
+      return true;
+    }
+    return (localProductCount / remoteManifestCount) <= 0.66;
   }
 
   DateTime? _latestCategoryUpdatedAt(List<Category> items) {
@@ -928,6 +972,17 @@ class AppController extends Notifier<AppState> {
       final localById = {for (final product in state.products) product.id: product};
       final remoteIds = manifest.itemUpdatedAts.keys.toSet();
       if (remoteIds.isEmpty) {
+        await _syncProductsByFullFetch(
+          includeInactive: false,
+          remoteProductsUpdatedAt: remoteProductsUpdatedAt,
+        );
+        return;
+      }
+      if (!includeInactive &&
+          _isPublicProductsCacheSuspicious(
+            remoteManifestCount: remoteIds.length,
+            localProductCount: state.products.length,
+          )) {
         await _syncProductsByFullFetch(
           includeInactive: false,
           remoteProductsUpdatedAt: remoteProductsUpdatedAt,
