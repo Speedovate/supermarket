@@ -2504,6 +2504,22 @@ class AppController extends Notifier<AppState> {
           existing.products.isNotEmpty &&
           state.products.isEmpty &&
           state.catalogHydrated;
+      final shouldProtectExistingProductsCache =
+          existing != null &&
+          existing.products.isNotEmpty &&
+          state.products.isNotEmpty &&
+          state.products.length < existing.products.length &&
+          (() {
+            final existingMeta = existing.productsMetaUpdatedAt;
+            final nextMeta = state.productsMetaUpdatedAt;
+            if (existingMeta == null) {
+              return false;
+            }
+            if (nextMeta == null) {
+              return true;
+            }
+            return !nextMeta.isAfter(existingMeta);
+          })();
 
       final persistedCategories = shouldProtectExistingCatalog
           ? existing.categories
@@ -2525,8 +2541,12 @@ class AppController extends Notifier<AppState> {
           : state.bannersMetaUpdatedAt;
       final persistedProducts = shouldProtectExistingCatalog
           ? existing.products
+          : shouldProtectExistingProductsCache
+          ? existing.products
           : state.products;
       final persistedProductsMetaUpdatedAt = shouldProtectExistingCatalog
+          ? existing.productsMetaUpdatedAt
+          : shouldProtectExistingProductsCache
           ? existing.productsMetaUpdatedAt
           : state.productsMetaUpdatedAt;
 
