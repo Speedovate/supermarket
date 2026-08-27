@@ -570,11 +570,14 @@ class AppController extends Notifier<AppState> {
     final hasCategories = includeInactive
         ? state.categories.isNotEmpty
         : publicCategories.isNotEmpty;
+    final hasBarangays = includeInactive
+        ? state.barangays.isNotEmpty
+        : activeBarangays.isNotEmpty;
     final hasProducts = includeInactive
         ? state.products.isNotEmpty
         : state.products.any((product) => product.isActive);
 
-    return !hasCategories || !hasProducts;
+    return !hasCategories || !hasBarangays || !hasProducts;
   }
 
   bool _isPublicCatalogStale(CatalogMetaSnapshot meta) {
