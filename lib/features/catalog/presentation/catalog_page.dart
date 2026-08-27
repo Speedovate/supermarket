@@ -63,15 +63,19 @@ Future<Product?> _showClientAdminProductDialog(
   BuildContext context,
   WidgetRef ref,
   Product product,
-) {
+) async {
   final latestProduct =
       ref.read(appControllerProvider).products.where((item) => item.id == product.id).firstOrNull ??
       product;
-  return showAdminProductDialog(
+  final updatedProduct = await showAdminProductDialog(
     context,
     ref,
     initial: latestProduct,
   );
+  if (updatedProduct != null && context.mounted) {
+    _popAllRoutesUntilFirst(context);
+  }
+  return updatedProduct;
 }
 
 void _popAllRoutesUntilFirst(BuildContext context) {
