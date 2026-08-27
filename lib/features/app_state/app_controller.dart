@@ -34,6 +34,11 @@ final routerRefreshProvider = Provider<ValueNotifier<int>>((ref) {
   return notifier;
 });
 
+const _currentAppBuildVersion = String.fromEnvironment(
+  'APP_BUILD_VERSION',
+  defaultValue: '',
+);
+
 class AppState {
   const AppState({
     this.initialized = false,
@@ -412,6 +417,11 @@ class AppController extends Notifier<AppState> {
   }
 
   void _applyPersistedState(PersistedData persisted) {
+    final hasCurrentBuildVersion = _currentAppBuildVersion.trim().isNotEmpty;
+    final persistedBuildVersion = persisted.appBuildVersion?.trim() ?? '';
+    final hasCatalogVersionMismatch =
+        hasCurrentBuildVersion &&
+        persistedBuildVersion != _currentAppBuildVersion;
     final sanitizedOrders = _hasActiveAdminContext(persisted.adminSession)
         ? persisted.orders
         : _filterClientVisibleOrders(
@@ -463,7 +473,8 @@ class AppController extends Notifier<AppState> {
         orders: sanitizedOrders,
       ),
       adminSession: persisted.adminSession,
-      catalogHydrated: hasPersistedCatalogContent,
+      catalogHydrated:
+          hasPersistedCatalogContent && !hasCatalogVersionMismatch,
     );
   }
 
@@ -2499,6 +2510,9 @@ class AppController extends Notifier<AppState> {
   Future<void> _persist() async {
     try {
       final existing = await _store.load();
+      final hasSamePersistedBuildVersion =
+          existing == null ||
+          existing.appBuildVersion?.trim() == _currentAppBuildVersion.trim();
       final shouldProtectExistingCatalog =
           existing != null &&
           existing.products.isNotEmpty &&
@@ -2506,6 +2520,7 @@ class AppController extends Notifier<AppState> {
           state.catalogHydrated;
       final shouldProtectExistingProductsCache =
           existing != null &&
+          hasSamePersistedBuildVersion &&
           existing.products.isNotEmpty &&
           state.products.isNotEmpty &&
           state.products.length < existing.products.length &&
@@ -2552,6 +2567,9 @@ class AppController extends Notifier<AppState> {
 
       await _store.save(
         PersistedData(
+          appBuildVersion: _currentAppBuildVersion.trim().isEmpty
+              ? null
+              : _currentAppBuildVersion.trim(),
           categories: persistedCategories,
           categoriesMetaUpdatedAt: persistedCategoriesMetaUpdatedAt,
           barangays: persistedBarangays,

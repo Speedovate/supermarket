@@ -1257,6 +1257,7 @@ class AdminSession {
 class PersistedData {
   const PersistedData({
     this.id = 1,
+    this.appBuildVersion,
     required this.categories,
     this.categoriesMetaUpdatedAt,
     required this.barangays,
@@ -1276,6 +1277,7 @@ class PersistedData {
   });
 
   final int id;
+  final String? appBuildVersion;
   final List<Category> categories;
   final DateTime? categoriesMetaUpdatedAt;
   final List<Barangay> barangays;
@@ -1295,6 +1297,7 @@ class PersistedData {
 
   Map<String, dynamic> toMap() => {
     'id': id,
+    'appBuildVersion': appBuildVersion,
     'categories': categories.map((item) => item.toMap()).toList(),
     'categoriesMetaUpdatedAt': categoriesMetaUpdatedAt?.toIso8601String(),
     'barangays': barangays.map((item) => item.toMap()).toList(),
@@ -1321,6 +1324,9 @@ class PersistedData {
       id: map['id'] is int
           ? map['id'] as int
           : int.tryParse('${map['id']}') ?? 1,
+      appBuildVersion: (map['appBuildVersion'] as String?)?.trim().isEmpty == true
+          ? null
+          : (map['appBuildVersion'] as String?)?.trim(),
       categories: (map['categories'] as List<dynamic>)
           .map(
             (item) => Category.fromMap(Map<String, dynamic>.from(item as Map)),
