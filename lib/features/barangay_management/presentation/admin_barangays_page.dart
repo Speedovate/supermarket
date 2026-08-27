@@ -23,6 +23,7 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
   static double get _filtersFieldWidth =>
       _filtersMenuWidth - (_filtersContentHorizontalPadding * 2);
   static const double _columnWidthAllowance = 2;
+  static const double _headerLabelExtraAllowance = 12;
   static const double _dateHeaderExtraAllowance = 2;
   static const double _statusBadgeHorizontalPadding = 28;
   static const double _actionHitSize = 34;
@@ -60,6 +61,14 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
     createdAtFilter = _parseRouteDate(uri.queryParameters['filters[created_at]']);
     updatedAtFilter = _parseRouteDate(uri.queryParameters['filters[updated_at]']);
     statusFilter = _normalizeNullable(uri.queryParameters['filters[status]']);
+    debugPrint(
+      '[AdminBarangaysPage] applyRouteFilters '
+      'route=${uri.toString()} '
+      'query="$query" '
+      'createdAt=$createdAtFilter '
+      'updatedAt=$updatedAtFilter '
+      'status=$statusFilter',
+    );
   }
 
   void _setFilters(VoidCallback update) {
@@ -132,6 +141,17 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
           matchesUpdatedAt &&
           matchesStatus;
     }).toList();
+    debugPrint(
+      '[AdminBarangaysPage] build '
+      'stateBarangays=${state.barangays.length} '
+      'sortedBarangays=${barangays.length} '
+      'filteredBarangays=${filteredBarangays.length} '
+      'query="$query" '
+      'createdAt=$createdAtFilter '
+      'updatedAt=$updatedAtFilter '
+      'status=$statusFilter '
+      'ids=${filteredBarangays.map((item) => item.id).join(",")}',
+    );
 
     final widths = _computeBarangayColumnWidths(
       screenWidth: screenWidth,
@@ -1167,29 +1187,84 @@ class _BarangayHeaderRow extends StatelessWidget {
 
     return Row(
       children: [
-        SizedBox(width: widths.id, child: Text('ID', style: labelStyle)),
+        SizedBox(
+          width: widths.id,
+          child: Text(
+            'ID',
+            style: labelStyle,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+          ),
+        ),
         SizedBox(width: widths.gap),
-        SizedBox(width: widths.name, child: Text('Name', style: labelStyle)),
+        SizedBox(
+          width: widths.name,
+          child: Text(
+            'Name',
+            style: labelStyle,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+          ),
+        ),
         SizedBox(width: widths.gap),
-        SizedBox(width: widths.status, child: Text('Status', style: labelStyle)),
+        SizedBox(
+          width: widths.status,
+          child: Text(
+            'Status',
+            style: labelStyle,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+          ),
+        ),
         SizedBox(width: widths.gap),
-        SizedBox(width: widths.cutoff, child: Text('Cutoff', style: labelStyle)),
+        SizedBox(
+          width: widths.cutoff,
+          child: Text(
+            'Cutoff',
+            style: labelStyle,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+          ),
+        ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.createdAt,
-          child: Text('Created at', style: labelStyle),
+          child: Text(
+            'Created at',
+            style: labelStyle,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+          ),
         ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.updatedAt,
-          child: Text('Updated at', style: labelStyle),
+          child: Text(
+            'Updated at',
+            style: labelStyle,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+          ),
         ),
         SizedBox(width: widths.gap + trailingSpace),
         SizedBox(
           width: _AdminBarangaysPageState._actionsWidth,
           child: Align(
             alignment: Alignment.centerRight,
-            child: Text('Actions', style: labelStyle, textAlign: TextAlign.right),
+            child: Text(
+              'Actions',
+              style: labelStyle,
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
+            ),
           ),
         ),
       ],
@@ -1419,7 +1494,8 @@ _BarangayColumnWidths _computeBarangayColumnWidths({
     painter.text = TextSpan(text: header, style: headerStyle);
     painter.layout();
     var width = painter.width.ceilToDouble() +
-        _AdminBarangaysPageState._columnWidthAllowance;
+        _AdminBarangaysPageState._columnWidthAllowance +
+        _AdminBarangaysPageState._headerLabelExtraAllowance;
     final effectiveValuesStyle = valuesStyle ?? bodyStyle;
     for (final value in values) {
       painter.text = TextSpan(text: value, style: effectiveValuesStyle);

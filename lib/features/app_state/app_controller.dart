@@ -780,6 +780,10 @@ class AppController extends Notifier<AppState> {
     try {
       final manifest = await _firestoreCatalog.loadBarangaysManifest();
       if (manifest == null) {
+        debugPrint(
+          '[AppController] _syncBarangaysFromManifest missing manifest '
+          'remoteUpdatedAt=$remoteUpdatedAt includeInactive=$includeInactive',
+        );
         throw StateError('Missing barangays manifest.');
       }
       final localById = {for (final item in state.barangays) item.id: item};
@@ -793,6 +797,15 @@ class AppController extends Notifier<AppState> {
           idsToFetch.add(entry.key);
         }
       }
+      debugPrint(
+        '[AppController] _syncBarangaysFromManifest manifest '
+        'localCount=${state.barangays.length} '
+        'remoteIds=${remoteIds.length} '
+        'idsToRemove=${idsToRemove.join(",")} '
+        'idsToFetch=${idsToFetch.join(",")} '
+        'includeInactive=$includeInactive '
+        'remoteUpdatedAt=$remoteUpdatedAt',
+      );
       final fetched = idsToFetch.isEmpty
           ? const <Barangay>[]
           : await _firestoreCatalog.loadBarangaysByIds(idsToFetch);
@@ -814,16 +827,36 @@ class AppController extends Notifier<AppState> {
       }
       final next = nextById.values.toList()
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      debugPrint(
+        '[AppController] _syncBarangaysFromManifest resolved '
+        'fetched=${fetched.length} '
+        'visibleFetched=${visibleFetched.length} '
+        'hiddenFetchedIds=${hiddenFetchedIds.join(",")} '
+        'next=${next.length}',
+      );
       state = state.copyWith(
         barangays: _normalizeBarangays(next, settings: state.settings),
         barangaysMetaUpdatedAt: remoteUpdatedAt,
       );
       await _persist();
-    } catch (_) {
+    } catch (error) {
+      debugPrint(
+        '[AppController] _syncBarangaysFromManifest fallback '
+        'error=$error includeInactive=$includeInactive '
+        'existing=${state.barangays.length}',
+      );
       final next = await _firestoreCatalog.loadBarangays(
         includeInactive: includeInactive,
       );
+      debugPrint(
+        '[AppController] _syncBarangaysFromManifest fallbackResult '
+        'loaded=${next.length} includeInactive=$includeInactive',
+      );
       if (next.isEmpty && state.barangays.isNotEmpty) {
+        debugPrint(
+          '[AppController] _syncBarangaysFromManifest preservedExisting '
+          'because fallback loaded empty while existing=${state.barangays.length}',
+        );
         return;
       }
       state = state.copyWith(
