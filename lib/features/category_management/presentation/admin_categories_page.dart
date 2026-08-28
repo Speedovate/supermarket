@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
+import '../../../core/services/firebase_firestore_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
@@ -2219,16 +2220,21 @@ extension on _AdminCategoriesPageState {
       }
       isSubmitting = true;
       try {
+        final fallbackNextCategoryId =
+            (categories.map((item) => item.id).fold<int>(
+                  0,
+                  (max, value) => value > max ? value : max,
+                )) +
+            1;
+        final resolvedCategoryId =
+            initial?.id ??
+            await ref
+                .read(firestoreCatalogServiceProvider)
+                .reserveNextCategoryId(
+                  fallbackNextCategoryId: fallbackNextCategoryId,
+                );
         final category = Category(
-          id:
-              initial?.id ??
-              ((categories
-                      .map((item) => item.id)
-                      .fold<int>(
-                        0,
-                        (max, value) => value > max ? value : max,
-                      )) +
-                  1),
+          id: resolvedCategoryId,
           name: nameController.text.trim(),
           normalizedName: nameController.text.trim().toLowerCase(),
           isActive: isActive,

@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/constants/sample_data.dart';
 import '../../core/models/app_models.dart';
 import '../../core/services/firebase_auth_service.dart';
 import '../../core/services/firebase_firestore_service.dart';
@@ -528,18 +527,6 @@ class AppController extends Notifier<AppState> {
       var snapshot = await _firestoreCatalog.loadCatalogSnapshot(
         includeInactive: includeInactive,
       );
-      if (snapshot == null) {
-        await _firestoreCatalog.seedInitialData(
-          categories: sampleCategories,
-          barangays: sampleBarangays,
-          banners: sampleBanners,
-          products: sampleProducts,
-          settings: const AppSettings(),
-        );
-        snapshot = await _firestoreCatalog.loadCatalogSnapshot(
-          includeInactive: includeInactive,
-        );
-      }
       if (snapshot == null) {
         return;
       }

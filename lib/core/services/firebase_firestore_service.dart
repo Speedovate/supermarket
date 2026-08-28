@@ -499,74 +499,6 @@ class FirestoreCatalogService {
         );
   }
 
-  Future<void> seedInitialData({
-    required List<Category> categories,
-    required List<Barangay> barangays,
-    required List<AppBanner> banners,
-    required List<Product> products,
-    required AppSettings settings,
-  }) async {
-    final batch = _firestore.batch();
-
-    for (var index = 0; index < categories.length; index++) {
-      final category = categories[index];
-      final ref = _firestore
-          .collection(FirebasePaths.categories)
-          .doc('${category.id}');
-      batch.set(ref, _categoryData(category, sortOrder: index));
-    }
-
-    for (final barangay in barangays) {
-      final ref = _firestore
-          .collection(FirebasePaths.barangays)
-          .doc('${barangay.id}');
-      batch.set(ref, _barangayData(barangay));
-    }
-
-    for (final banner in banners) {
-      final ref = _firestore.collection(FirebasePaths.banners).doc('${banner.id}');
-      batch.set(ref, _bannerData(banner));
-    }
-
-    for (final product in products) {
-      final ref = _firestore
-          .collection(FirebasePaths.products)
-          .doc('${product.id}');
-      batch.set(ref, _productData(product));
-    }
-
-    final settingsRef = _firestore
-        .collection(FirebasePaths.appSettings)
-        .doc(FirebasePaths.defaultSettingsDocumentId);
-    batch.set(settingsRef, _settingsData(settings));
-    batch.set(
-      _catalogMetaRef,
-      _catalogMetaData(
-        categories: true,
-        barangays: true,
-        banners: true,
-        products: true,
-        settings: true,
-      ),
-      SetOptions(merge: true),
-    );
-    batch.set(
-      _categoriesManifestRef,
-      _manifestData(categories.map((item) => (item.id, item.updatedAt))),
-    );
-    batch.set(
-      _barangaysManifestRef,
-      _manifestData(barangays.map((item) => (item.id, item.updatedAt))),
-    );
-    batch.set(
-      _bannersManifestRef,
-      _manifestData(banners.map((item) => (item.id, item.updatedAt))),
-    );
-    batch.set(_productsManifestRef, _productsManifestData(products));
-
-    await batch.commit();
-  }
-
   Future<void> saveProduct(Product product) async {
     final batch = _firestore.batch();
     batch.set(
@@ -865,6 +797,222 @@ class FirestoreCatalogService {
       }, SetOptions(merge: true));
 
       return reservedOrderId;
+    });
+  }
+
+  Future<int> reserveNextCategoryId({int fallbackNextCategoryId = 1}) async {
+    final reserved = await reserveNextCategoryIds(
+      count: 1,
+      fallbackNextCategoryId: fallbackNextCategoryId,
+    );
+    return reserved.first;
+  }
+
+  Future<List<int>> reserveNextCategoryIds({
+    required int count,
+    int fallbackNextCategoryId = 1,
+  }) async {
+    if (count <= 0) {
+      return const [];
+    }
+    final counterRef = _firestore
+        .collection(FirebasePaths.system)
+        .doc(FirebasePaths.categoriesCounterDocumentId);
+    final latestCategoryQuery = await _firestore
+        .collection(FirebasePaths.categories)
+        .orderBy('id', descending: true)
+        .limit(1)
+        .get();
+    final remoteNextCategoryId = latestCategoryQuery.docs.isEmpty
+        ? 1
+        : (_coerceInt(latestCategoryQuery.docs.first.data()['id']) + 1);
+    final baselineNextCategoryId = math.max(
+      1,
+      remoteNextCategoryId > 0 ? remoteNextCategoryId : fallbackNextCategoryId,
+    );
+
+    return _firestore.runTransaction<List<int>>((transaction) async {
+      final snapshot = await transaction.get(counterRef);
+      final data = snapshot.data();
+      final currentNextCategoryId = data == null
+          ? 0
+          : _coerceInt(data['nextCategoryId']);
+      final reservedStartId = currentNextCategoryId > 0
+          ? math.max(currentNextCategoryId, baselineNextCategoryId)
+          : baselineNextCategoryId;
+      final reservedIds = List<int>.generate(
+        count,
+        (index) => reservedStartId + index,
+      );
+
+      transaction.set(counterRef, {
+        'nextCategoryId': reservedStartId + count,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+
+      return reservedIds;
+    });
+  }
+
+  Future<int> reserveNextBarangayId({int fallbackNextBarangayId = 1}) async {
+    final reserved = await reserveNextBarangayIds(
+      count: 1,
+      fallbackNextBarangayId: fallbackNextBarangayId,
+    );
+    return reserved.first;
+  }
+
+  Future<List<int>> reserveNextBarangayIds({
+    required int count,
+    int fallbackNextBarangayId = 1,
+  }) async {
+    if (count <= 0) {
+      return const [];
+    }
+    final counterRef = _firestore
+        .collection(FirebasePaths.system)
+        .doc(FirebasePaths.barangaysCounterDocumentId);
+    final latestBarangayQuery = await _firestore
+        .collection(FirebasePaths.barangays)
+        .orderBy('id', descending: true)
+        .limit(1)
+        .get();
+    final remoteNextBarangayId = latestBarangayQuery.docs.isEmpty
+        ? 1
+        : (_coerceInt(latestBarangayQuery.docs.first.data()['id']) + 1);
+    final baselineNextBarangayId = math.max(
+      1,
+      remoteNextBarangayId > 0 ? remoteNextBarangayId : fallbackNextBarangayId,
+    );
+
+    return _firestore.runTransaction<List<int>>((transaction) async {
+      final snapshot = await transaction.get(counterRef);
+      final data = snapshot.data();
+      final currentNextBarangayId = data == null
+          ? 0
+          : _coerceInt(data['nextBarangayId']);
+      final reservedStartId = currentNextBarangayId > 0
+          ? math.max(currentNextBarangayId, baselineNextBarangayId)
+          : baselineNextBarangayId;
+      final reservedIds = List<int>.generate(
+        count,
+        (index) => reservedStartId + index,
+      );
+
+      transaction.set(counterRef, {
+        'nextBarangayId': reservedStartId + count,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+
+      return reservedIds;
+    });
+  }
+
+  Future<int> reserveNextBannerId({int fallbackNextBannerId = 1}) async {
+    final reserved = await reserveNextBannerIds(
+      count: 1,
+      fallbackNextBannerId: fallbackNextBannerId,
+    );
+    return reserved.first;
+  }
+
+  Future<List<int>> reserveNextBannerIds({
+    required int count,
+    int fallbackNextBannerId = 1,
+  }) async {
+    if (count <= 0) {
+      return const [];
+    }
+    final counterRef = _firestore
+        .collection(FirebasePaths.system)
+        .doc(FirebasePaths.bannersCounterDocumentId);
+    final latestBannerQuery = await _firestore
+        .collection(FirebasePaths.banners)
+        .orderBy('id', descending: true)
+        .limit(1)
+        .get();
+    final remoteNextBannerId = latestBannerQuery.docs.isEmpty
+        ? 1
+        : (_coerceInt(latestBannerQuery.docs.first.data()['id']) + 1);
+    final baselineNextBannerId = math.max(
+      1,
+      remoteNextBannerId > 0 ? remoteNextBannerId : fallbackNextBannerId,
+    );
+
+    return _firestore.runTransaction<List<int>>((transaction) async {
+      final snapshot = await transaction.get(counterRef);
+      final data = snapshot.data();
+      final currentNextBannerId = data == null
+          ? 0
+          : _coerceInt(data['nextBannerId']);
+      final reservedStartId = currentNextBannerId > 0
+          ? math.max(currentNextBannerId, baselineNextBannerId)
+          : baselineNextBannerId;
+      final reservedIds = List<int>.generate(
+        count,
+        (index) => reservedStartId + index,
+      );
+
+      transaction.set(counterRef, {
+        'nextBannerId': reservedStartId + count,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+
+      return reservedIds;
+    });
+  }
+
+  Future<int> reserveNextProductId({int fallbackNextProductId = 1}) async {
+    final reserved = await reserveNextProductIds(
+      count: 1,
+      fallbackNextProductId: fallbackNextProductId,
+    );
+    return reserved.first;
+  }
+
+  Future<List<int>> reserveNextProductIds({
+    required int count,
+    int fallbackNextProductId = 1,
+  }) async {
+    if (count <= 0) {
+      return const [];
+    }
+    final counterRef = _firestore
+        .collection(FirebasePaths.system)
+        .doc(FirebasePaths.productsCounterDocumentId);
+    final latestProductQuery = await _firestore
+        .collection(FirebasePaths.products)
+        .orderBy('id', descending: true)
+        .limit(1)
+        .get();
+    final remoteNextProductId = latestProductQuery.docs.isEmpty
+        ? 1
+        : (_coerceInt(latestProductQuery.docs.first.data()['id']) + 1);
+    final baselineNextProductId = math.max(
+      1,
+      remoteNextProductId > 0 ? remoteNextProductId : fallbackNextProductId,
+    );
+
+    return _firestore.runTransaction<List<int>>((transaction) async {
+      final snapshot = await transaction.get(counterRef);
+      final data = snapshot.data();
+      final currentNextProductId = data == null
+          ? 0
+          : _coerceInt(data['nextProductId']);
+      final reservedStartId = currentNextProductId > 0
+          ? math.max(currentNextProductId, baselineNextProductId)
+          : baselineNextProductId;
+      final reservedIds = List<int>.generate(
+        count,
+        (index) => reservedStartId + index,
+      );
+
+      transaction.set(counterRef, {
+        'nextProductId': reservedStartId + count,
+        'updatedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+
+      return reservedIds;
     });
   }
 

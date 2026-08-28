@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
+import '../../../core/services/firebase_firestore_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
@@ -852,15 +853,22 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
 
               final now = DateTime.now();
               final currentBarangays = ref.read(appControllerProvider).barangays;
-              final nextId =
+              final fallbackNextBarangayId =
                   (currentBarangays.map((item) => item.id).fold<int>(0, _mathMax)) + 1;
               final cutoffMinutes = (selectedTime.hour * 60) + selectedTime.minute;
 
               setState(() => isSubmitting = true);
               try {
+                final resolvedBarangayId =
+                    barangay?.id ??
+                    await ref
+                        .read(firestoreCatalogServiceProvider)
+                        .reserveNextBarangayId(
+                          fallbackNextBarangayId: fallbackNextBarangayId,
+                        );
                 await ref.read(appControllerProvider.notifier).saveBarangay(
                   Barangay(
-                    id: barangay?.id ?? nextId,
+                    id: resolvedBarangayId,
                     name: trimmedName,
                     isActive: selectedActive,
                     cutoffWeekday: selectedWeekday,

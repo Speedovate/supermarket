@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
+import '../../../core/services/firebase_firestore_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../app_state/app_controller.dart';
@@ -1041,23 +1042,30 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
     WidgetRef ref, {
     AppBanner? initial,
   }) async {
-    final nextId =
-        initial?.id ??
-        ((ref
-                    .read(appControllerProvider)
-                    .banners
-                    .map((item) => item.id)
-                    .fold<int>(0, (max, value) => value > max ? value : max)) +
-                1);
     final banner = await showAdminBannerDialog(
       context,
       initial: initial,
-      nextId: nextId,
+      nextId: initial?.id ?? 0,
     );
     if (banner == null) {
       return;
     }
-    await ref.read(appControllerProvider.notifier).saveBanner(banner);
+    final currentState = ref.read(appControllerProvider);
+    final fallbackNextBannerId =
+        (currentState.banners
+                .map((item) => item.id)
+                .fold<int>(0, (max, value) => value > max ? value : max)) +
+            1;
+    final resolvedBanner = initial == null
+        ? banner.copyWith(
+            id: await ref
+                .read(firestoreCatalogServiceProvider)
+                .reserveNextBannerId(
+                  fallbackNextBannerId: fallbackNextBannerId,
+                ),
+          )
+        : banner;
+    await ref.read(appControllerProvider.notifier).saveBanner(resolvedBanner);
   }
 }
 

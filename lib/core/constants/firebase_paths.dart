@@ -11,6 +11,10 @@ class FirebasePaths {
   static const appSettings = 'app_settings';
   static const defaultSettingsDocumentId = 'default';
   static const ordersCounterDocumentId = 'orders_counter';
+  static const categoriesCounterDocumentId = 'categories_counter';
+  static const barangaysCounterDocumentId = 'barangays_counter';
+  static const bannersCounterDocumentId = 'banners_counter';
+  static const productsCounterDocumentId = 'products_counter';
   static const catalogMetaDocumentId = 'catalog_meta';
   static const categoriesManifestDocumentId = 'categories_manifest';
   static const barangaysManifestDocumentId = 'barangays_manifest';

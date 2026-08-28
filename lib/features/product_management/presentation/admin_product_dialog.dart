@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
+import '../../../core/services/firebase_firestore_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/product_image_upload.dart';
 import '../../../core/widgets/common_widgets.dart';
@@ -53,16 +54,23 @@ Future<Product?> showAdminProductDialog(
     try {
       final parsedPrice =
           parsePesosValueToCentavos(priceController.text.trim()) ?? 0;
+      final fallbackNextProductId =
+          (state.products
+                  .map((item) => item.id)
+                  .fold<int>(0, (max, value) => value > max ? value : max)) +
+              1;
+      final resolvedProductId =
+          initial?.id ??
+          await ref
+              .read(firestoreCatalogServiceProvider)
+              .reserveNextProductId(
+                fallbackNextProductId: fallbackNextProductId,
+              );
       final product = Product(
         active: isActive,
         createdAt: initial?.createdAt ?? DateTime.now(),
         updatedAt: DateTime.now(),
-        id:
-            initial?.id ??
-            ((state.products
-                    .map((item) => item.id)
-                    .fold<int>(0, (max, value) => value > max ? value : max)) +
-                1),
+        id: resolvedProductId,
         name: nameController.text.trim(),
         category: selectedCategory ?? 0,
         details: detailsController.text.trim(),

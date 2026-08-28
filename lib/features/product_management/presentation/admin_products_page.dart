@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
+import '../../../core/services/firebase_firestore_service.dart';
 import '../../../core/utils/catalog_excel.dart';
 import '../../../core/utils/download_bytes.dart';
 import '../../../core/utils/pick_excel_file.dart';
@@ -458,15 +459,67 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
             'Additional import prevents duplicate name + details combinations. Found ${parts.join(' and ')}.',
           );
         }
-        importStage = 'saving imported categories';
+        final existingCategoryIdByNormalizedName = {
+          for (final category in currentState.categories)
+            category.normalizedName: category.id,
+        };
+        final importedCategoryLocalIdToFinalId = <int, int>{};
+        final categoriesToSave = <Category>[];
+        final newImportedCategories = resolvedImport.categories.where((category) {
+          return !existingCategoryIdByNormalizedName.containsKey(
+            category.normalizedName,
+          );
+        }).toList();
+        importStage = 'reserving imported category IDs';
+        final reservedCategoryIds = await ref
+            .read(firestoreCatalogServiceProvider)
+            .reserveNextCategoryIds(
+              count: newImportedCategories.length,
+              fallbackNextCategoryId: currentState.categories.isEmpty
+                  ? 1
+                  : currentState.categories.map((item) => item.id).reduce(math.max) + 1,
+            );
+        var reservedCategoryIndex = 0;
         for (final category in resolvedImport.categories) {
+          final existingCategoryId =
+              existingCategoryIdByNormalizedName[category.normalizedName];
+          if (existingCategoryId != null) {
+            importedCategoryLocalIdToFinalId[category.id] = existingCategoryId;
+            continue;
+          }
+          final finalCategoryId = reservedCategoryIds[reservedCategoryIndex++];
+          importedCategoryLocalIdToFinalId[category.id] = finalCategoryId;
+          categoriesToSave.add(category.copyWith(id: finalCategoryId));
+        }
+        importStage = 'saving imported categories';
+        for (final category in categoriesToSave) {
           if (existingCategoryIds.contains(category.id)) {
             continue;
           }
           await ref.read(appControllerProvider.notifier).saveCategory(category);
         }
+        importStage = 'reserving imported product IDs';
+        final reservedProductIds = await ref
+            .read(firestoreCatalogServiceProvider)
+            .reserveNextProductIds(
+              count: resolvedImport.products.length,
+              fallbackNextProductId: currentState.products.isEmpty
+                  ? 1
+                  : currentState.products.map((item) => item.id).reduce(math.max) + 1,
+            );
+        final productsToSave = <Product>[
+          for (var index = 0; index < resolvedImport.products.length; index++)
+            resolvedImport.products[index].copyWith(
+              id: reservedProductIds[index],
+              category: resolvedImport.products[index].category <= 0
+                  ? 0
+                  : (importedCategoryLocalIdToFinalId[
+                          resolvedImport.products[index].category] ??
+                      resolvedImport.products[index].category),
+            ),
+        ];
         importStage = 'saving imported products';
-        for (final product in resolvedImport.products) {
+        for (final product in productsToSave) {
           await ref.read(appControllerProvider.notifier).saveProduct(product);
         }
       }
