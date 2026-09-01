@@ -764,22 +764,10 @@ class FirestoreCatalogService {
     );
   }
 
-  Future<int> reserveNextOrderId({int fallbackNextOrderId = 1}) async {
+  Future<int> reserveNextOrderId() async {
     final counterRef = _firestore
         .collection(FirebasePaths.system)
         .doc(FirebasePaths.ordersCounterDocumentId);
-    final latestOrderQuery = await _firestore
-        .collection(FirebasePaths.orders)
-        .orderBy('id', descending: true)
-        .limit(1)
-        .get();
-    final remoteNextOrderId = latestOrderQuery.docs.isEmpty
-        ? 1
-        : (_coerceInt(latestOrderQuery.docs.first.data()['id']) + 1);
-    final baselineNextOrderId = math.max(
-      1,
-      remoteNextOrderId > 0 ? remoteNextOrderId : fallbackNextOrderId,
-    );
 
     return _firestore.runTransaction<int>((transaction) async {
       final snapshot = await transaction.get(counterRef);
@@ -788,8 +776,8 @@ class FirestoreCatalogService {
           ? 0
           : _coerceInt(data['nextOrderId']);
       final reservedOrderId = currentNextOrderId > 0
-          ? math.max(currentNextOrderId, baselineNextOrderId)
-          : baselineNextOrderId;
+          ? currentNextOrderId
+          : 1;
 
       transaction.set(counterRef, {
         'nextOrderId': reservedOrderId + 1,

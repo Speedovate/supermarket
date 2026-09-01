@@ -62,14 +62,6 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
     createdAtFilter = _parseRouteDate(uri.queryParameters['filters[created_at]']);
     updatedAtFilter = _parseRouteDate(uri.queryParameters['filters[updated_at]']);
     statusFilter = _normalizeNullable(uri.queryParameters['filters[status]']);
-    debugPrint(
-      '[AdminBarangaysPage] applyRouteFilters '
-      'route=${uri.toString()} '
-      'query="$query" '
-      'createdAt=$createdAtFilter '
-      'updatedAt=$updatedAtFilter '
-      'status=$statusFilter',
-    );
   }
 
   void _setFilters(VoidCallback update) {
@@ -142,17 +134,6 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
           matchesUpdatedAt &&
           matchesStatus;
     }).toList();
-    debugPrint(
-      '[AdminBarangaysPage] build '
-      'stateBarangays=${state.barangays.length} '
-      'sortedBarangays=${barangays.length} '
-      'filteredBarangays=${filteredBarangays.length} '
-      'query="$query" '
-      'createdAt=$createdAtFilter '
-      'updatedAt=$updatedAtFilter '
-      'status=$statusFilter '
-      'ids=${filteredBarangays.map((item) => item.id).join(",")}',
-    );
 
     final widths = _computeBarangayColumnWidths(
       screenWidth: screenWidth,

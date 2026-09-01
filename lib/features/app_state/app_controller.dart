@@ -1626,15 +1626,17 @@ class AppController extends Notifier<AppState> {
       final currentOrders = [...state.orders];
       final currentCartTotalCentavos = state.cartTotalCentavos;
       final now = DateTime.now();
-      final fallbackNextOrderId =
-          currentOrders.fold<int>(
-            0,
-            (maxId, order) => math.max(maxId, order.id),
-          ) +
-          1;
-      final orderId = await _firestoreCatalog.reserveNextOrderId(
-        fallbackNextOrderId: fallbackNextOrderId,
+      final authUser = _auth.currentUser;
+      debugPrint(
+        '[OrderSubmission] start '
+        'cartItems=${currentCart.length} '
+        'signedIn=${authUser != null} '
+        'uid=${authUser?.uid ?? 'none'} '
+        'anonymous=${authUser?.isAnonymous ?? false}',
       );
+      debugPrint('[OrderSubmission] reserving order ID via system/orders_counter');
+      final orderId = await _firestoreCatalog.reserveNextOrderId();
+      debugPrint('[OrderSubmission] reserved orderId=$orderId');
       final normalizedCustomer = state.customerDraft.copyWith(
         normalizedMobileNumber: normalizePhoneNumber(
           state.customerDraft.mobileNumber,
@@ -1674,7 +1676,9 @@ class AppController extends Notifier<AppState> {
         products: items,
       );
 
+      debugPrint('[OrderSubmission] saving orders/$orderId');
       await _firestoreCatalog.saveOrder(order);
+      debugPrint('[OrderSubmission] saved orders/$orderId successfully');
       state = state.copyWith(
         orders: [order, ...currentOrders],
         cart: const [],
@@ -1690,15 +1694,23 @@ class AppController extends Notifier<AppState> {
       }
       state = state.copyWith(submittingOrder: false);
       await _persist();
+      debugPrint('[OrderSubmission] completed orderId=$orderId');
       return orderId;
     } on FirebaseException catch (error) {
+      debugPrint(
+        '[OrderSubmission] FirebaseException '
+        'code=${error.code} '
+        'message=${error.message ?? 'none'} '
+        'plugin=${error.plugin}',
+      );
       state = state.copyWith(
         submittingOrder: false,
         errorMessage: _mapFirebaseOperationError(error),
       );
       await _persist();
       return null;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('[OrderSubmission] unexpected error=$error\n$stackTrace');
       state = state.copyWith(
         submittingOrder: false,
         errorMessage: 'Unable to submit your order right now.',
