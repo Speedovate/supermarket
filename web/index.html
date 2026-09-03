@@ -23,7 +23,7 @@
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   >
   <meta name="description" content="Andrew's Supermarket.">
-  <meta name="theme-color" content="#2F3DBF">
+  <meta name="theme-color" content="#FFFFFF">
   <meta name="app-build-version" content="__APP_BUILD_VERSION__">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Andrew's Supermarket">
@@ -333,11 +333,13 @@
         }
         themeColorMeta.setAttribute(
           'content',
-          isSplashVisible()
-            ? splashThemeColor
-            : (isAppleStandalonePwa || !hasAuthenticatedAdminSession
-                ? clientThemeColor
-                : adminThemeColor),
+          isAppleStandalonePwa
+            ? clientThemeColor
+            : (isSplashVisible()
+                ? splashThemeColor
+                : (hasAuthenticatedAdminSession
+                    ? adminThemeColor
+                    : clientThemeColor)),
         );
       }
 

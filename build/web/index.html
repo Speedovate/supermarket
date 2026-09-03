@@ -23,8 +23,8 @@
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
   >
   <meta name="description" content="Andrew's Supermarket.">
-  <meta name="theme-color" content="#2F3DBF">
-  <meta name="app-build-version" content="20260904024619-7c564e5">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="app-build-version" content="20260904025031-ed9cd1a">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Andrew's Supermarket">
   <meta property="og:title" content="Andrew's Supermarket | Order Now">
@@ -44,13 +44,13 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Andrew's Supermarket">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png?v=20260904024619-7c564e5">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png?v=20260904025031-ed9cd1a">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png?v=20260904024619-7c564e5"/>
+  <link rel="icon" type="image/png" href="favicon.png?v=20260904025031-ed9cd1a"/>
 
   <title>Andrew's Supermarket</title>
-  <link rel="manifest" href="manifest.json?v=20260904024619-7c564e5">
+  <link rel="manifest" href="manifest.json?v=20260904025031-ed9cd1a">
   <style>
     :root {
       --startup-logo-width: 180px;
@@ -284,9 +284,9 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script>
-    window.20260904024619-7c564e5 = '20260904024619-7c564e5';
+    window.20260904025031-ed9cd1a = '20260904025031-ed9cd1a';
   </script>
-  <script src="flutter_bootstrap.js?v=20260904024619-7c564e5" async></script>
+  <script src="flutter_bootstrap.js?v=20260904025031-ed9cd1a" async></script>
   <script>
     function getChromeOpenUrl() {
       const href = window.location.href;
@@ -333,11 +333,13 @@
         }
         themeColorMeta.setAttribute(
           'content',
-          isSplashVisible()
-            ? splashThemeColor
-            : (isAppleStandalonePwa || !hasAuthenticatedAdminSession
-                ? clientThemeColor
-                : adminThemeColor),
+          isAppleStandalonePwa
+            ? clientThemeColor
+            : (isSplashVisible()
+                ? splashThemeColor
+                : (hasAuthenticatedAdminSession
+                    ? adminThemeColor
+                    : clientThemeColor)),
         );
       }
 
