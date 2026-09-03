@@ -71,6 +71,12 @@ class ProductManifestSnapshot {
   bool get hasAnyData => updatedAt != null || itemUpdatedAts.isNotEmpty;
 }
 
+class OrdersMetaSnapshot {
+  const OrdersMetaSnapshot({this.updatedAt});
+
+  final DateTime? updatedAt;
+}
+
 class FirestoreCatalogService {
   FirestoreCatalogService(this._firestore);
 
@@ -79,6 +85,10 @@ class FirestoreCatalogService {
   DocumentReference<Map<String, dynamic>> get _catalogMetaRef => _firestore
       .collection(FirebasePaths.system)
       .doc(FirebasePaths.catalogMetaDocumentId);
+
+  DocumentReference<Map<String, dynamic>> get _ordersMetaRef => _firestore
+      .collection(FirebasePaths.system)
+      .doc(FirebasePaths.ordersMetaDocumentId);
 
   DocumentReference<Map<String, dynamic>> get _categoriesManifestRef =>
       _firestore
@@ -156,6 +166,21 @@ class FirestoreCatalogService {
         settingsUpdatedAt: _parseMetaDate(normalized['settingsUpdatedAt']),
       );
       return meta.hasAnyData ? meta : null;
+    });
+  }
+
+  Future<OrdersMetaSnapshot?> loadOrdersMeta() async {
+    final snapshot = await _ordersMetaRef.get();
+    final updatedAt = _parseMetaDate(snapshot.data()?['updatedAt']);
+    return updatedAt == null ? null : OrdersMetaSnapshot(updatedAt: updatedAt);
+  }
+
+  Stream<OrdersMetaSnapshot?> watchOrdersMeta() {
+    return _ordersMetaRef.snapshots().map((snapshot) {
+      final updatedAt = _parseMetaDate(snapshot.data()?['updatedAt']);
+      return updatedAt == null
+          ? null
+          : OrdersMetaSnapshot(updatedAt: updatedAt);
     });
   }
 
@@ -779,10 +804,16 @@ class FirestoreCatalogService {
   }
 
   Future<void> saveOrder(OrderRequest order) async {
-    await _firestore
-        .collection(FirebasePaths.orders)
-        .doc('${order.id}')
-        .set(_orderData(order));
+    final batch = _firestore.batch();
+    batch.set(
+      _firestore.collection(FirebasePaths.orders).doc('${order.id}'),
+      _orderData(order),
+    );
+    batch.set(_ordersMetaRef, {
+      'updatedAt': DateTime.now().toIso8601String(),
+      'lastOrderId': order.id,
+    });
+    await batch.commit();
   }
 
   Future<int> reserveNextOrderId() async {

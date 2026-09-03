@@ -65,6 +65,7 @@ service cloud.firestore {
     match /system/{documentId} {
       allow get: if
         documentId == 'orders_counter' ||
+        documentId == 'orders_meta' ||
         documentId == 'catalog_meta' ||
         documentId == 'categories_manifest' ||
         documentId == 'barangays_manifest' ||
@@ -89,6 +90,13 @@ service cloud.firestore {
               request.resource.data.nextOrderId == resource.data.nextOrderId + 1
             )
           )
+        ) ||
+        (
+          documentId == 'orders_meta' &&
+          request.resource.data.keys().hasOnly(['updatedAt', 'lastOrderId']) &&
+          request.resource.data.updatedAt is string &&
+          request.resource.data.lastOrderId is int &&
+          request.resource.data.lastOrderId >= 1
         );
     }
 

@@ -57,6 +57,7 @@ class AppState {
     this.productsMetaUpdatedAt,
     this.cart = const [],
     this.orders = const [],
+    this.ordersMetaUpdatedAt,
     this.settings = const AppSettings(),
     this.settingsMetaUpdatedAt,
     this.customerDraft = const CustomerDraft(),
@@ -80,6 +81,7 @@ class AppState {
   final DateTime? productsMetaUpdatedAt;
   final List<CartItem> cart;
   final List<OrderRequest> orders;
+  final DateTime? ordersMetaUpdatedAt;
   final AppSettings settings;
   final DateTime? settingsMetaUpdatedAt;
   final CustomerDraft customerDraft;
@@ -107,6 +109,7 @@ class AppState {
     Object? productsMetaUpdatedAt = _sentinel,
     List<CartItem>? cart,
     List<OrderRequest>? orders,
+    Object? ordersMetaUpdatedAt = _sentinel,
     AppSettings? settings,
     Object? settingsMetaUpdatedAt = _sentinel,
     CustomerDraft? customerDraft,
@@ -142,6 +145,9 @@ class AppState {
           : productsMetaUpdatedAt as DateTime?,
       cart: cart ?? this.cart,
       orders: orders ?? this.orders,
+      ordersMetaUpdatedAt: ordersMetaUpdatedAt == _sentinel
+          ? this.ordersMetaUpdatedAt
+          : ordersMetaUpdatedAt as DateTime?,
       settings: settings ?? this.settings,
       settingsMetaUpdatedAt: settingsMetaUpdatedAt == _sentinel
           ? this.settingsMetaUpdatedAt
@@ -165,6 +171,7 @@ class AppController extends Notifier<AppState> {
   StreamSubscription<List<Product>>? _productsSubscription;
   StreamSubscription<AppSettings?>? _settingsSubscription;
   StreamSubscription<List<OrderRequest>>? _ordersSubscription;
+  StreamSubscription<OrdersMetaSnapshot?>? _adminOrdersMetaSubscription;
   StreamSubscription<CatalogMetaSnapshot?>? _catalogMetaSubscription;
   Timer? _catalogRefreshRetryTimer;
   Timer? _ordersRefreshRetryTimer;
@@ -305,6 +312,7 @@ class AppController extends Notifier<AppState> {
         unawaited(_productsSubscription?.cancel());
         unawaited(_settingsSubscription?.cancel());
         unawaited(_ordersSubscription?.cancel());
+        unawaited(_adminOrdersMetaSubscription?.cancel());
         _catalogRefreshRetryTimer?.cancel();
         _ordersRefreshRetryTimer?.cancel();
       });
@@ -331,78 +339,71 @@ class AppController extends Notifier<AppState> {
       hasActiveAdminContext: hasActiveAdminContext,
       trackedPhones: trackedPhones,
     );
-    if (_ordersSubscription != null &&
-        _ordersRealtimeScopeKey == nextScopeKey) {
+    final hasActiveSubscription = hasActiveAdminContext
+        ? _adminOrdersMetaSubscription != null
+        : _ordersSubscription != null;
+    if (hasActiveSubscription && _ordersRealtimeScopeKey == nextScopeKey) {
       return;
     }
     if (!hasActiveAdminContext) {
       _resetOrdersRefreshRetry();
     }
-    unawaited(_ordersSubscription?.cancel());
     _ordersRealtimeScopeKey = nextScopeKey;
-    final stream = hasActiveAdminContext
-        ? _firestoreCatalog.watchOrders()
-        : _firestoreCatalog.watchOrdersForNormalizedPhones(trackedPhones);
+    if (hasActiveAdminContext) {
+      unawaited(_ordersSubscription?.cancel());
+      _ordersSubscription = null;
+      unawaited(_adminOrdersMetaSubscription?.cancel());
+      _adminOrdersMetaSubscription = _firestoreCatalog.watchOrdersMeta().listen(
+        (meta) {
+          if (meta == null ||
+              !_sameMoment(meta.updatedAt, state.ordersMetaUpdatedAt)) {
+            unawaited(_refreshOrdersFromFirebase(remoteMeta: meta));
+          }
+        },
+        onError: _handleOrdersRealtimeSyncError,
+      );
+      unawaited(_refreshOrdersFromFirebase());
+      return;
+    }
+
+    unawaited(_adminOrdersMetaSubscription?.cancel());
+    _adminOrdersMetaSubscription = null;
+    unawaited(_ordersSubscription?.cancel());
+    final stream = _firestoreCatalog.watchOrdersForNormalizedPhones(
+      trackedPhones,
+    );
     _ordersSubscription = stream.listen((orders) async {
       try {
-        final nextOrders = hasActiveAdminContext
-            ? orders
-            : _mergeOrdersPreservingLocal(
-                existing: state.orders,
-                incoming: orders,
-                trackedPhones: trackedPhones,
-              );
-        state = state.copyWith(
-          orders: nextOrders,
-          products: hasActiveAdminContext
-              ? _reconcileProductSoldWithOrders(
-                  products: state.products,
-                  orders: nextOrders,
-                  shouldPersistRemotely: true,
-                ).products
-              : state.products,
+        final nextOrders = _mergeOrdersPreservingLocal(
+          existing: state.orders,
+          incoming: orders,
+          trackedPhones: trackedPhones,
         );
+        state = state.copyWith(orders: nextOrders);
         await _persist();
-        if (hasActiveAdminContext) {
-          final soldSync = _reconcileProductSoldWithOrders(
-            products: state.products,
-            orders: nextOrders,
-            shouldPersistRemotely: true,
-          );
-          if (soldSync.changedProducts.isNotEmpty) {
-            final now = DateTime.now();
-            state = state.copyWith(
-              products: soldSync.products,
-              productsMetaUpdatedAt: now,
-              catalogHydrated: true,
-            );
-            await _persist();
-            await _firestoreCatalog.saveProducts(soldSync.changedProducts);
-            await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
-          }
-        }
       } catch (error, stackTrace) {
         _handleOrdersRealtimeSyncError(error, stackTrace);
       }
     }, onError: _handleOrdersRealtimeSyncError);
-    if (hasActiveAdminContext) {
-      // The listener can emit Firestore's local cache first. Reconcile once
-      // from the server so the admin list does not remain stale.
-      unawaited(_refreshOrdersFromFirebase());
-    }
   }
 
   bool _hasOrdersRealtimeCoverage() {
-    if (_ordersSubscription == null) {
+    final hasActiveAdminContext = _hasActiveAdminContext(state.adminSession);
+    if (hasActiveAdminContext
+        ? _adminOrdersMetaSubscription == null
+        : _ordersSubscription == null) {
       return false;
     }
-    final hasActiveAdminContext = _hasActiveAdminContext(state.adminSession);
     final trackedPhones = _customerLookupPhones();
     return _ordersRealtimeScopeKey ==
         _buildOrdersRealtimeScopeKey(
           hasActiveAdminContext: hasActiveAdminContext,
           trackedPhones: trackedPhones,
         );
+  }
+
+  bool _sameMoment(DateTime? first, DateTime? second) {
+    return first != null && second != null && first.isAtSameMomentAs(second);
   }
 
   void _handleCatalogRealtimeSyncError(Object error, StackTrace stackTrace) {
@@ -505,6 +506,7 @@ class AppController extends Notifier<AppState> {
       products: const [],
       productsMetaUpdatedAt: null,
       orders: const [],
+      ordersMetaUpdatedAt: null,
       settings: const AppSettings(),
       settingsMetaUpdatedAt: null,
       cart: const [],
@@ -560,6 +562,7 @@ class AppController extends Notifier<AppState> {
           persisted.productsMetaUpdatedAt ??
           _latestProductUpdatedAt(persisted.products),
       orders: sanitizedOrders,
+      ordersMetaUpdatedAt: persisted.ordersMetaUpdatedAt,
       settings: _normalizeSettings(persisted.settings),
       settingsMetaUpdatedAt:
           persisted.settingsMetaUpdatedAt ??
@@ -2499,11 +2502,21 @@ class AppController extends Notifier<AppState> {
     await _persist();
   }
 
-  Future<void> _refreshOrdersFromFirebase() async {
+  Future<void> _refreshOrdersFromFirebase({
+    OrdersMetaSnapshot? remoteMeta,
+  }) async {
     try {
       final adminSession = state.adminSession;
       final hasActiveAdminContext = _hasActiveAdminContext(adminSession);
       final trackedPhones = _customerLookupPhones();
+      final resolvedMeta = hasActiveAdminContext
+          ? remoteMeta ?? await _firestoreCatalog.loadOrdersMeta()
+          : null;
+      if (hasActiveAdminContext &&
+          resolvedMeta != null &&
+          _sameMoment(resolvedMeta.updatedAt, state.ordersMetaUpdatedAt)) {
+        return;
+      }
       final remoteOrders = hasActiveAdminContext
           ? await _firestoreCatalog.loadOrders()
           : await _firestoreCatalog.loadOrdersForNormalizedPhones(
@@ -2518,6 +2531,9 @@ class AppController extends Notifier<AppState> {
             );
       state = state.copyWith(
         orders: nextOrders,
+        ordersMetaUpdatedAt: hasActiveAdminContext
+            ? resolvedMeta?.updatedAt
+            : state.ordersMetaUpdatedAt,
         products: hasActiveAdminContext
             ? _reconcileProductSoldWithOrders(
                 products: state.products,
@@ -2833,6 +2849,7 @@ class AppController extends Notifier<AppState> {
           products: persistedProducts,
           productsMetaUpdatedAt: persistedProductsMetaUpdatedAt,
           orders: state.orders,
+          ordersMetaUpdatedAt: state.ordersMetaUpdatedAt,
           settings: state.settings,
           settingsMetaUpdatedAt: state.settingsMetaUpdatedAt,
           cart: state.cart,

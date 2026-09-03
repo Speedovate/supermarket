@@ -71,8 +71,7 @@ class Category {
           ? map['id'] as int
           : int.tryParse('${map['id']}') ?? 0,
       name: name,
-      normalizedName:
-          (map['normalizedName'] as String? ?? '').trim().isNotEmpty
+      normalizedName: (map['normalizedName'] as String? ?? '').trim().isNotEmpty
           ? (map['normalizedName'] as String).trim()
           : name.toLowerCase(),
       isActive:
@@ -82,9 +81,9 @@ class Category {
       sortOrder: map['sortOrder'] is int
           ? map['sortOrder'] as int
           : int.tryParse('${map['sortOrder']}') ??
-              (map['id'] is int
-                  ? map['id'] as int
-                  : int.tryParse('${map['id']}') ?? 0),
+                (map['id'] is int
+                    ? map['id'] as int
+                    : int.tryParse('${map['id']}') ?? 0),
     );
   }
 }
@@ -1241,9 +1240,7 @@ class AdminSession {
       uid: map['uid'] as String,
       email: map['email'] as String,
       displayName:
-          (map['name'] as String?) ??
-          (map['displayName'] as String?) ??
-          '',
+          (map['name'] as String?) ?? (map['displayName'] as String?) ?? '',
       createdAt: (map['created_at'] ?? map['createdAt']) == null
           ? null
           : DateTime.parse('${map['created_at'] ?? map['createdAt']}'),
@@ -1267,6 +1264,7 @@ class PersistedData {
     required this.products,
     this.productsMetaUpdatedAt,
     required this.orders,
+    this.ordersMetaUpdatedAt,
     required this.settings,
     this.settingsMetaUpdatedAt,
     required this.cart,
@@ -1287,6 +1285,7 @@ class PersistedData {
   final List<Product> products;
   final DateTime? productsMetaUpdatedAt;
   final List<OrderRequest> orders;
+  final DateTime? ordersMetaUpdatedAt;
   final AppSettings settings;
   final DateTime? settingsMetaUpdatedAt;
   final List<CartItem> cart;
@@ -1307,6 +1306,7 @@ class PersistedData {
     'products': products.map((item) => item.toMap()).toList(),
     'productsMetaUpdatedAt': productsMetaUpdatedAt?.toIso8601String(),
     'orders': orders.map((item) => item.toMap()).toList(),
+    'ordersMetaUpdatedAt': ordersMetaUpdatedAt?.toIso8601String(),
     'settings': settings.toMap(),
     'settingsMetaUpdatedAt': settingsMetaUpdatedAt?.toIso8601String(),
     'cart': cart.map((item) => item.toMap()).toList(),
@@ -1324,7 +1324,8 @@ class PersistedData {
       id: map['id'] is int
           ? map['id'] as int
           : int.tryParse('${map['id']}') ?? 1,
-      appBuildVersion: (map['appBuildVersion'] as String?)?.trim().isEmpty == true
+      appBuildVersion:
+          (map['appBuildVersion'] as String?)?.trim().isEmpty == true
           ? null
           : (map['appBuildVersion'] as String?)?.trim(),
       categories: (map['categories'] as List<dynamic>)
@@ -1365,6 +1366,9 @@ class PersistedData {
                 OrderRequest.fromMap(Map<String, dynamic>.from(item as Map)),
           )
           .toList(),
+      ordersMetaUpdatedAt: map['ordersMetaUpdatedAt'] == null
+          ? null
+          : DateTime.parse(map['ordersMetaUpdatedAt'] as String),
       settings: AppSettings.fromMap(
         Map<String, dynamic>.from(map['settings'] as Map),
       ),
