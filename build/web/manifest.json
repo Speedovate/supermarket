@@ -4,7 +4,7 @@
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
-    "theme_color": "#2F3DBF",
+    "theme_color": "#FFFFFF",
     "description": "Andrew's Supermarket",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,

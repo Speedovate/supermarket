@@ -42,7 +42,7 @@
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Andrew's Supermarket">
   <link rel="apple-touch-icon" href="icons/Icon-192.png?v=__APP_CACHE_BUSTER__">
 
@@ -320,6 +320,7 @@
       const adminThemeColor = '#2F3DBF';
       const clientThemeColor = '#FFFFFF';
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+      const isAppleStandalonePwa = window.navigator.standalone === true;
       let hasAuthenticatedAdminSession = false;
 
       function isSplashVisible() {
@@ -330,14 +331,13 @@
         if (!themeColorMeta) {
           return;
         }
-        const isAuthenticatedAdminRoute =
-          hasAuthenticatedAdminSession &&
-          window.location.pathname.startsWith('/admin');
         themeColorMeta.setAttribute(
           'content',
           isSplashVisible()
             ? splashThemeColor
-            : (isAuthenticatedAdminRoute ? adminThemeColor : clientThemeColor),
+            : (isAppleStandalonePwa || !hasAuthenticatedAdminSession
+                ? clientThemeColor
+                : adminThemeColor),
         );
       }
 
