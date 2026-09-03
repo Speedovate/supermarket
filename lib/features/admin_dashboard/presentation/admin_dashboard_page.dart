@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common_widgets.dart';
+import '../../app_state/app_controller.dart';
 import 'admin_dashboard_view_model.dart';
 
 class AdminDashboardPage extends ConsumerStatefulWidget {
@@ -27,6 +28,18 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
 
   DateTime? startDateFilter;
   DateTime? endDateFilter;
+  bool _loadingOrders = true;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(() async {
+      await ref.read(appControllerProvider.notifier).refreshFromFirebase();
+      if (mounted) {
+        setState(() => _loadingOrders = false);
+      }
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -97,284 +110,324 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
         '${vm.filteredSalesOrders} ${vm.filteredSalesOrders == 1 ? 'order' : 'orders'}';
     final chartWidth = math.max<double>(
       width - 64,
-      math.max<double>(680, (vm.salesPoints.length * 60).toDouble()),
+      math.max<double>(680, (vm.salesPoints.length * 92).toDouble()),
     );
 
-    return ListView(
-      children: [
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: metricColumns,
-            mainAxisSpacing: 20,
-            crossAxisSpacing: 20,
-            mainAxisExtent: 154,
-          ),
-          itemCount: metrics.length,
-          itemBuilder: (context, index) {
-            final metric = metrics[index];
-            const accent = AppColors.logoBlue;
-            const tint = Color(0xFFF2F6FF);
-            final route = switch (metric.label) {
-              'Orders' => '/admin/orders',
-              'Products' => '/admin/products',
-              'Best Sellers' =>
-                '/admin/products?filters[status]=active&filters[sold]=many_few',
-              'Categories' => '/admin/categories',
-              _ => '/admin/dashboard',
-            };
-            return MousePressable(
-              onTap: () => context.go(route),
-              borderRadius: BorderRadius.circular(22),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(28, 22, 28, 22),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: const Color(0xFFEFF2FA)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      metric.label,
-                      style: const TextStyle(
-                        color: accent,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        height: 1.15,
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 14,
-                      ),
-                      decoration: BoxDecoration(
-                        color: tint,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        NumberFormat.decimalPattern().format(metric.value),
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.displaySmall
-                            ?.copyWith(
-                              color: accent,
-                              fontWeight: FontWeight.w800,
-                              fontSize: metricValueFontSize,
-                              height: 1.05,
-                            ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 20),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The scaffold already removes the mobile header and safe areas. Scale
+        // the dashboard within that remaining viewport before allowing scroll.
+        final availableHeight = constraints.maxHeight;
+        final metricMainAxisExtent = isMobile
+            ? (availableHeight >= 700 ? 126.0 : 118.0)
+            : 154.0;
+        final metricSpacing = isMobile ? 12.0 : 20.0;
+        final sectionSpacing = isMobile ? 14.0 : 20.0;
+        final salesChartHeight = isMobile
+            ? (availableHeight - 490).clamp(190.0, 280.0)
+            : 280.0;
+        final metricCardPadding = isMobile
+            ? const EdgeInsets.fromLTRB(16, 16, 16, 16)
+            : const EdgeInsets.fromLTRB(28, 22, 28, 22);
+        final metricValuePadding = isMobile
+            ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
+            : const EdgeInsets.symmetric(horizontal: 18, vertical: 14);
+        final metricLabelGap = isMobile ? 12.0 : 22.0;
+
+        return ListView(
           children: [
-            Expanded(
-              child: Text(
-                'Sales',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppColors.logoBlue,
-                  fontWeight: FontWeight.w800,
-                  height: 1.15,
-                ),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: metricColumns,
+                mainAxisSpacing: metricSpacing,
+                crossAxisSpacing: metricSpacing,
+                mainAxisExtent: metricMainAxisExtent,
               ),
-            ),
-            if (isMobile)
-              MenuAnchor(
-                style: const MenuStyle(
-                  backgroundColor: WidgetStatePropertyAll(Colors.white),
-                  surfaceTintColor: WidgetStatePropertyAll(Colors.white),
-                  padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                  shape: WidgetStatePropertyAll(
-                    RoundedRectangleBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(16)),
+              itemCount: metrics.length,
+              itemBuilder: (context, index) {
+                final metric = metrics[index];
+                const accent = AppColors.logoBlue;
+                const tint = Color(0xFFF2F6FF);
+                final route = switch (metric.label) {
+                  'Orders' => '/admin/orders',
+                  'Products' => '/admin/products',
+                  'Best Sellers' =>
+                    '/admin/products?filters[status]=active&filters[sold]=many_few',
+                  'Categories' => '/admin/categories',
+                  _ => '/admin/dashboard',
+                };
+                return MousePressable(
+                  onTap: () => context.go(route),
+                  borderRadius: BorderRadius.circular(22),
+                  child: Container(
+                    padding: metricCardPadding,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: const Color(0xFFEFF2FA)),
                     ),
-                  ),
-                ),
-                menuChildren: [
-                  _buildFiltersMenu(
-                    context: context,
-                    anchorKey: _mobileFiltersAnchorKey,
-                  ),
-                ],
-                builder: (context, controller, child) {
-                  return MousePressable(
-                    onTap: () {
-                      if (controller.isOpen) {
-                        controller.close();
-                      } else {
-                        controller.open();
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      key: _mobileFiltersAnchorKey,
-                      width: toolbarActionSize,
-                      height: toolbarActionSize,
-                      decoration: BoxDecoration(
-                        color: AppColors.logoBlue,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.filter_list_rounded,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                    ),
-                  );
-                },
-              )
-            else
-              MenuAnchor(
-                style: const MenuStyle(
-                  backgroundColor: WidgetStatePropertyAll(Colors.white),
-                  surfaceTintColor: WidgetStatePropertyAll(Colors.white),
-                  padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                  shape: WidgetStatePropertyAll(
-                    RoundedRectangleBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(16)),
-                    ),
-                  ),
-                ),
-                menuChildren: [
-                  _buildFiltersMenu(
-                    context: context,
-                    anchorKey: _desktopFiltersAnchorKey,
-                  ),
-                ],
-                builder: (context, controller, child) {
-                  return MousePressable(
-                    onTap: () {
-                      if (controller.isOpen) {
-                        controller.close();
-                      } else {
-                        controller.open();
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      key: _desktopFiltersAnchorKey,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 14,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.logoBlue,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Filters',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              height: 1.15,
-                            ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          metric.label,
+                          style: const TextStyle(
+                            color: accent,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            height: 1.15,
                           ),
-                          const SizedBox(width: 8),
-                          const Icon(
+                        ),
+                        SizedBox(height: metricLabelGap),
+                        Container(
+                          width: double.infinity,
+                          padding: metricValuePadding,
+                          decoration: BoxDecoration(
+                            color: tint,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            _loadingOrders &&
+                                    (metric.label == 'Orders' ||
+                                        metric.label == 'Best Sellers')
+                                ? '...'
+                                : NumberFormat.decimalPattern().format(
+                                    metric.value,
+                                  ),
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.displaySmall
+                                ?.copyWith(
+                                  color: accent,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: metricValueFontSize,
+                                  height: 1.05,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            SizedBox(height: sectionSpacing),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Sales',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: AppColors.logoBlue,
+                      fontWeight: FontWeight.w800,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+                if (isMobile)
+                  MenuAnchor(
+                    style: const MenuStyle(
+                      backgroundColor: WidgetStatePropertyAll(Colors.white),
+                      surfaceTintColor: WidgetStatePropertyAll(Colors.white),
+                      padding: WidgetStatePropertyAll(EdgeInsets.zero),
+                      shape: WidgetStatePropertyAll(
+                        RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(16)),
+                        ),
+                      ),
+                    ),
+                    menuChildren: [
+                      _buildFiltersMenu(
+                        context: context,
+                        anchorKey: _mobileFiltersAnchorKey,
+                      ),
+                    ],
+                    builder: (context, controller, child) {
+                      return MousePressable(
+                        onTap: () {
+                          if (controller.isOpen) {
+                            controller.close();
+                          } else {
+                            controller.open();
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          key: _mobileFiltersAnchorKey,
+                          width: toolbarActionSize,
+                          height: toolbarActionSize,
+                          decoration: BoxDecoration(
+                            color: AppColors.logoBlue,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
                             Icons.filter_list_rounded,
                             size: 18,
                             color: Colors.white,
                           ),
-                        ],
+                        ),
+                      );
+                    },
+                  )
+                else
+                  MenuAnchor(
+                    style: const MenuStyle(
+                      backgroundColor: WidgetStatePropertyAll(Colors.white),
+                      surfaceTintColor: WidgetStatePropertyAll(Colors.white),
+                      padding: WidgetStatePropertyAll(EdgeInsets.zero),
+                      shape: WidgetStatePropertyAll(
+                        RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(16)),
+                        ),
                       ),
                     ),
-                  );
-                },
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        SectionCard(
-          showShadow: false,
-          padding: EdgeInsets.zero,
-          borderRadius: 16,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: ColoredBox(
-              color: Colors.white,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: AppColors.logoBlue.withValues(alpha: 0.10),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                    child: isMobile
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    menuChildren: [
+                      _buildFiltersMenu(
+                        context: context,
+                        anchorKey: _desktopFiltersAnchorKey,
+                      ),
+                    ],
+                    builder: (context, controller, child) {
+                      return MousePressable(
+                        onTap: () {
+                          if (controller.isOpen) {
+                            controller.close();
+                          } else {
+                            controller.open();
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          key: _desktopFiltersAnchorKey,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.logoBlue,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    formatPesos(vm.filteredSalesCentavos),
-                                    style: const TextStyle(
-                                      color: AppColors.logoBlue,
-                                      fontWeight: FontWeight.w800,
-                                      height: 1.15,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    salesOrdersLabel,
-                                    style: const TextStyle(
-                                      color: AppColors.logoBlue,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.15,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (startDateFilter != null || endDateFilter != null) ...[
-                                const SizedBox(height: 10),
-                                Center(
-                                  child: Text(
-                                    '${startDateFilter == null ? 'Any' : formatAsOfDate(startDateFilter!)} - ${endDateFilter == null ? 'Any' : formatAsOfDate(endDateFilter!)}',
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: AppColors.logoBlue,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.15,
-                                    ),
-                                  ),
+                              const Text(
+                                'Filters',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.15,
                                 ),
-                              ],
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(
+                                Icons.filter_list_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
                             ],
-                          )
-                        : Row(
-                            children: [
-                              Expanded(
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    formatPesos(vm.filteredSalesCentavos),
-                                    style: const TextStyle(
-                                      color: AppColors.logoBlue,
-                                      fontWeight: FontWeight.w800,
-                                      height: 1.15,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+            SizedBox(height: isMobile ? 10 : 12),
+            SectionCard(
+              showShadow: false,
+              padding: EdgeInsets.zero,
+              borderRadius: 16,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: ColoredBox(
+                  color: Colors.white,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.logoBlue.withValues(alpha: 0.10),
+                        ),
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          isMobile ? 14 : 16,
+                          20,
+                          isMobile ? 14 : 16,
+                        ),
+                        child: isMobile
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        _loadingOrders
+                                            ? '...'
+                                            : formatPesos(
+                                                vm.filteredSalesCentavos,
+                                              ),
+                                        style: const TextStyle(
+                                          color: AppColors.logoBlue,
+                                          fontWeight: FontWeight.w800,
+                                          height: 1.15,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        _loadingOrders
+                                            ? '...'
+                                            : salesOrdersLabel,
+                                        style: const TextStyle(
+                                          color: AppColors.logoBlue,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.15,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (startDateFilter != null ||
+                                      endDateFilter != null) ...[
+                                    const SizedBox(height: 10),
+                                    Center(
+                                      child: Text(
+                                        '${startDateFilter == null ? 'Any' : formatAsOfDate(startDateFilter!)} - ${endDateFilter == null ? 'Any' : formatAsOfDate(endDateFilter!)}',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: AppColors.logoBlue,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.15,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              )
+                            : Row(
+                                children: [
+                                  Expanded(
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        _loadingOrders
+                                            ? '...'
+                                            : formatPesos(
+                                                vm.filteredSalesCentavos,
+                                              ),
+                                        style: const TextStyle(
+                                          color: AppColors.logoBlue,
+                                          fontWeight: FontWeight.w800,
+                                          height: 1.15,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ),
-                              Expanded(
-                                child:
-                                    (startDateFilter != null ||
+                                  Expanded(
+                                    child:
+                                        (startDateFilter != null ||
                                             endDateFilter != null)
                                         ? Text(
                                             '${startDateFilter == null ? 'Any' : formatAsOfDate(startDateFilter!)} - ${endDateFilter == null ? 'Any' : formatAsOfDate(endDateFilter!)}',
@@ -386,53 +439,73 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                                             ),
                                           )
                                         : const SizedBox.shrink(),
-                              ),
-                              Expanded(
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: Text(
-                                    salesOrdersLabel,
-                                    style: const TextStyle(
-                                      color: AppColors.logoBlue,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.15,
+                                  ),
+                                  Expanded(
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Text(
+                                        _loadingOrders
+                                            ? '...'
+                                            : salesOrdersLabel,
+                                        style: const TextStyle(
+                                          color: AppColors.logoBlue,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.15,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
-                            ],
+                      ),
+                      const Divider(
+                        height: 0,
+                        thickness: 0.6,
+                        color: Color(0xFFE4E7EC),
+                      ),
+                      if (_loadingOrders)
+                        SizedBox(
+                          height: salesChartHeight + 48,
+                          child: const Center(
+                            child: SizedBox.square(
+                              dimension: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: AppColors.logoBlue,
+                              ),
+                            ),
                           ),
+                        )
+                      else if (vm.salesPoints.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(20),
+                          child: EmptyStateCard(
+                            title: 'No sales found',
+                            message:
+                                'Adjust the date filters or wait for processed orders.',
+                            showBorder: false,
+                          ),
+                        )
+                      else
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          padding: EdgeInsets.all(isMobile ? 14 : 20),
+                          child: SizedBox(
+                            width: chartWidth,
+                            child: _SalesChart(
+                              points: vm.salesPoints,
+                              chartHeight: salesChartHeight,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                  const Divider(
-                    height: 0,
-                    thickness: 0.6,
-                    color: Color(0xFFE4E7EC),
-                  ),
-                  if (vm.salesPoints.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: EmptyStateCard(
-                        title: 'No sales found',
-                        message:
-                            'Adjust the date filters or wait for processed orders.',
-                        showBorder: false,
-                      ),
-                    )
-                  else
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.all(20),
-                      child: SizedBox(
-                        width: chartWidth,
-                        child: _SalesChart(points: vm.salesPoints),
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -559,9 +632,10 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
 }
 
 class _SalesChart extends StatelessWidget {
-  const _SalesChart({required this.points});
+  const _SalesChart({required this.points, required this.chartHeight});
 
   final List<AdminSalesPoint> points;
+  final double chartHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -578,9 +652,9 @@ class _SalesChart extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          height: 280,
+          height: chartHeight,
           child: CustomPaint(
-            size: const Size(double.infinity, 280),
+            size: Size(double.infinity, chartHeight),
             painter: _SalesChartPainter(points: points, maxSales: maxSales),
           ),
         ),
@@ -597,12 +671,16 @@ class _SalesChart extends StatelessWidget {
                       Text(
                         DateFormat('MMM d').format(point.date),
                         textAlign: TextAlign.center,
+                        maxLines: 1,
+                        softWrap: false,
                         style: labelStyle,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         formatPesos(point.salesCentavos),
                         textAlign: TextAlign.center,
+                        maxLines: 1,
+                        softWrap: false,
                         style: labelStyle?.copyWith(
                           color: AppColors.logoBlue,
                           fontWeight: FontWeight.w700,
