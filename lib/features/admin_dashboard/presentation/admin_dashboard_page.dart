@@ -96,7 +96,10 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     final metrics = <AdminDashboardMetric>[
       AdminDashboardMetric('Orders', vm.totalOrders),
       AdminDashboardMetric('Products', vm.activeProducts),
-      AdminDashboardMetric('Best Sellers', vm.bestSellers.length),
+      AdminDashboardMetric(
+        'Completed',
+        vm.metrics.where((metric) => metric.label == 'Completed').first.value,
+      ),
       AdminDashboardMetric('Categories', vm.categories),
     ];
     final metricColumns = width >= 1320
@@ -153,8 +156,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                 final route = switch (metric.label) {
                   'Orders' => '/admin/orders',
                   'Products' => '/admin/products',
-                  'Best Sellers' =>
-                    '/admin/products?filters[status]=active&filters[sold]=many_few',
+                  'Completed' => '/admin/orders?filters[status]=completed',
                   'Categories' => '/admin/categories',
                   _ => '/admin/dashboard',
                 };
@@ -191,7 +193,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                           child: Text(
                             _loadingOrders &&
                                     (metric.label == 'Orders' ||
-                                        metric.label == 'Best Sellers')
+                                        metric.label == 'Completed')
                                 ? '...'
                                 : NumberFormat.decimalPattern().format(
                                     metric.value,
