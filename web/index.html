@@ -320,6 +320,7 @@
       const adminThemeColor = '#2F3DBF';
       const clientThemeColor = '#FFFFFF';
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+      let hasAuthenticatedAdminSession = false;
 
       function isSplashVisible() {
         return Boolean(document.getElementById('app-startup-splash'));
@@ -329,16 +330,22 @@
         if (!themeColorMeta) {
           return;
         }
-        const isAdmin = window.location.pathname.startsWith('/admin');
+        const isAuthenticatedAdminRoute =
+          hasAuthenticatedAdminSession &&
+          window.location.pathname.startsWith('/admin');
         themeColorMeta.setAttribute(
           'content',
           isSplashVisible()
             ? splashThemeColor
-            : (isAdmin ? adminThemeColor : clientThemeColor),
+            : (isAuthenticatedAdminRoute ? adminThemeColor : clientThemeColor),
         );
       }
 
       window.__syncThemeColor = syncThemeColor;
+      window.__setAuthenticatedAdminTheme = function (isAuthenticatedAdmin) {
+        hasAuthenticatedAdminSession = isAuthenticatedAdmin === true;
+        syncThemeColor();
+      };
 
       const originalPushState = history.pushState;
       history.pushState = function () {

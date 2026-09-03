@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/app_state/app_controller.dart';
+import '../core/platform/web_theme_color.dart';
 import 'router.dart';
 import 'theme.dart';
 
@@ -15,8 +16,7 @@ class AndrewsSupermarketApp extends ConsumerStatefulWidget {
       _AndrewsSupermarketAppState();
 }
 
-class _AndrewsSupermarketAppState
-    extends ConsumerState<AndrewsSupermarketApp> {
+class _AndrewsSupermarketAppState extends ConsumerState<AndrewsSupermarketApp> {
   AppLifecycleListener? _appLifecycleListener;
 
   Set<PointerDeviceKind> get _dragDevices {
@@ -57,6 +57,11 @@ class _AndrewsSupermarketAppState
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
+    final isAuthenticatedAdmin = ref.watch(
+      appControllerProvider.select((state) => state.adminSession != null),
+    );
+
+    syncAuthenticatedAdminTheme(isAuthenticatedAdmin: isAuthenticatedAdmin);
 
     return MaterialApp.router(
       title: "Andrew's Supermarket",
@@ -73,9 +78,7 @@ class _AndrewsSupermarketAppState
         // SelectionArea above MaterialApp's internal Overlay.
         return Overlay(
           initialEntries: [
-            OverlayEntry(
-              builder: (context) => SelectionArea(child: appChild),
-            ),
+            OverlayEntry(builder: (context) => SelectionArea(child: appChild)),
           ],
         );
       },

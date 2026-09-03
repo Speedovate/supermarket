@@ -59,8 +59,12 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
         selection: TextSelection.collapsed(offset: query.length),
       );
     }
-    createdAtFilter = _parseRouteDate(uri.queryParameters['filters[created_at]']);
-    updatedAtFilter = _parseRouteDate(uri.queryParameters['filters[updated_at]']);
+    createdAtFilter = _parseRouteDate(
+      uri.queryParameters['filters[created_at]'],
+    );
+    updatedAtFilter = _parseRouteDate(
+      uri.queryParameters['filters[updated_at]'],
+    );
     statusFilter = _parseOrderStatus(uri.queryParameters['filters[status]']);
     methodFilter = _parseMethod(uri.queryParameters['filters[method]']);
   }
@@ -159,7 +163,8 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
           _isSameDay(order.updatedAt, updatedAtFilter!);
       final matchesStatus =
           statusFilter == null || order.status == statusFilter;
-      final matchesMethod = methodFilter == null || order.method == methodFilter;
+      final matchesMethod =
+          methodFilter == null || order.method == methodFilter;
       return matchesQuery &&
           matchesCreatedAt &&
           matchesUpdatedAt &&
@@ -174,11 +179,6 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
       bodyStyle: bodyStyle,
       gap: gap,
     );
-    final activeFilterCount =
-        (createdAtFilter == null ? 0 : 1) +
-        (updatedAtFilter == null ? 0 : 1) +
-        (statusFilter == null ? 0 : 1) +
-        (methodFilter == null ? 0 : 1);
     final toolbarActionSize = isMobile ? 48.0 : 0.0;
 
     return Column(
@@ -195,7 +195,8 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                         Expanded(
                           child: TextField(
                             controller: _queryController,
-                            onChanged: (value) => _setFilters(() => query = value),
+                            onChanged: (value) =>
+                                _setFilters(() => query = value),
                             decoration: InputDecoration(
                               hintText: 'Search',
                               hintStyle: const TextStyle(
@@ -282,7 +283,8 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                           width: 280,
                           child: TextField(
                             controller: _queryController,
-                            onChanged: (value) => _setFilters(() => query = value),
+                            onChanged: (value) =>
+                                _setFilters(() => query = value),
                             decoration: InputDecoration(
                               hintText: 'Search',
                               hintStyle: const TextStyle(
@@ -343,7 +345,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                               child: Container(
                                 key: _desktopFiltersAnchorKey,
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
+                                  horizontal: 24,
                                   vertical: 14,
                                 ),
                                 decoration: BoxDecoration(
@@ -353,12 +355,6 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(
-                                      Icons.filter_list_rounded,
-                                      size: 18,
-                                      color: Colors.white,
-                                    ),
-                                    const SizedBox(width: 8),
                                     const Text(
                                       'Filters',
                                       style: TextStyle(
@@ -367,23 +363,9 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                                         height: 1.15,
                                       ),
                                     ),
-                                    if (activeFilterCount > 0) ...[
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '$activeFilterCount',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                          height: 1.15,
-                                        ),
-                                      ),
-                                    ],
                                     const SizedBox(width: 8),
-                                    Icon(
-                                      controller.isOpen
-                                          ? Icons.keyboard_arrow_up_rounded
-                                          : Icons
-                                                .keyboard_arrow_down_rounded,
+                                    const Icon(
+                                      Icons.filter_list_rounded,
                                       size: 18,
                                       color: Colors.white,
                                     ),
@@ -396,6 +378,40 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                       ],
                     ),
             ),
+            SizedBox(width: isMobile ? 8 : 12),
+            MousePressable(
+              onTap: () => context.go('/'),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: isMobile ? toolbarActionSize : null,
+                height: isMobile ? toolbarActionSize : null,
+                padding: isMobile
+                    ? EdgeInsets.zero
+                    : const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.logoBlue,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (!isMobile) ...[
+                      const Text(
+                        'New',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          height: 1.15,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    const Icon(Icons.add, size: 18, color: Colors.white),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -403,96 +419,118 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
           fit: FlexFit.loose,
           child: LayoutBuilder(
             builder: (context, constraints) {
-            final contentWidth =
-                widths.id +
-                gap +
-                widths.name +
-                gap +
-                widths.phone +
-                gap +
-                widths.status +
-                gap +
-                widths.items +
-                gap +
-                widths.total +
-                gap +
-                widths.createdAt +
-                gap +
-                widths.updatedAt +
-                gap +
-                _actionsWidth;
-            final effectiveTableWidth = constraints.maxWidth > contentWidth + 40
-                ? constraints.maxWidth
-                : contentWidth + 40;
-            final trailingSpace = effectiveTableWidth - (contentWidth + 40);
-            const headerHeight = 53.0;
-            const dividerHeight = 0.6;
-            const emptyStateHeight = 232.0;
-            final rowHeights = filteredOrders
-                .map(
-                  (order) => _measureOrderRowHeight(
-                    order: order,
-                    widths: widths,
-                    bodyStyle: bodyStyle,
-                  ),
-                )
-                .toList();
-            final contentHeightEstimate = filteredOrders.isEmpty
-                ? emptyStateHeight
-                : rowHeights.fold<double>(0, (sum, height) => sum + height) +
-                    math.max(0, filteredOrders.length - 1) * dividerHeight;
-            final maxTableHeight = constraints.maxHeight.isFinite
-                ? constraints.maxHeight
-                : headerHeight + dividerHeight + contentHeightEstimate;
-            final targetTableHeight = math.min(
-              maxTableHeight,
-              headerHeight + dividerHeight + contentHeightEstimate,
-            );
-            final shouldScrollBody =
-                headerHeight + dividerHeight + contentHeightEstimate >
-                maxTableHeight;
+              final contentWidth =
+                  widths.id +
+                  gap +
+                  widths.name +
+                  gap +
+                  widths.phone +
+                  gap +
+                  widths.status +
+                  gap +
+                  widths.items +
+                  gap +
+                  widths.total +
+                  gap +
+                  widths.createdAt +
+                  gap +
+                  widths.updatedAt +
+                  gap +
+                  _actionsWidth;
+              final effectiveTableWidth =
+                  constraints.maxWidth > contentWidth + 40
+                  ? constraints.maxWidth
+                  : contentWidth + 40;
+              final trailingSpace = effectiveTableWidth - (contentWidth + 40);
+              const headerHeight = 53.0;
+              const dividerHeight = 0.6;
+              const emptyStateHeight = 232.0;
+              final rowHeights = filteredOrders
+                  .map(
+                    (order) => _measureOrderRowHeight(
+                      order: order,
+                      widths: widths,
+                      bodyStyle: bodyStyle,
+                    ),
+                  )
+                  .toList();
+              final contentHeightEstimate = filteredOrders.isEmpty
+                  ? emptyStateHeight
+                  : rowHeights.fold<double>(0, (sum, height) => sum + height) +
+                        math.max(0, filteredOrders.length - 1) * dividerHeight;
+              final maxTableHeight = constraints.maxHeight.isFinite
+                  ? constraints.maxHeight
+                  : headerHeight + dividerHeight + contentHeightEstimate;
+              final targetTableHeight = math.min(
+                maxTableHeight,
+                headerHeight + dividerHeight + contentHeightEstimate,
+              );
+              final shouldScrollBody =
+                  headerHeight + dividerHeight + contentHeightEstimate >
+                  maxTableHeight;
 
-            return SectionCard(
-              showShadow: false,
-              padding: EdgeInsets.zero,
-              borderRadius: 16,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: ColoredBox(
-                  color: Colors.white,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: effectiveTableWidth,
-                      height: shouldScrollBody ? targetTableHeight : null,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: AppColors.logoBlue.withValues(alpha: 0.10),
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(16),
-                                topRight: Radius.circular(16),
+              return SectionCard(
+                showShadow: false,
+                padding: EdgeInsets.zero,
+                borderRadius: 16,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: ColoredBox(
+                    color: Colors.white,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: effectiveTableWidth,
+                        height: shouldScrollBody ? targetTableHeight : null,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: AppColors.logoBlue.withValues(
+                                  alpha: 0.10,
+                                ),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(16),
+                                  topRight: Radius.circular(16),
+                                ),
+                              ),
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                16,
+                                20,
+                                16,
+                              ),
+                              child: _OrderHeaderRow(
+                                widths: widths,
+                                trailingSpace: trailingSpace,
+                                isEmpty: filteredOrders.isEmpty,
                               ),
                             ),
-                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                            child: _OrderHeaderRow(
-                              widths: widths,
-                              trailingSpace: trailingSpace,
-                              isEmpty: filteredOrders.isEmpty,
+                            const Divider(
+                              height: 0,
+                              thickness: 0.6,
+                              color: Color(0xFFE4E7EC),
                             ),
-                          ),
-                          const Divider(
-                            height: 0,
-                            thickness: 0.6,
-                            color: Color(0xFFE4E7EC),
-                          ),
-                          if (filteredOrders.isEmpty)
-                            if (shouldScrollBody)
-                              Expanded(
-                                child: ClipRRect(
+                            if (filteredOrders.isEmpty)
+                              if (shouldScrollBody)
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadius.only(
+                                      bottomLeft: Radius.circular(16),
+                                      bottomRight: Radius.circular(16),
+                                    ),
+                                    child: const EmptyStateCard(
+                                      title: 'No orders found',
+                                      message:
+                                          'Customer submissions will appear here.',
+                                      showBorder: false,
+                                    ),
+                                  ),
+                                )
+                              else
+                                ClipRRect(
                                   borderRadius: const BorderRadius.only(
                                     bottomLeft: Radius.circular(16),
                                     bottomRight: Radius.circular(16),
@@ -503,73 +541,28 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                                         'Customer submissions will appear here.',
                                     showBorder: false,
                                   ),
-                                ),
-                              )
+                                )
                             else
-                              ClipRRect(
-                                borderRadius: const BorderRadius.only(
-                                  bottomLeft: Radius.circular(16),
-                                  bottomRight: Radius.circular(16),
-                                ),
-                                child: const EmptyStateCard(
-                                  title: 'No orders found',
-                                  message:
-                                      'Customer submissions will appear here.',
-                                  showBorder: false,
-                                ),
-                              )
-                          else
-                            shouldScrollBody
-                                ? Expanded(
-                                    child: ListView.separated(
-                                      padding: EdgeInsets.zero,
-                                      itemCount: filteredOrders.length,
-                                      itemBuilder: (context, i) => _OrderRow(
-                                        order: filteredOrders[i],
-                                        widths: widths,
-                                        trailingSpace: trailingSpace,
-                                        isLast: i == filteredOrders.length - 1,
-                                        onView: () => _showOrderPreviewDialog(
-                                          context,
-                                          filteredOrders[i],
-                                        ),
-                                        onEdit: () => _showEditOrderStatusDialog(
-                                          context,
-                                          filteredOrders[i],
-                                        ),
-                                        onCopy: () => _copyOrderSummary(
-                                          context,
-                                          filteredOrders[i],
-                                        ),
-                                        onOpen: () => context.go(
-                                          '/admin/orders/${filteredOrders[i].id}',
-                                        ),
-                                      ),
-                                      separatorBuilder: (context, i) =>
-                                          const Divider(
-                                            height: 0,
-                                            thickness: 0.6,
-                                            color: Color(0xFFE4E7EC),
-                                          ),
-                                    ),
-                                  )
-                                : Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      for (var i = 0; i < filteredOrders.length; i++) ...[
-                                        _OrderRow(
+                              shouldScrollBody
+                                  ? Expanded(
+                                      child: ListView.separated(
+                                        padding: EdgeInsets.zero,
+                                        itemCount: filteredOrders.length,
+                                        itemBuilder: (context, i) => _OrderRow(
                                           order: filteredOrders[i],
                                           widths: widths,
                                           trailingSpace: trailingSpace,
-                                          isLast: i == filteredOrders.length - 1,
+                                          isLast:
+                                              i == filteredOrders.length - 1,
                                           onView: () => _showOrderPreviewDialog(
                                             context,
                                             filteredOrders[i],
                                           ),
-                                          onEdit: () => _showEditOrderStatusDialog(
-                                            context,
-                                            filteredOrders[i],
-                                          ),
+                                          onEdit: () =>
+                                              _showEditOrderStatusDialog(
+                                                context,
+                                                filteredOrders[i],
+                                              ),
                                           onCopy: () => _copyOrderSummary(
                                             context,
                                             filteredOrders[i],
@@ -578,22 +571,62 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                                             '/admin/orders/${filteredOrders[i].id}',
                                           ),
                                         ),
-                                        if (i != filteredOrders.length - 1)
-                                          const Divider(
-                                            height: 0,
-                                            thickness: 0.6,
-                                            color: Color(0xFFE4E7EC),
+                                        separatorBuilder: (context, i) =>
+                                            const Divider(
+                                              height: 0,
+                                              thickness: 0.6,
+                                              color: Color(0xFFE4E7EC),
+                                            ),
+                                      ),
+                                    )
+                                  : Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        for (
+                                          var i = 0;
+                                          i < filteredOrders.length;
+                                          i++
+                                        ) ...[
+                                          _OrderRow(
+                                            order: filteredOrders[i],
+                                            widths: widths,
+                                            trailingSpace: trailingSpace,
+                                            isLast:
+                                                i == filteredOrders.length - 1,
+                                            onView: () =>
+                                                _showOrderPreviewDialog(
+                                                  context,
+                                                  filteredOrders[i],
+                                                ),
+                                            onEdit: () =>
+                                                _showEditOrderStatusDialog(
+                                                  context,
+                                                  filteredOrders[i],
+                                                ),
+                                            onCopy: () => _copyOrderSummary(
+                                              context,
+                                              filteredOrders[i],
+                                            ),
+                                            onOpen: () => context.go(
+                                              '/admin/orders/${filteredOrders[i].id}',
+                                            ),
                                           ),
+                                          if (i != filteredOrders.length - 1)
+                                            const Divider(
+                                              height: 0,
+                                              thickness: 0.6,
+                                              color: Color(0xFFE4E7EC),
+                                            ),
+                                        ],
                                       ],
-                                    ],
-                                  ),
-                        ],
+                                    ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            );
+              );
             },
           ),
         ),
@@ -780,7 +813,10 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                     alignment: Alignment.center,
                     child: const Text(
                       'Clear',
-                      style: TextStyle(fontWeight: FontWeight.w700, height: 1.15),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                      ),
                     ),
                   ),
                 ),
@@ -900,39 +936,40 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
         orders.map((item) => item.name),
         max: screenWidth < 700 ? 132 : 168,
       ),
-      phone: maxWidth(
-        'Phone',
-        orders.map((item) => item.phone),
-      ),
-      total: maxWidth(
-        'Total',
-        orders.map((item) => formatPesos(item.total)),
-      ),
-      status: maxWidth(
-        'Status',
-        orders.map((item) => displayStatus(item.status)),
-        valuesStyle: badgeTextStyle,
-      ) + _statusBadgeHorizontalPadding,
+      phone: maxWidth('Phone', orders.map((item) => item.phone)),
+      total: maxWidth('Total', orders.map((item) => formatPesos(item.total))),
+      status:
+          maxWidth(
+            'Status',
+            orders.map((item) => displayStatus(item.status)),
+            valuesStyle: badgeTextStyle,
+          ) +
+          _statusBadgeHorizontalPadding,
       items: maxWidth(
         'Items',
         orders.map(
-          (item) => '${item.items.fold<int>(0, (sum, entry) => sum + entry.requestedQuantity)}',
+          (item) =>
+              '${item.items.fold<int>(0, (sum, entry) => sum + entry.requestedQuantity)}',
         ),
       ),
-      createdAt: maxWidth(
-        'Created at',
-        orders.map(
-          (item) =>
-              '${formatOrderDate(item.createdAt)}\n${formatOrderTimeWithSeconds(item.createdAt)}',
-        ),
-      ) + _dateHeaderExtraAllowance,
-      updatedAt: maxWidth(
-        'Updated at',
-        orders.map(
-          (item) =>
-              '${formatOrderDate(item.updatedAt)}\n${formatOrderTimeWithSeconds(item.updatedAt)}',
-        ),
-      ) + _dateHeaderExtraAllowance,
+      createdAt:
+          maxWidth(
+            'Created at',
+            orders.map(
+              (item) =>
+                  '${formatOrderDate(item.createdAt)}\n${formatOrderTimeWithSeconds(item.createdAt)}',
+            ),
+          ) +
+          _dateHeaderExtraAllowance,
+      updatedAt:
+          maxWidth(
+            'Updated at',
+            orders.map(
+              (item) =>
+                  '${formatOrderDate(item.updatedAt)}\n${formatOrderTimeWithSeconds(item.updatedAt)}',
+            ),
+          ) +
+          _dateHeaderExtraAllowance,
     );
   }
 
@@ -957,12 +994,12 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
     final methodLabel = order.method == FulfillmentMethod.pickup
         ? 'For Pickup'
         : displayFulfillment(order.method);
-    final methodLine = order.method == FulfillmentMethod.delivery &&
+    final methodLine =
+        order.method == FulfillmentMethod.delivery &&
             order.place.trim().isNotEmpty
         ? '$methodLabel - ${order.place}'
         : methodLabel;
-    final addressLines =
-        order.method == FulfillmentMethod.delivery
+    final addressLines = order.method == FulfillmentMethod.delivery
         ? [
             if (order.addressStreet.trim().isNotEmpty ||
                 order.addressLandmark.trim().isNotEmpty)
@@ -984,9 +1021,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
       'Order #${order.id}',
       methodLine,
       '${formatOrderDate(order.createdAt)} ${formatOrderTimeWithSeconds(order.createdAt)}',
-      if (addressLines.isNotEmpty) ...[
-        ...addressLines,
-      ],
+      if (addressLines.isNotEmpty) ...[...addressLines],
       '',
       order.name,
       order.phone,
@@ -1122,8 +1157,9 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
     var selectedMethod = order.method;
     var selectedPlace = order.place.trim();
     var selectedStreet = order.addressStreet.trim();
-    final serviceableBarangays =
-        ref.read(appControllerProvider.notifier).serviceableBarangays;
+    final serviceableBarangays = ref
+        .read(appControllerProvider.notifier)
+        .serviceableBarangays;
 
     final shouldSave = await showDialog<bool>(
       context: context,
@@ -1484,7 +1520,12 @@ class _OrderHeaderRow extends StatelessWidget {
           width: _AdminOrdersPageState._actionsWidth,
           child: Align(
             alignment: Alignment.centerRight,
-            child: Text('Actions', style: labelStyle, maxLines: 1, textAlign: TextAlign.right),
+            child: Text(
+              'Actions',
+              style: labelStyle,
+              maxLines: 1,
+              textAlign: TextAlign.right,
+            ),
           ),
         ),
       ],
@@ -1547,11 +1588,7 @@ class _OrderRow extends StatelessWidget {
             SizedBox(width: widths.gap),
             SizedBox(
               width: widths.name,
-              child: Text(
-                order.name,
-                style: bodyStyle,
-                softWrap: true,
-              ),
+              child: Text(order.name, style: bodyStyle, softWrap: true),
             ),
             SizedBox(width: widths.gap),
             SizedBox(
@@ -1729,17 +1766,8 @@ double _measureOrderRowHeight({
 
   final tallestContent = <double>[
     _measureOrderTextHeight('${order.id}', bodyStyle, widths.id, maxLines: 1),
-    _measureOrderTextHeight(
-      order.name,
-      bodyStyle,
-      widths.name,
-    ),
-    _measureOrderTextHeight(
-      order.phone,
-      bodyStyle,
-      widths.phone,
-      maxLines: 1,
-    ),
+    _measureOrderTextHeight(order.name, bodyStyle, widths.name),
+    _measureOrderTextHeight(order.phone, bodyStyle, widths.phone, maxLines: 1),
     34,
     _measureOrderTextHeight(
       '${order.items.fold<int>(0, (sum, item) => sum + item.requestedQuantity)}',

@@ -141,10 +141,6 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
       headerStyle: headerStyle,
       bodyStyle: bodyStyle,
     );
-    final activeFilterCount =
-        (createdAtFilter == null ? 0 : 1) +
-        (updatedAtFilter == null ? 0 : 1) +
-        (statusFilter == null ? 0 : 1);
     final toolbarActionSize = isMobile ? 48.0 : 0.0;
 
     return Column(
@@ -309,7 +305,7 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                               child: Container(
                                 key: _desktopFiltersAnchorKey,
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
+                                  horizontal: 24,
                                   vertical: 14,
                                 ),
                                 decoration: BoxDecoration(
@@ -319,36 +315,17 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(
-                                      Icons.filter_list_rounded,
-                                      size: 18,
-                                      color: Colors.white,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Text(
-                                      'Filters',
+                                      const Text(
+                                        'Filters',
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w700,
                                         height: 1.15,
                                       ),
                                     ),
-                                    if (activeFilterCount > 0) ...[
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '$activeFilterCount',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                          height: 1.15,
-                                        ),
-                                      ),
-                                    ],
                                     const SizedBox(width: 8),
-                                    Icon(
-                                      controller.isOpen
-                                          ? Icons.keyboard_arrow_up_rounded
-                                          : Icons.keyboard_arrow_down_rounded,
+                                    const Icon(
+                                      Icons.filter_list_rounded,
                                       size: 18,
                                       color: Colors.white,
                                     ),
@@ -370,7 +347,7 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                 height: isMobile ? toolbarActionSize : null,
                 padding: isMobile
                     ? EdgeInsets.zero
-                    : const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    : const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 decoration: BoxDecoration(
                   color: AppColors.logoBlue,
                   borderRadius: BorderRadius.circular(16),
@@ -379,18 +356,18 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.add, size: 18, color: Colors.white),
                     if (!isMobile) ...[
-                      const SizedBox(width: 8),
                       const Text(
-                        'New Banner',
+                        'New',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
                           height: 1.15,
                         ),
                       ),
+                      const SizedBox(width: 8),
                     ],
+                    const Icon(Icons.add, size: 18, color: Colors.white),
                   ],
                 ),
               ),

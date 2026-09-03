@@ -63,10 +63,7 @@ class CatalogMetaSnapshot {
 }
 
 class ProductManifestSnapshot {
-  const ProductManifestSnapshot({
-    this.updatedAt,
-    required this.itemUpdatedAts,
-  });
+  const ProductManifestSnapshot({this.updatedAt, required this.itemUpdatedAts});
 
   final DateTime? updatedAt;
   final Map<int, DateTime> itemUpdatedAts;
@@ -83,13 +80,15 @@ class FirestoreCatalogService {
       .collection(FirebasePaths.system)
       .doc(FirebasePaths.catalogMetaDocumentId);
 
-  DocumentReference<Map<String, dynamic>> get _categoriesManifestRef => _firestore
-      .collection(FirebasePaths.system)
-      .doc(FirebasePaths.categoriesManifestDocumentId);
+  DocumentReference<Map<String, dynamic>> get _categoriesManifestRef =>
+      _firestore
+          .collection(FirebasePaths.system)
+          .doc(FirebasePaths.categoriesManifestDocumentId);
 
-  DocumentReference<Map<String, dynamic>> get _barangaysManifestRef => _firestore
-      .collection(FirebasePaths.system)
-      .doc(FirebasePaths.barangaysManifestDocumentId);
+  DocumentReference<Map<String, dynamic>> get _barangaysManifestRef =>
+      _firestore
+          .collection(FirebasePaths.system)
+          .doc(FirebasePaths.barangaysManifestDocumentId);
 
   DocumentReference<Map<String, dynamic>> get _bannersManifestRef => _firestore
       .collection(FirebasePaths.system)
@@ -161,13 +160,14 @@ class FirestoreCatalogService {
   }
 
   Future<List<Category>> loadCategories({bool includeInactive = true}) async {
-    final categories = (includeInactive
-        ? (await _firestore.collection(FirebasePaths.categories).get())
-              .docs
-              .map(_categoryFromSnapshot)
-              .toList()
-        : await _loadPublicCategories())
-      ..sort(_compareCategoriesBySortOrder);
+    final categories =
+        (includeInactive
+              ? (await _firestore.collection(FirebasePaths.categories).get())
+                    .docs
+                    .map(_categoryFromSnapshot)
+                    .toList()
+              : await _loadPublicCategories())
+          ..sort(_compareCategoriesBySortOrder);
     return categories;
   }
 
@@ -183,17 +183,18 @@ class FirestoreCatalogService {
 
   Stream<List<Category>> watchCategories({bool includeInactive = true}) {
     if (includeInactive) {
-      return _firestore
-          .collection(FirebasePaths.categories)
-          .snapshots()
-          .map((snapshot) {
-            final categories = snapshot.docs.map(_categoryFromSnapshot).toList()
-              ..sort(_compareCategoriesBySortOrder);
-            return categories;
-          });
+      return _firestore.collection(FirebasePaths.categories).snapshots().map((
+        snapshot,
+      ) {
+        final categories = snapshot.docs.map(_categoryFromSnapshot).toList()
+          ..sort(_compareCategoriesBySortOrder);
+        return categories;
+      });
     }
 
-    return Stream.fromFuture(_loadPublicCategories()).asyncExpand((items) async* {
+    return Stream.fromFuture(_loadPublicCategories()).asyncExpand((
+      items,
+    ) async* {
       yield items..sort(_compareCategoriesBySortOrder);
     });
   }
@@ -234,13 +235,17 @@ class FirestoreCatalogService {
   }
 
   Future<List<AppBanner>> loadBanners({bool includeInactive = true}) async {
-    final banners = (includeInactive
-        ? (await _firestore.collection(FirebasePaths.banners).orderBy('id').get())
-              .docs
-              .map(_bannerFromSnapshot)
-              .toList()
-        : await _loadPublicBanners())
-      ..sort((a, b) => a.id.compareTo(b.id));
+    final banners =
+        (includeInactive
+              ? (await _firestore
+                        .collection(FirebasePaths.banners)
+                        .orderBy('id')
+                        .get())
+                    .docs
+                    .map(_bannerFromSnapshot)
+                    .toList()
+              : await _loadPublicBanners())
+          ..sort((a, b) => a.id.compareTo(b.id));
     return banners;
   }
 
@@ -273,13 +278,17 @@ class FirestoreCatalogService {
   }
 
   Future<List<Product>> loadProducts({bool includeInactive = true}) async {
-    final products = (includeInactive
-        ? (await _firestore.collection(FirebasePaths.products).orderBy('id').get())
-              .docs
-              .map(_productFromSnapshot)
-              .toList()
-        : await _loadPublicProducts())
-      ..sort((a, b) => a.id.compareTo(b.id));
+    final products =
+        (includeInactive
+              ? (await _firestore
+                        .collection(FirebasePaths.products)
+                        .orderBy('id')
+                        .get())
+                    .docs
+                    .map(_productFromSnapshot)
+                    .toList()
+              : await _loadPublicProducts())
+          ..sort((a, b) => a.id.compareTo(b.id));
     return products;
   }
 
@@ -295,7 +304,10 @@ class FirestoreCatalogService {
       final group = productIds.sublist(index, end);
       final snapshot = await _firestore
           .collection(FirebasePaths.products)
-          .where(FieldPath.documentId, whereIn: group.map((id) => '$id').toList())
+          .where(
+            FieldPath.documentId,
+            whereIn: group.map((id) => '$id').toList(),
+          )
           .get();
       products.addAll(snapshot.docs.map(_productFromSnapshot));
     }
@@ -430,7 +442,8 @@ class FirestoreCatalogService {
         streams.length,
         null,
       );
-      final subscriptions = <StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>[];
+      final subscriptions =
+          <StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>[];
 
       void emitMerged() {
         final orders = <OrderRequest>[];
@@ -450,13 +463,10 @@ class FirestoreCatalogService {
       }
 
       for (var index = 0; index < streams.length; index++) {
-        final subscription = streams[index].listen(
-          (snapshot) {
-            snapshots[index] = snapshot;
-            emitMerged();
-          },
-          onError: controller.addError,
-        );
+        final subscription = streams[index].listen((snapshot) {
+          snapshots[index] = snapshot;
+          emitMerged();
+        }, onError: controller.addError);
         subscriptions.add(subscription);
       }
 
@@ -545,7 +555,9 @@ class FirestoreCatalogService {
 
   Future<void> deleteProduct(int productId) async {
     final batch = _firestore.batch();
-    batch.delete(_firestore.collection(FirebasePaths.products).doc('$productId'));
+    batch.delete(
+      _firestore.collection(FirebasePaths.products).doc('$productId'),
+    );
     batch.set(
       _catalogMetaRef,
       _catalogMetaData(products: true),
@@ -606,16 +618,16 @@ class FirestoreCatalogService {
     );
     batch.set(
       _categoriesManifestRef,
-      _manifestData(
-        items.map((item) => (item.id, item.updatedAt)),
-      ),
+      _manifestData(items.map((item) => (item.id, item.updatedAt))),
     );
     await batch.commit();
   }
 
   Future<void> deleteCategory(int categoryId) async {
     final batch = _firestore.batch();
-    batch.delete(_firestore.collection(FirebasePaths.categories).doc('$categoryId'));
+    batch.delete(
+      _firestore.collection(FirebasePaths.categories).doc('$categoryId'),
+    );
     batch.set(
       _catalogMetaRef,
       _catalogMetaData(categories: true),
@@ -647,18 +659,24 @@ class FirestoreCatalogService {
         (batch) => batch.delete(doc.reference),
       for (var index = 0; index < categories.length; index++)
         (batch) => batch.set(
-              _firestore.collection(FirebasePaths.categories).doc('${categories[index].id}'),
-              _categoryData(categories[index], sortOrder: index),
-            ),
+          _firestore
+              .collection(FirebasePaths.categories)
+              .doc('${categories[index].id}'),
+          _categoryData(categories[index], sortOrder: index),
+        ),
       for (final product in products)
         (batch) => batch.set(
-              _firestore.collection(FirebasePaths.products).doc('${product.id}'),
-              _productData(product),
-            ),
+          _firestore.collection(FirebasePaths.products).doc('${product.id}'),
+          _productData(product),
+        ),
     ];
 
     const maxBatchOperations = 400;
-    for (var start = 0; start < operations.length; start += maxBatchOperations) {
+    for (
+      var start = 0;
+      start < operations.length;
+      start += maxBatchOperations
+    ) {
       final batch = _firestore.batch();
       final end = math.min(start + maxBatchOperations, operations.length);
       for (var index = start; index < end; index++) {
@@ -701,7 +719,9 @@ class FirestoreCatalogService {
 
   Future<void> deleteBarangay(int barangayId) async {
     final batch = _firestore.batch();
-    batch.delete(_firestore.collection(FirebasePaths.barangays).doc('$barangayId'));
+    batch.delete(
+      _firestore.collection(FirebasePaths.barangays).doc('$barangayId'),
+    );
     batch.set(
       _catalogMetaRef,
       _catalogMetaData(barangays: true),
@@ -759,9 +779,10 @@ class FirestoreCatalogService {
   }
 
   Future<void> saveOrder(OrderRequest order) async {
-    await _firestore.collection(FirebasePaths.orders).doc('${order.id}').set(
-      _orderData(order),
-    );
+    await _firestore
+        .collection(FirebasePaths.orders)
+        .doc('${order.id}')
+        .set(_orderData(order));
   }
 
   Future<int> reserveNextOrderId() async {
@@ -775,9 +796,7 @@ class FirestoreCatalogService {
       final currentNextOrderId = data == null
           ? 0
           : _coerceInt(data['nextOrderId']);
-      final reservedOrderId = currentNextOrderId > 0
-          ? currentNextOrderId
-          : 1;
+      final reservedOrderId = currentNextOrderId > 0 ? currentNextOrderId : 1;
 
       transaction.set(counterRef, {
         'nextOrderId': reservedOrderId + 1,
@@ -1111,14 +1130,18 @@ class FirestoreCatalogService {
   }
 
   Map<String, dynamic> _productsManifestData(Iterable<Product> products) {
-    return _manifestData(products.map((product) => (product.id, product.updatedAt)));
+    return _manifestData(
+      products.map((product) => (product.id, product.updatedAt)),
+    );
   }
 
   Map<String, dynamic> _productsManifestEntryData(Product product) {
     return _manifestEntryData(product.id, product.updatedAt);
   }
 
-  Map<String, dynamic> _productsManifestEntriesData(Iterable<Product> products) {
+  Map<String, dynamic> _productsManifestEntriesData(
+    Iterable<Product> products,
+  ) {
     return _manifestEntriesData(
       products.map((product) => (product.id, product.updatedAt)),
     );
@@ -1174,7 +1197,10 @@ class FirestoreCatalogService {
   }
 
   Future<AdminSession?> loadAdminSession(String uid) async {
-    final doc = await _firestore.collection(FirebasePaths.admins).doc(uid).get();
+    final doc = await _firestore
+        .collection(FirebasePaths.admins)
+        .doc(uid)
+        .get();
     if (!doc.exists || doc.data() == null) {
       return null;
     }
@@ -1187,19 +1213,26 @@ class FirestoreCatalogService {
   }
 
   Future<void> saveAdminSession(AdminSession session) async {
-    await _firestore.collection(FirebasePaths.admins).doc(session.uid).set(
-      session.toMap(),
-      SetOptions(merge: true),
-    );
+    await _firestore
+        .collection(FirebasePaths.admins)
+        .doc(session.uid)
+        .set(session.toMap(), SetOptions(merge: true));
   }
 
-  Category _categoryFromSnapshot(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+  Category _categoryFromSnapshot(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
     final map = _normalizeFirestoreMap(doc.data());
     map.putIfAbsent('id', () => int.tryParse(doc.id) ?? 0);
-    map.putIfAbsent('normalizedName', () => '${map['name'] ?? ''}'.trim().toLowerCase());
+    map.putIfAbsent(
+      'normalizedName',
+      () => '${map['name'] ?? ''}'.trim().toLowerCase(),
+    );
     map.putIfAbsent(
       'sortOrder',
-      () => map['id'] is int ? map['id'] as int : int.tryParse('${map['id']}') ?? 0,
+      () => map['id'] is int
+          ? map['id'] as int
+          : int.tryParse('${map['id']}') ?? 0,
     );
     return Category.fromMap(map);
   }
@@ -1212,37 +1245,50 @@ class FirestoreCatalogService {
     return a.id.compareTo(b.id);
   }
 
-  Barangay _barangayFromSnapshot(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+  Barangay _barangayFromSnapshot(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
     final map = _normalizeFirestoreMap(doc.data());
     map.putIfAbsent('id', () => int.tryParse(doc.id) ?? 0);
     return Barangay.fromMap(map);
   }
 
-  AppBanner _bannerFromSnapshot(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+  AppBanner _bannerFromSnapshot(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
     final map = _normalizeFirestoreMap(doc.data());
     map.putIfAbsent('id', () => int.tryParse(doc.id) ?? 0);
     return AppBanner.fromMap(map);
   }
 
-  Product _productFromSnapshot(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+  Product _productFromSnapshot(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
     final map = _normalizeFirestoreMap(doc.data());
     map.putIfAbsent('id', () => int.tryParse(doc.id) ?? 0);
     return Product.fromMap(map);
   }
 
-  OrderRequest _orderFromSnapshot(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+  OrderRequest _orderFromSnapshot(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
     final map = _normalizeFirestoreMap(doc.data());
     map.putIfAbsent('id', () => int.tryParse(doc.id) ?? 0);
     return OrderRequest.fromMap(map);
   }
 
-  AppSettings _settingsFromSnapshot(DocumentSnapshot<Map<String, dynamic>> doc) {
+  AppSettings _settingsFromSnapshot(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
     final map = _normalizeFirestoreMap(doc.data() ?? const {});
     map.putIfAbsent('id', () => int.tryParse(doc.id) ?? 1);
     return AppSettings.fromMap(map);
   }
 
-  Map<String, dynamic> _categoryData(Category category, {required int sortOrder}) {
+  Map<String, dynamic> _categoryData(
+    Category category, {
+    required int sortOrder,
+  }) {
     return {
       ...category.toMap(),
       'isActive': category.isActive,
@@ -1280,85 +1326,31 @@ class FirestoreCatalogService {
   }
 
   Future<List<Category>> _loadPublicCategories() async {
-    final snapshots = await Future.wait([
-      _firestore
-          .collection(FirebasePaths.categories)
-          .where('isActive', isEqualTo: true)
-          .get(),
-      _firestore
-          .collection(FirebasePaths.categories)
-          .where('active', isEqualTo: true)
-          .get(),
-      _firestore
-          .collection(FirebasePaths.categories)
-          .where('status', isEqualTo: true)
-          .get(),
-    ]);
-    final byId = <int, Category>{};
-    for (final snapshot in snapshots) {
-      for (final doc in snapshot.docs) {
-        final category = _categoryFromSnapshot(doc);
-        byId[category.id] = category;
-      }
-    }
-    return byId.values.toList();
+    final snapshot = await _firestore
+        .collection(FirebasePaths.categories)
+        .where('isActive', isEqualTo: true)
+        .get();
+    return snapshot.docs.map(_categoryFromSnapshot).toList();
   }
 
   Future<List<AppBanner>> _loadPublicBanners() async {
-    final snapshots = await Future.wait([
-      _firestore
-          .collection(FirebasePaths.banners)
-          .where('isActive', isEqualTo: true)
-          .get(),
-      _firestore
-          .collection(FirebasePaths.banners)
-          .where('active', isEqualTo: true)
-          .get(),
-      _firestore
-          .collection(FirebasePaths.banners)
-          .where('status', isEqualTo: true)
-          .get(),
-    ]);
-    final byId = <int, AppBanner>{};
-    for (final snapshot in snapshots) {
-      for (final doc in snapshot.docs) {
-        final banner = _bannerFromSnapshot(doc);
-        byId[banner.id] = banner;
-      }
-    }
-    return byId.values.toList();
+    final snapshot = await _firestore
+        .collection(FirebasePaths.banners)
+        .where('isActive', isEqualTo: true)
+        .get();
+    return snapshot.docs.map(_bannerFromSnapshot).toList();
   }
 
   Future<List<Product>> _loadPublicProducts() async {
-    final snapshots = await Future.wait([
-      _firestore
-          .collection(FirebasePaths.products)
-          .where('isActive', isEqualTo: true)
-          .get(),
-      _firestore
-          .collection(FirebasePaths.products)
-          .where('active', isEqualTo: true)
-          .get(),
-      _firestore
-          .collection(FirebasePaths.products)
-          .where('status', isEqualTo: true)
-          .get(),
-    ]);
-    final byId = <int, Product>{};
-    for (final snapshot in snapshots) {
-      for (final doc in snapshot.docs) {
-        final product = _productFromSnapshot(doc);
-        byId[product.id] = product;
-      }
-    }
-    return byId.values.toList();
+    final snapshot = await _firestore
+        .collection(FirebasePaths.products)
+        .where('isActive', isEqualTo: true)
+        .get();
+    return snapshot.docs.map(_productFromSnapshot).toList();
   }
 
   Map<String, dynamic> _settingsData(AppSettings settings) {
-    return {
-      ...settings.toMap(),
-      'id': settings.id,
-    };
+    return {...settings.toMap(), 'id': settings.id};
   }
 
   Map<String, dynamic> _orderData(OrderRequest order) {
@@ -1381,7 +1373,9 @@ class FirestoreCatalogService {
   }
 
   Map<String, dynamic> _normalizeFirestoreMap(Map<String, dynamic> raw) {
-    return raw.map((key, value) => MapEntry(key, _normalizeFirestoreValue(value)));
+    return raw.map(
+      (key, value) => MapEntry(key, _normalizeFirestoreValue(value)),
+    );
   }
 
   dynamic _normalizeFirestoreValue(dynamic value) {
@@ -1390,7 +1384,8 @@ class FirestoreCatalogService {
     }
     if (value is Map) {
       return value.map(
-        (key, nestedValue) => MapEntry('$key', _normalizeFirestoreValue(nestedValue)),
+        (key, nestedValue) =>
+            MapEntry('$key', _normalizeFirestoreValue(nestedValue)),
       );
     }
     if (value is List) {

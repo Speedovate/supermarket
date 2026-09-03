@@ -166,9 +166,14 @@ class AppController extends Notifier<AppState> {
   StreamSubscription<AppSettings?>? _settingsSubscription;
   StreamSubscription<List<OrderRequest>>? _ordersSubscription;
   StreamSubscription<CatalogMetaSnapshot?>? _catalogMetaSubscription;
+  Timer? _catalogRefreshRetryTimer;
+  Timer? _ordersRefreshRetryTimer;
   String? _ordersRealtimeScopeKey;
   bool? _catalogRealtimeIncludesInactive;
+  bool _catalogIntegrityChecked = false;
   bool _realtimeSyncScheduled = false;
+  int _catalogRefreshRetryAttempt = 0;
+  int _ordersRefreshRetryAttempt = 0;
   bool _disposeSyncRegistered = false;
   static const _defaultStoreContactNumber = '09064493206';
   static const _defaultFacebookMessengerUrl =
@@ -176,9 +181,7 @@ class AppController extends Notifier<AppState> {
 
   bool _isCurrentAdminRoute() {
     final path = Uri.base.path;
-    return path == '/admin' ||
-        path == '/admin/' ||
-        path.startsWith('/admin/');
+    return path == '/admin' || path == '/admin/' || path.startsWith('/admin/');
   }
 
   bool _hasActiveAdminContext([AdminSession? session]) {
@@ -247,6 +250,11 @@ class AppController extends Notifier<AppState> {
     await _syncAdminSessionFromFirebase();
     await _hydratePublicDataFromFirebase();
     _startRealtimeSync();
+    if (_hasActiveAdminContext(state.adminSession)) {
+      await _refreshOrdersFromFirebase();
+      state = state.copyWith(loading: false);
+      return;
+    }
     if (_hasOrdersRealtimeCoverage()) {
       state = state.copyWith(loading: false);
       return;
@@ -273,14 +281,19 @@ class AppController extends Notifier<AppState> {
     _catalogMetaSubscription ??= _firestoreCatalog.watchCatalogMeta().listen((
       meta,
     ) async {
-      if (meta == null) {
-        return;
+      try {
+        if (meta == null) {
+          return;
+        }
+        await _syncCatalogFromMeta(
+          meta,
+          includeInactive: _hasActiveAdminContext(state.adminSession),
+        );
+        _resetCatalogRefreshRetry();
+      } catch (error, stackTrace) {
+        _handleCatalogRealtimeSyncError(error, stackTrace);
       }
-      await _syncCatalogFromMeta(
-        meta,
-        includeInactive: _hasActiveAdminContext(state.adminSession),
-      );
-    }, onError: _handleRealtimeSyncError);
+    }, onError: _handleCatalogRealtimeSyncError);
     _restartOrdersRealtimeSync();
     if (!_disposeSyncRegistered) {
       _disposeSyncRegistered = true;
@@ -292,6 +305,8 @@ class AppController extends Notifier<AppState> {
         unawaited(_productsSubscription?.cancel());
         unawaited(_settingsSubscription?.cancel());
         unawaited(_ordersSubscription?.cancel());
+        _catalogRefreshRetryTimer?.cancel();
+        _ordersRefreshRetryTimer?.cancel();
       });
     }
   }
@@ -316,54 +331,65 @@ class AppController extends Notifier<AppState> {
       hasActiveAdminContext: hasActiveAdminContext,
       trackedPhones: trackedPhones,
     );
-    if (_ordersSubscription != null && _ordersRealtimeScopeKey == nextScopeKey) {
+    if (_ordersSubscription != null &&
+        _ordersRealtimeScopeKey == nextScopeKey) {
       return;
+    }
+    if (!hasActiveAdminContext) {
+      _resetOrdersRefreshRetry();
     }
     unawaited(_ordersSubscription?.cancel());
     _ordersRealtimeScopeKey = nextScopeKey;
     final stream = hasActiveAdminContext
         ? _firestoreCatalog.watchOrders()
-        : _firestoreCatalog.watchOrdersForNormalizedPhones(
-            trackedPhones,
-          );
+        : _firestoreCatalog.watchOrdersForNormalizedPhones(trackedPhones);
     _ordersSubscription = stream.listen((orders) async {
-      final nextOrders = hasActiveAdminContext
-          ? orders
-          : _mergeOrdersPreservingLocal(
-              existing: state.orders,
-              incoming: orders,
-              trackedPhones: trackedPhones,
-            );
-      state = state.copyWith(
-        orders: nextOrders,
-        products: hasActiveAdminContext
-            ? _reconcileProductSoldWithOrders(
-                products: state.products,
-                orders: nextOrders,
-                shouldPersistRemotely: true,
-              ).products
-            : state.products,
-      );
-      await _persist();
-      if (hasActiveAdminContext) {
-        final soldSync = _reconcileProductSoldWithOrders(
-          products: state.products,
+      try {
+        final nextOrders = hasActiveAdminContext
+            ? orders
+            : _mergeOrdersPreservingLocal(
+                existing: state.orders,
+                incoming: orders,
+                trackedPhones: trackedPhones,
+              );
+        state = state.copyWith(
           orders: nextOrders,
-          shouldPersistRemotely: true,
+          products: hasActiveAdminContext
+              ? _reconcileProductSoldWithOrders(
+                  products: state.products,
+                  orders: nextOrders,
+                  shouldPersistRemotely: true,
+                ).products
+              : state.products,
         );
-        if (soldSync.changedProducts.isNotEmpty) {
-          final now = DateTime.now();
-          state = state.copyWith(
-            products: soldSync.products,
-            productsMetaUpdatedAt: now,
-            catalogHydrated: true,
+        await _persist();
+        if (hasActiveAdminContext) {
+          final soldSync = _reconcileProductSoldWithOrders(
+            products: state.products,
+            orders: nextOrders,
+            shouldPersistRemotely: true,
           );
-          await _persist();
-          await _firestoreCatalog.saveProducts(soldSync.changedProducts);
-          await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
+          if (soldSync.changedProducts.isNotEmpty) {
+            final now = DateTime.now();
+            state = state.copyWith(
+              products: soldSync.products,
+              productsMetaUpdatedAt: now,
+              catalogHydrated: true,
+            );
+            await _persist();
+            await _firestoreCatalog.saveProducts(soldSync.changedProducts);
+            await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
+          }
         }
+      } catch (error, stackTrace) {
+        _handleOrdersRealtimeSyncError(error, stackTrace);
       }
-    }, onError: _handleRealtimeSyncError);
+    }, onError: _handleOrdersRealtimeSyncError);
+    if (hasActiveAdminContext) {
+      // The listener can emit Firestore's local cache first. Reconcile once
+      // from the server so the admin list does not remain stale.
+      unawaited(_refreshOrdersFromFirebase());
+    }
   }
 
   bool _hasOrdersRealtimeCoverage() {
@@ -379,19 +405,92 @@ class AppController extends Notifier<AppState> {
         );
   }
 
-  void _handleRealtimeSyncError(Object error, StackTrace stackTrace) {
-    if (error is FirebaseException && error.code == 'permission-denied') {
-      state = state.copyWith(loading: false);
-      return;
-    }
+  void _handleCatalogRealtimeSyncError(Object error, StackTrace stackTrace) {
     FlutterError.reportError(
       FlutterErrorDetails(
         exception: error,
         stack: stackTrace,
-        library: 'app_state_realtime_sync',
-        context: ErrorDescription('while listening to Firestore realtime data'),
+        library: 'app_state_catalog_sync',
+        context: ErrorDescription(
+          'while listening to Firestore catalog metadata',
+        ),
       ),
     );
+    _scheduleCatalogRefreshRetry();
+  }
+
+  void _scheduleCatalogRefreshRetry() {
+    if (_catalogRefreshRetryTimer != null) {
+      return;
+    }
+    const retryDelays = [
+      Duration(seconds: 2),
+      Duration(seconds: 5),
+      Duration(seconds: 10),
+      Duration(seconds: 20),
+      Duration(seconds: 30),
+    ];
+    final delay =
+        retryDelays[math.min(
+          _catalogRefreshRetryAttempt,
+          retryDelays.length - 1,
+        )];
+    _catalogRefreshRetryAttempt++;
+    _catalogRefreshRetryTimer = Timer(delay, () {
+      _catalogRefreshRetryTimer = null;
+      unawaited(_catalogMetaSubscription?.cancel());
+      _catalogMetaSubscription = null;
+      _startRealtimeSync();
+      unawaited(_hydratePublicDataFromFirebase());
+    });
+  }
+
+  void _resetCatalogRefreshRetry() {
+    _catalogRefreshRetryTimer?.cancel();
+    _catalogRefreshRetryTimer = null;
+    _catalogRefreshRetryAttempt = 0;
+  }
+
+  void _handleOrdersRealtimeSyncError(Object error, StackTrace stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'app_state_orders_sync',
+        context: ErrorDescription('while listening to admin orders'),
+      ),
+    );
+    _scheduleOrdersRefreshRetry();
+  }
+
+  void _scheduleOrdersRefreshRetry() {
+    if (!_hasActiveAdminContext(state.adminSession) ||
+        _ordersRefreshRetryTimer != null) {
+      return;
+    }
+    const retryDelays = [
+      Duration(seconds: 2),
+      Duration(seconds: 5),
+      Duration(seconds: 10),
+      Duration(seconds: 20),
+      Duration(seconds: 30),
+    ];
+    final delay =
+        retryDelays[math.min(
+          _ordersRefreshRetryAttempt,
+          retryDelays.length - 1,
+        )];
+    _ordersRefreshRetryAttempt++;
+    _ordersRefreshRetryTimer = Timer(delay, () {
+      _ordersRefreshRetryTimer = null;
+      unawaited(_refreshOrdersFromFirebase());
+    });
+  }
+
+  void _resetOrdersRefreshRetry() {
+    _ordersRefreshRetryTimer?.cancel();
+    _ordersRefreshRetryTimer = null;
+    _ordersRefreshRetryAttempt = 0;
   }
 
   void _applyDefaultState() {
@@ -472,8 +571,7 @@ class AppController extends Notifier<AppState> {
         orders: sanitizedOrders,
       ),
       adminSession: persisted.adminSession,
-      catalogHydrated:
-          hasPersistedCatalogContent && !hasCatalogVersionMismatch,
+      catalogHydrated: hasPersistedCatalogContent && !hasCatalogVersionMismatch,
     );
   }
 
@@ -485,6 +583,20 @@ class AppController extends Notifier<AppState> {
     }
     try {
       final catalogMeta = await _firestoreCatalog.loadCatalogMeta();
+      final canVerifyCachedCatalog =
+          catalogMeta != null &&
+          state.catalogHydrated &&
+          !_needsCatalogReconciliation(includeInactive: includeInactive);
+      if (canVerifyCachedCatalog && !_catalogIntegrityChecked) {
+        await _reconcileCatalogCacheIntegrity(
+          catalogMeta,
+          includeInactive: includeInactive,
+        );
+        _catalogIntegrityChecked = true;
+      }
+      if (catalogMeta != null) {
+        _resetCatalogRefreshRetry();
+      }
       if (catalogMeta != null &&
           state.catalogHydrated &&
           !includeInactive &&
@@ -502,6 +614,7 @@ class AppController extends Notifier<AppState> {
                 catalogMeta.productsUpdatedAt ??
                 state.productsMetaUpdatedAt ??
                 DateTime.now(),
+            allowEmpty: remoteManifestCount == 0,
           );
           return;
         }
@@ -572,8 +685,19 @@ class AppController extends Notifier<AppState> {
         catalogHydrated: true,
       );
       await _persist();
-    } catch (_) {
-      // Keep current local session data if Firebase fetch fails.
+      _catalogIntegrityChecked = true;
+      _resetCatalogRefreshRetry();
+    } catch (error, stackTrace) {
+      // Keep current local session data while a bounded retry restores it.
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'app_state_catalog_sync',
+          context: ErrorDescription('while refreshing the Firestore catalog'),
+        ),
+      );
+      _scheduleCatalogRefreshRetry();
     } finally {
       if (shouldManageLoading) {
         state = state.copyWith(loading: false);
@@ -640,7 +764,7 @@ class AppController extends Notifier<AppState> {
     required int localProductCount,
   }) {
     if (remoteManifestCount <= 0) {
-      return false;
+      return localProductCount > 0;
     }
     if (localProductCount <= 0) {
       return true;
@@ -656,6 +780,100 @@ class AppController extends Notifier<AppState> {
       return true;
     }
     return (localProductCount / remoteManifestCount) <= 0.66;
+  }
+
+  Future<void> _reconcileCatalogCacheIntegrity(
+    CatalogMetaSnapshot meta, {
+    required bool includeInactive,
+  }) async {
+    final manifests = await Future.wait([
+      _firestoreCatalog.loadCategoriesManifest(),
+      _firestoreCatalog.loadBarangaysManifest(),
+      _firestoreCatalog.loadBannersManifest(),
+      _firestoreCatalog.loadProductsManifest(),
+    ]);
+    final categoriesManifest = manifests[0];
+    final barangaysManifest = manifests[1];
+    final bannersManifest = manifests[2];
+    final productsManifest = manifests[3];
+
+    if (categoriesManifest != null &&
+        _isCollectionCacheSuspicious(
+          remoteCount: categoriesManifest.itemUpdatedAts.length,
+          localCount: state.categories.length,
+          includeInactive: includeInactive,
+        )) {
+      await _syncCategoriesFromManifest(
+        remoteUpdatedAt:
+            meta.categoriesUpdatedAt ??
+            categoriesManifest.updatedAt ??
+            DateTime.now(),
+        includeInactive: includeInactive,
+      );
+    }
+    if (barangaysManifest != null &&
+        _isCollectionCacheSuspicious(
+          remoteCount: barangaysManifest.itemUpdatedAts.length,
+          localCount: state.barangays.length,
+          includeInactive: includeInactive,
+        )) {
+      await _syncBarangaysFromManifest(
+        remoteUpdatedAt:
+            meta.barangaysUpdatedAt ??
+            barangaysManifest.updatedAt ??
+            DateTime.now(),
+        includeInactive: includeInactive,
+      );
+    }
+    if (bannersManifest != null &&
+        _isCollectionCacheSuspicious(
+          remoteCount: bannersManifest.itemUpdatedAts.length,
+          localCount: state.banners.length,
+          includeInactive: includeInactive,
+        )) {
+      await _syncBannersFromManifest(
+        remoteUpdatedAt:
+            meta.bannersUpdatedAt ??
+            bannersManifest.updatedAt ??
+            DateTime.now(),
+        includeInactive: includeInactive,
+      );
+    }
+    if (productsManifest != null &&
+        _isCollectionCacheSuspicious(
+          remoteCount: productsManifest.itemUpdatedAts.length,
+          localCount: state.products.length,
+          includeInactive: includeInactive,
+        )) {
+      await _syncProductsFromManifest(
+        remoteProductsUpdatedAt:
+            meta.productsUpdatedAt ??
+            productsManifest.updatedAt ??
+            DateTime.now(),
+        includeInactive: includeInactive,
+        force: true,
+      );
+    }
+    await _syncSettingsFromFirebase(
+      remoteUpdatedAt:
+          meta.settingsUpdatedAt ??
+          state.settingsMetaUpdatedAt ??
+          DateTime.now(),
+    );
+  }
+
+  bool _isCollectionCacheSuspicious({
+    required int remoteCount,
+    required int localCount,
+    required bool includeInactive,
+  }) {
+    if (includeInactive) {
+      return remoteCount != localCount;
+    }
+    return _isPublicProductsCacheSuspicious(
+      remoteManifestCount: remoteCount,
+      localProductCount: localCount,
+    );
   }
 
   DateTime? _latestCategoryUpdatedAt(List<Category> items) {
@@ -743,9 +961,7 @@ class AppController extends Notifier<AppState> {
       remote: meta.settingsUpdatedAt,
       local: state.settingsMetaUpdatedAt,
     )) {
-      await _syncSettingsFromFirebase(
-        remoteUpdatedAt: meta.settingsUpdatedAt!,
-      );
+      await _syncSettingsFromFirebase(remoteUpdatedAt: meta.settingsUpdatedAt!);
       didSync = true;
     }
     return didSync;
@@ -779,10 +995,13 @@ class AppController extends Notifier<AppState> {
           : fetched.where((item) => item.isActive).toList();
       final hiddenFetchedIds = includeInactive
           ? const <int>{}
-          : idsToFetch.difference(visibleFetched.map((item) => item.id).toSet());
+          : idsToFetch.difference(
+              visibleFetched.map((item) => item.id).toSet(),
+            );
       final nextById = <int, Category>{};
       for (final item in state.categories) {
-        if (idsToRemove.contains(item.id) || hiddenFetchedIds.contains(item.id)) {
+        if (idsToRemove.contains(item.id) ||
+            hiddenFetchedIds.contains(item.id)) {
           continue;
         }
         nextById[item.id] = item;
@@ -846,10 +1065,13 @@ class AppController extends Notifier<AppState> {
           : fetched.where((item) => item.isActive).toList();
       final hiddenFetchedIds = includeInactive
           ? const <int>{}
-          : idsToFetch.difference(visibleFetched.map((item) => item.id).toSet());
+          : idsToFetch.difference(
+              visibleFetched.map((item) => item.id).toSet(),
+            );
       final nextById = <int, Barangay>{};
       for (final item in state.barangays) {
-        if (idsToRemove.contains(item.id) || hiddenFetchedIds.contains(item.id)) {
+        if (idsToRemove.contains(item.id) ||
+            hiddenFetchedIds.contains(item.id)) {
           continue;
         }
         nextById[item.id] = item;
@@ -907,10 +1129,13 @@ class AppController extends Notifier<AppState> {
           : fetched.where((item) => item.isActive).toList();
       final hiddenFetchedIds = includeInactive
           ? const <int>{}
-          : idsToFetch.difference(visibleFetched.map((item) => item.id).toSet());
+          : idsToFetch.difference(
+              visibleFetched.map((item) => item.id).toSet(),
+            );
       final nextById = <int, AppBanner>{};
       for (final item in state.banners) {
-        if (idsToRemove.contains(item.id) || hiddenFetchedIds.contains(item.id)) {
+        if (idsToRemove.contains(item.id) ||
+            hiddenFetchedIds.contains(item.id)) {
           continue;
         }
         nextById[item.id] = item;
@@ -918,7 +1143,8 @@ class AppController extends Notifier<AppState> {
       for (final item in visibleFetched) {
         nextById[item.id] = item;
       }
-      final next = nextById.values.toList()..sort((a, b) => a.id.compareTo(b.id));
+      final next = nextById.values.toList()
+        ..sort((a, b) => a.id.compareTo(b.id));
       state = state.copyWith(
         banners: next,
         bannersMetaUpdatedAt: remoteUpdatedAt,
@@ -942,17 +1168,20 @@ class AppController extends Notifier<AppState> {
   Future<void> _syncProductsFromManifest({
     required DateTime remoteProductsUpdatedAt,
     required bool includeInactive,
+    bool force = false,
   }) async {
-    if (!_isRemoteCollectionNewer(
-      remote: remoteProductsUpdatedAt,
-      local: state.productsMetaUpdatedAt,
-    )) {
+    if (!force &&
+        !_isRemoteCollectionNewer(
+          remote: remoteProductsUpdatedAt,
+          local: state.productsMetaUpdatedAt,
+        )) {
       return;
     }
     if (includeInactive) {
       await _syncProductsByFullFetch(
         includeInactive: true,
         remoteProductsUpdatedAt: remoteProductsUpdatedAt,
+        allowEmpty: force,
       );
       return;
     }
@@ -963,16 +1192,20 @@ class AppController extends Notifier<AppState> {
         await _syncProductsByFullFetch(
           includeInactive: false,
           remoteProductsUpdatedAt: remoteProductsUpdatedAt,
+          allowEmpty: true,
         );
         return;
       }
 
-      final localById = {for (final product in state.products) product.id: product};
+      final localById = {
+        for (final product in state.products) product.id: product,
+      };
       final remoteIds = manifest.itemUpdatedAts.keys.toSet();
       if (remoteIds.isEmpty) {
         await _syncProductsByFullFetch(
           includeInactive: false,
           remoteProductsUpdatedAt: remoteProductsUpdatedAt,
+          allowEmpty: true,
         );
         return;
       }
@@ -1004,7 +1237,9 @@ class AppController extends Notifier<AppState> {
       final visibleFetchedProducts = fetchedProducts
           .where((product) => product.isActive)
           .toList();
-      final fetchedVisibleIds = visibleFetchedProducts.map((item) => item.id).toSet();
+      final fetchedVisibleIds = visibleFetchedProducts
+          .map((item) => item.id)
+          .toSet();
       final idsHiddenOrMissing = idsToFetch.difference(fetchedVisibleIds);
 
       final nextById = <int, Product>{};
@@ -1053,11 +1288,12 @@ class AppController extends Notifier<AppState> {
   Future<void> _syncProductsByFullFetch({
     required bool includeInactive,
     required DateTime remoteProductsUpdatedAt,
+    bool allowEmpty = false,
   }) async {
     final products = await _firestoreCatalog.loadProducts(
       includeInactive: includeInactive,
     );
-    if (products.isEmpty && state.products.isNotEmpty) {
+    if (!allowEmpty && products.isEmpty && state.products.isNotEmpty) {
       return;
     }
     state = state.copyWith(
@@ -1280,7 +1516,8 @@ class AppController extends Notifier<AppState> {
     final normalizedQuery = query.trim().toLowerCase();
     return state.products.where((product) {
       final isUnassignedCategory =
-          product.category <= 0 || !activeCategoryIds.contains(product.category);
+          product.category <= 0 ||
+          !activeCategoryIds.contains(product.category);
       final categoryMatch = switch (categoryId) {
         'all' => true,
         'others' => isUnassignedCategory,
@@ -1634,7 +1871,9 @@ class AppController extends Notifier<AppState> {
         'uid=${authUser?.uid ?? 'none'} '
         'anonymous=${authUser?.isAnonymous ?? false}',
       );
-      debugPrint('[OrderSubmission] reserving order ID via system/orders_counter');
+      debugPrint(
+        '[OrderSubmission] reserving order ID via system/orders_counter',
+      );
       final orderId = await _firestoreCatalog.reserveNextOrderId();
       debugPrint('[OrderSubmission] reserved orderId=$orderId');
       final normalizedCustomer = state.customerDraft.copyWith(
@@ -1783,7 +2022,10 @@ class AppController extends Notifier<AppState> {
     final trackedPhones = _clientScopedPhoneSeeds();
     state = state.copyWith(
       adminSession: null,
-      orders: _filterClientVisibleOrders(state.orders, trackedPhones: trackedPhones),
+      orders: _filterClientVisibleOrders(
+        state.orders,
+        trackedPhones: trackedPhones,
+      ),
     );
     await _persist();
     _startRealtimeSync();
@@ -1841,9 +2083,7 @@ class AppController extends Notifier<AppState> {
       errorMessage: null,
     );
     await _firestoreCatalog.saveProduct(updated);
-    await _reconcileProductsAfterMutation(
-      fallbackUpdatedAt: updated.updatedAt,
-    );
+    await _reconcileProductsAfterMutation(fallbackUpdatedAt: updated.updatedAt);
     await _persist();
     if (previousProduct?.photoStoragePath != null &&
         previousProduct!.photoStoragePath != updated.photoStoragePath &&
@@ -1911,7 +2151,9 @@ class AppController extends Notifier<AppState> {
     await _firestoreCatalog.deleteProduct(productId);
     await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
     await _persist();
-    unawaited(_productImageStorage.deleteByPath(removedProduct?.photoStoragePath));
+    unawaited(
+      _productImageStorage.deleteByPath(removedProduct?.photoStoragePath),
+    );
   }
 
   Future<void> saveCategory(Category category) async {
@@ -2023,7 +2265,8 @@ class AppController extends Notifier<AppState> {
         product.copyWith(
           name: product.name.trim(),
           details: product.details.trim(),
-          category: normalizedCategories.any((item) => item.id == product.categoryId)
+          category:
+              normalizedCategories.any((item) => item.id == product.categoryId)
               ? product.categoryId
               : 0,
         ),
@@ -2301,9 +2544,19 @@ class AppController extends Notifier<AppState> {
           await _firestoreCatalog.saveProducts(soldSync.changedProducts);
           await _reconcileProductsAfterMutation(fallbackUpdatedAt: now);
         }
+        _resetOrdersRefreshRetry();
       }
-    } catch (_) {
-      // Keep local cached orders when the network fetch fails.
+    } catch (error, stackTrace) {
+      // Preserve cached orders while a bounded retry restores the server view.
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'app_state_orders_sync',
+          context: ErrorDescription('while refreshing admin orders'),
+        ),
+      );
+      _scheduleOrdersRefreshRetry();
     }
   }
 
@@ -2352,21 +2605,22 @@ class AppController extends Notifier<AppState> {
     if (trackedPhones.isEmpty) {
       return const [];
     }
-    final filtered = orders.where((order) {
-      final normalizedPhone = normalizePhoneNumber(order.phone);
-      return normalizedPhone.isNotEmpty && trackedPhones.contains(normalizedPhone);
-    }).toList()
-      ..sort((a, b) {
-        final updatedCompare = b.updatedAt.compareTo(a.updatedAt);
-        if (updatedCompare != 0) {
-          return updatedCompare;
-        }
-        final createdCompare = b.createdAt.compareTo(a.createdAt);
-        if (createdCompare != 0) {
-          return createdCompare;
-        }
-        return b.id.compareTo(a.id);
-      });
+    final filtered =
+        orders.where((order) {
+          final normalizedPhone = normalizePhoneNumber(order.phone);
+          return normalizedPhone.isNotEmpty &&
+              trackedPhones.contains(normalizedPhone);
+        }).toList()..sort((a, b) {
+          final updatedCompare = b.updatedAt.compareTo(a.updatedAt);
+          if (updatedCompare != 0) {
+            return updatedCompare;
+          }
+          final createdCompare = b.createdAt.compareTo(a.createdAt);
+          if (createdCompare != 0) {
+            return createdCompare;
+          }
+          return b.id.compareTo(a.id);
+        });
     return filtered;
   }
 
@@ -2430,14 +2684,15 @@ class AppController extends Notifier<AppState> {
       'invalid-email' => 'Enter a valid email address.',
       'user-disabled' => 'This admin account has been disabled.',
       'user-not-found' => 'No admin account found for this email.',
-      'wrong-password' || 'invalid-credential' => 'Incorrect email or password.',
-      'too-many-requests' =>
-        'Too many attempts. Please try again in a moment.',
+      'wrong-password' ||
+      'invalid-credential' => 'Incorrect email or password.',
+      'too-many-requests' => 'Too many attempts. Please try again in a moment.',
       'network-request-failed' =>
         'Network error. Please check your connection and try again.',
-      _ => (error.message?.trim().isNotEmpty ?? false)
-          ? error.message!.trim()
-          : 'Unable to sign in right now.',
+      _ =>
+        (error.message?.trim().isNotEmpty ?? false)
+            ? error.message!.trim()
+            : 'Unable to sign in right now.',
     };
   }
 
@@ -2445,11 +2700,11 @@ class AppController extends Notifier<AppState> {
     return switch (error.code) {
       'permission-denied' =>
         'Firebase denied access. Check your Firestore admin document and rules.',
-      'unavailable' =>
-        'Firebase is temporarily unavailable. Please try again.',
-      _ => (error.message?.trim().isNotEmpty ?? false)
-          ? error.message!.trim()
-          : 'Unable to sign in right now.',
+      'unavailable' => 'Firebase is temporarily unavailable. Please try again.',
+      _ =>
+        (error.message?.trim().isNotEmpty ?? false)
+            ? error.message!.trim()
+            : 'Unable to sign in right now.',
     };
   }
 
@@ -2610,7 +2865,9 @@ class AppController extends Notifier<AppState> {
     if (!trimmedPhotoUrl.startsWith('data:image/')) {
       return (
         photoUrl: trimmedPhotoUrl,
-        photoStoragePath: trimmedStoragePath.isEmpty ? null : trimmedStoragePath,
+        photoStoragePath: trimmedStoragePath.isEmpty
+            ? null
+            : trimmedStoragePath,
       );
     }
 
@@ -2624,7 +2881,9 @@ class AppController extends Notifier<AppState> {
         photoStoragePath: upload.storagePath,
       );
     } catch (error) {
-      throw StateError('Unable to upload product image to Firebase Storage: $error');
+      throw StateError(
+        'Unable to upload product image to Firebase Storage: $error',
+      );
     }
   }
 }

@@ -186,10 +186,6 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
         statusFilter == null &&
         createdAtFilter == null &&
         updatedAtFilter == null;
-    final activeFilterCount =
-        (createdAtFilter == null ? 0 : 1) +
-        (updatedAtFilter == null ? 0 : 1) +
-        (statusFilter == null ? 0 : 1);
     final toolbarActionSize = isMobile ? 48.0 : 0.0;
 
     return Column(
@@ -962,7 +958,7 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                   child: Container(
                                     key: _desktopFiltersAnchorKey,
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 18,
+                                      horizontal: 24,
                                       vertical: 14,
                                     ),
                                     decoration: BoxDecoration(
@@ -972,12 +968,6 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(
-                                          Icons.filter_list_rounded,
-                                          size: 18,
-                                          color: Colors.white,
-                                        ),
-                                        const SizedBox(width: 8),
                                         const Text(
                                           'Filters',
                                           style: TextStyle(
@@ -986,23 +976,9 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                             height: 1.15,
                                           ),
                                         ),
-                                        if (activeFilterCount > 0) ...[
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            '$activeFilterCount',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w700,
-                                              height: 1.15,
-                                            ),
-                                          ),
-                                        ],
                                         const SizedBox(width: 8),
-                                        Icon(
-                                          controller.isOpen
-                                              ? Icons.keyboard_arrow_up_rounded
-                                              : Icons
-                                                    .keyboard_arrow_down_rounded,
+                                        const Icon(
+                                          Icons.filter_list_rounded,
                                           size: 18,
                                           color: Colors.white,
                                         ),
@@ -1025,7 +1001,7 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                     padding: isMobile
                         ? EdgeInsets.zero
                         : const EdgeInsets.symmetric(
-                            horizontal: 18,
+                            horizontal: 24,
                             vertical: 14,
                           ),
                     decoration: BoxDecoration(
@@ -1036,18 +1012,18 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.add, size: 18, color: Colors.white),
                         if (!isMobile) ...[
-                          const SizedBox(width: 8),
                           const Text(
-                            'New Category',
+                            'New',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
                               height: 1.15,
                             ),
                           ),
+                          const SizedBox(width: 8),
                         ],
+                        const Icon(Icons.add, size: 18, color: Colors.white),
                       ],
                     ),
                   ),
@@ -2282,8 +2258,8 @@ extension on _AdminCategoriesPageState {
                       TextFormField(
                         controller: nameController,
                         onFieldSubmitted: (_) => submit(dialogContext),
-                        maxLength: 15,
-                        inputFormatters: [LengthLimitingTextInputFormatter(15)],
+                        maxLength: 16,
+                        inputFormatters: [LengthLimitingTextInputFormatter(16)],
                         decoration: const InputDecoration(
                           labelText: 'Category name',
                         ),
