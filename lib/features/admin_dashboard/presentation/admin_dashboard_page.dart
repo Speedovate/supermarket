@@ -381,7 +381,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                                               ),
                                         style: const TextStyle(
                                           color: AppColors.logoBlue,
-                                          fontWeight: FontWeight.w800,
+                                          fontWeight: FontWeight.w600,
                                           height: 1.15,
                                         ),
                                       ),
@@ -428,7 +428,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                                               ),
                                         style: const TextStyle(
                                           color: AppColors.logoBlue,
-                                          fontWeight: FontWeight.w800,
+                                          fontWeight: FontWeight.w600,
                                           height: 1.15,
                                         ),
                                       ),
