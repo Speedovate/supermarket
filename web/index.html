@@ -321,6 +321,8 @@
       const clientThemeColor = '#FFFFFF';
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
       const isAppleStandalonePwa = window.navigator.standalone === true;
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       let hasAuthenticatedAdminSession = false;
 
       function isSplashVisible() {
@@ -333,7 +335,7 @@
         }
         themeColorMeta.setAttribute(
           'content',
-          isAppleStandalonePwa
+          isAppleStandalonePwa || isIOS
             ? clientThemeColor
             : (isSplashVisible()
                 ? splashThemeColor

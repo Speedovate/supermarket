@@ -1,10 +1,12 @@
-import 'dart:html' as html;
+import 'dart:js_interop';
+
+import 'package:web/web.dart' as web;
 
 void syncAuthenticatedAdminTheme({required bool isAuthenticatedAdmin}) {
-  html.window.dispatchEvent(
-    html.CustomEvent(
+  web.window.dispatchEvent(
+    web.CustomEvent(
       'andrews-authenticated-admin-theme',
-      detail: isAuthenticatedAdmin,
+      web.CustomEventInit(detail: isAuthenticatedAdmin.toJS),
     ),
   );
 }
