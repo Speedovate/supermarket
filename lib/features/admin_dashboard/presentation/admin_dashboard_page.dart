@@ -95,11 +95,11 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
 
     final metrics = <AdminDashboardMetric>[
       AdminDashboardMetric('Orders', vm.totalOrders),
-      AdminDashboardMetric('Products', vm.activeProducts),
       AdminDashboardMetric(
         'Completed',
         vm.metrics.where((metric) => metric.label == 'Completed').first.value,
       ),
+      AdminDashboardMetric('Products', vm.activeProducts),
       AdminDashboardMetric('Categories', vm.categories),
     ];
     final metricColumns = width >= 1320
@@ -185,28 +185,35 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
                         SizedBox(height: metricLabelGap),
                         Container(
                           width: double.infinity,
+                          alignment: Alignment.center,
                           padding: metricValuePadding,
                           decoration: BoxDecoration(
                             color: tint,
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: Text(
-                            _loadingOrders &&
-                                    (metric.label == 'Orders' ||
-                                        metric.label == 'Completed')
-                                ? '...'
-                                : NumberFormat.decimalPattern().format(
+                          child: _loadingOrders
+                              ? const SizedBox.square(
+                                  dimension: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: accent,
+                                  ),
+                                )
+                              : Text(
+                                  NumberFormat.decimalPattern().format(
                                     metric.value,
                                   ),
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.displaySmall
-                                ?.copyWith(
-                                  color: accent,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: metricValueFontSize,
-                                  height: 1.05,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .displaySmall
+                                      ?.copyWith(
+                                        color: accent,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: metricValueFontSize,
+                                        height: 1.05,
+                                      ),
                                 ),
-                          ),
                         ),
                       ],
                     ),
