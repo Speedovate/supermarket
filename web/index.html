@@ -342,10 +342,10 @@
       }
 
       window.__syncThemeColor = syncThemeColor;
-      window.__setAuthenticatedAdminTheme = function (isAuthenticatedAdmin) {
-        hasAuthenticatedAdminSession = isAuthenticatedAdmin === true;
+      window.addEventListener('andrews-authenticated-admin-theme', function (event) {
+        hasAuthenticatedAdminSession = event.detail === true;
         syncThemeColor();
-      };
+      });
 
       const originalPushState = history.pushState;
       history.pushState = function () {
