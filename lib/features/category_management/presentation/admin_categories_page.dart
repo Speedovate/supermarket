@@ -255,305 +255,318 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                   child: SizedBox(
                                     width: _filtersMenuWidth,
                                     child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          16,
-                                          _filtersContentHorizontalPadding,
-                                          0,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            const Text(
-                                              'Status',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.logoBlue,
-                                                height: 1.15,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: SizedBox(
-                                                width: _filtersFieldWidth,
-                                                child: AppPopupMenuField<String>(
-                                                  value: statusFilter,
-                                                  decoration:
-                                                      _filterDropdownDecoration(
-                                                        'Status',
-                                                      ),
-                                                  options: const [
-                                                    AppPopupMenuOption<String?>(
-                                                      value: null,
-                                                      label: 'Any',
-                                                    ),
-                                                    AppPopupMenuOption<String?>(
-                                                      value: 'active',
-                                                      label: 'Active',
-                                                    ),
-                                                    AppPopupMenuOption<String?>(
-                                                      value: 'inactive',
-                                                      label: 'Inactive',
-                                                    ),
-                                                  ],
-                                                  onChanged: (value) =>
-                                                      _setFilters(
-                                                        () => statusFilter =
-                                                            value,
-                                                      ),
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            _filtersContentHorizontalPadding,
+                                            16,
+                                            _filtersContentHorizontalPadding,
+                                            0,
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              const Text(
+                                                'Status',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.logoBlue,
+                                                  height: 1.15,
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                          ],
-                                        ),
-                                      ),
-                                      const _FilterDivider(),
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          12,
-                                          _filtersContentHorizontalPadding,
-                                          0,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            const Text(
-                                              'Created at',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.logoBlue,
-                                                height: 1.15,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: SizedBox(
-                                                width: _filtersFieldWidth,
-                                                child: _DateField(
-                                                  label: createdAtFilter == null
-                                                      ? 'Any'
-                                                      : formatAsOfDate(
-                                                          createdAtFilter!,
+                                              const SizedBox(height: 10),
+                                              Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: SizedBox(
+                                                  width: _filtersFieldWidth,
+                                                  child: AppPopupMenuField<String>(
+                                                    value: statusFilter,
+                                                    decoration:
+                                                        _filterDropdownDecoration(
+                                                          'Status',
                                                         ),
-                                                  decoration:
-                                                      _filterDropdownDecoration(
-                                                        'Created at',
+                                                    options: const [
+                                                      AppPopupMenuOption<
+                                                        String?
+                                                      >(
+                                                        value: null,
+                                                        label: 'Any',
                                                       ),
-                                                  icon: Icons
-                                                      .calendar_month_rounded,
-                                                  onTap: () async {
-                                                    final now = DateTime.now();
-                                                    final earliestDate =
-                                                        allCategories
-                                                            .map(
-                                                              (
-                                                                category,
-                                                              ) => category
-                                                                  .createdAt,
-                                                            )
-                                                            .reduce(
-                                                              (
-                                                                value,
-                                                                element,
-                                                              ) =>
-                                                                  value
-                                                                      .isBefore(
-                                                                        element,
-                                                                      )
-                                                                  ? value
-                                                                  : element,
-                                                            );
-                                                    final pickedDate =
-                                                        await showDatePicker(
-                                                          context: context,
-                                                          firstDate: DateTime(
-                                                            earliestDate.year -
-                                                                1,
-                                                          ),
-                                                          lastDate: DateTime(
-                                                            now.year + 2,
-                                                            12,
-                                                            31,
-                                                          ),
-                                                          initialDate:
-                                                              createdAtFilter ??
-                                                              now,
-                                                          currentDate: now,
-                                                        );
-                                                    if (pickedDate == null ||
-                                                        !context.mounted) {
-                                                      return;
-                                                    }
-                                                    _setFilters(() {
-                                                      createdAtFilter =
-                                                          pickedDate;
-                                                    });
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                          ],
-                                        ),
-                                      ),
-                                      const _FilterDivider(),
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          12,
-                                          _filtersContentHorizontalPadding,
-                                          0,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            const Text(
-                                              'Updated at',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.logoBlue,
-                                                height: 1.15,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: SizedBox(
-                                                width: _filtersFieldWidth,
-                                                child: _DateField(
-                                                  label: updatedAtFilter == null
-                                                      ? 'Any'
-                                                      : formatAsOfDate(
-                                                          updatedAtFilter!,
+                                                      AppPopupMenuOption<
+                                                        String?
+                                                      >(
+                                                        value: 'active',
+                                                        label: 'Active',
+                                                      ),
+                                                      AppPopupMenuOption<
+                                                        String?
+                                                      >(
+                                                        value: 'inactive',
+                                                        label: 'Inactive',
+                                                      ),
+                                                    ],
+                                                    onChanged: (value) =>
+                                                        _setFilters(
+                                                          () => statusFilter =
+                                                              value,
                                                         ),
-                                                  decoration:
-                                                      _filterDropdownDecoration(
-                                                        'Updated at',
-                                                      ),
-                                                  icon: Icons
-                                                      .calendar_month_rounded,
-                                                  onTap: () async {
-                                                    final now = DateTime.now();
-                                                    final earliestDate =
-                                                        allCategories
-                                                            .map(
-                                                              (
-                                                                category,
-                                                              ) => category
-                                                                  .updatedAt,
-                                                            )
-                                                            .reduce(
-                                                              (
-                                                                value,
-                                                                element,
-                                                              ) =>
-                                                                  value
-                                                                      .isBefore(
-                                                                        element,
-                                                                      )
-                                                                  ? value
-                                                                  : element,
-                                                            );
-                                                    final pickedDate =
-                                                        await showDatePicker(
-                                                          context: context,
-                                                          firstDate: DateTime(
-                                                            earliestDate.year -
-                                                                1,
-                                                          ),
-                                                          lastDate: DateTime(
-                                                            now.year + 2,
-                                                            12,
-                                                            31,
-                                                          ),
-                                                          initialDate:
-                                                              updatedAtFilter ??
-                                                              now,
-                                                          currentDate: now,
-                                                        );
-                                                    if (pickedDate == null ||
-                                                        !context.mounted) {
-                                                      return;
-                                                    }
-                                                    _setFilters(() {
-                                                      updatedAtFilter =
-                                                          pickedDate;
-                                                    });
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                          ],
-                                        ),
-                                      ),
-                                      const _FilterDivider(),
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          12,
-                                          _filtersContentHorizontalPadding,
-                                          _filtersContentHorizontalPadding,
-                                        ),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: SizedBox(
-                                            width: _filtersFieldWidth,
-                                            child: MousePressable(
-                                              onTap: () {
-                                                _setFilters(() {
-                                                  createdAtFilter = null;
-                                                  updatedAtFilter = null;
-                                                  statusFilter = null;
-                                                });
-                                              },
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              child: Container(
-                                                width: double.infinity,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 14,
-                                                      vertical: 10,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  border: Border.all(
-                                                    color: const Color(
-                                                      0xFFE4E7EC,
-                                                    ),
                                                   ),
                                                 ),
-                                                alignment: Alignment.center,
-                                                child: const Text(
-                                                  'Clear',
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.w700,
-                                                    height: 1.15,
+                                              ),
+                                              const SizedBox(height: 12),
+                                            ],
+                                          ),
+                                        ),
+                                        const _FilterDivider(),
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            _filtersContentHorizontalPadding,
+                                            12,
+                                            _filtersContentHorizontalPadding,
+                                            0,
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              const Text(
+                                                'Created at',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.logoBlue,
+                                                  height: 1.15,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: SizedBox(
+                                                  width: _filtersFieldWidth,
+                                                  child: _DateField(
+                                                    label:
+                                                        createdAtFilter == null
+                                                        ? 'Any'
+                                                        : formatAsOfDate(
+                                                            createdAtFilter!,
+                                                          ),
+                                                    decoration:
+                                                        _filterDropdownDecoration(
+                                                          'Created at',
+                                                        ),
+                                                    icon: Icons
+                                                        .calendar_month_rounded,
+                                                    onTap: () async {
+                                                      final now =
+                                                          DateTime.now();
+                                                      final earliestDate =
+                                                          allCategories
+                                                              .map(
+                                                                (
+                                                                  category,
+                                                                ) => category
+                                                                    .createdAt,
+                                                              )
+                                                              .reduce(
+                                                                (
+                                                                  value,
+                                                                  element,
+                                                                ) =>
+                                                                    value.isBefore(
+                                                                      element,
+                                                                    )
+                                                                    ? value
+                                                                    : element,
+                                                              );
+                                                      final pickedDate =
+                                                          await showDatePicker(
+                                                            context: context,
+                                                            firstDate: DateTime(
+                                                              earliestDate
+                                                                      .year -
+                                                                  1,
+                                                            ),
+                                                            lastDate: DateTime(
+                                                              now.year + 2,
+                                                              12,
+                                                              31,
+                                                            ),
+                                                            initialDate:
+                                                                createdAtFilter ??
+                                                                now,
+                                                            currentDate: now,
+                                                          );
+                                                      if (pickedDate == null ||
+                                                          !context.mounted) {
+                                                        return;
+                                                      }
+                                                      _setFilters(() {
+                                                        createdAtFilter =
+                                                            pickedDate;
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                            ],
+                                          ),
+                                        ),
+                                        const _FilterDivider(),
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            _filtersContentHorizontalPadding,
+                                            12,
+                                            _filtersContentHorizontalPadding,
+                                            0,
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              const Text(
+                                                'Updated at',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.logoBlue,
+                                                  height: 1.15,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: SizedBox(
+                                                  width: _filtersFieldWidth,
+                                                  child: _DateField(
+                                                    label:
+                                                        updatedAtFilter == null
+                                                        ? 'Any'
+                                                        : formatAsOfDate(
+                                                            updatedAtFilter!,
+                                                          ),
+                                                    decoration:
+                                                        _filterDropdownDecoration(
+                                                          'Updated at',
+                                                        ),
+                                                    icon: Icons
+                                                        .calendar_month_rounded,
+                                                    onTap: () async {
+                                                      final now =
+                                                          DateTime.now();
+                                                      final earliestDate =
+                                                          allCategories
+                                                              .map(
+                                                                (
+                                                                  category,
+                                                                ) => category
+                                                                    .updatedAt,
+                                                              )
+                                                              .reduce(
+                                                                (
+                                                                  value,
+                                                                  element,
+                                                                ) =>
+                                                                    value.isBefore(
+                                                                      element,
+                                                                    )
+                                                                    ? value
+                                                                    : element,
+                                                              );
+                                                      final pickedDate =
+                                                          await showDatePicker(
+                                                            context: context,
+                                                            firstDate: DateTime(
+                                                              earliestDate
+                                                                      .year -
+                                                                  1,
+                                                            ),
+                                                            lastDate: DateTime(
+                                                              now.year + 2,
+                                                              12,
+                                                              31,
+                                                            ),
+                                                            initialDate:
+                                                                updatedAtFilter ??
+                                                                now,
+                                                            currentDate: now,
+                                                          );
+                                                      if (pickedDate == null ||
+                                                          !context.mounted) {
+                                                        return;
+                                                      }
+                                                      _setFilters(() {
+                                                        updatedAtFilter =
+                                                            pickedDate;
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                            ],
+                                          ),
+                                        ),
+                                        const _FilterDivider(),
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            _filtersContentHorizontalPadding,
+                                            12,
+                                            _filtersContentHorizontalPadding,
+                                            _filtersContentHorizontalPadding,
+                                          ),
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: SizedBox(
+                                              width: _filtersFieldWidth,
+                                              child: MousePressable(
+                                                onTap: () {
+                                                  _setFilters(() {
+                                                    createdAtFilter = null;
+                                                    updatedAtFilter = null;
+                                                    statusFilter = null;
+                                                  });
+                                                },
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                child: Container(
+                                                  width: double.infinity,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 14,
+                                                        vertical: 10,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: const Color(
+                                                        0xFFE4E7EC,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  alignment: Alignment.center,
+                                                  child: const Text(
+                                                    'Clear',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      height: 1.15,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
                                 ),
                               ],
                               builder: (context, controller, child) {
@@ -644,305 +657,318 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                   child: SizedBox(
                                     width: _filtersMenuWidth,
                                     child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          16,
-                                          _filtersContentHorizontalPadding,
-                                          0,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            const Text(
-                                              'Status',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.logoBlue,
-                                                height: 1.15,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: SizedBox(
-                                                width: _filtersFieldWidth,
-                                                child: AppPopupMenuField<String>(
-                                                  value: statusFilter,
-                                                  decoration:
-                                                      _filterDropdownDecoration(
-                                                        'Status',
-                                                      ),
-                                                  options: const [
-                                                    AppPopupMenuOption<String?>(
-                                                      value: null,
-                                                      label: 'Any',
-                                                    ),
-                                                    AppPopupMenuOption<String?>(
-                                                      value: 'active',
-                                                      label: 'Active',
-                                                    ),
-                                                    AppPopupMenuOption<String?>(
-                                                      value: 'inactive',
-                                                      label: 'Inactive',
-                                                    ),
-                                                  ],
-                                                  onChanged: (value) =>
-                                                      _setFilters(
-                                                        () => statusFilter =
-                                                            value,
-                                                      ),
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            _filtersContentHorizontalPadding,
+                                            16,
+                                            _filtersContentHorizontalPadding,
+                                            0,
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              const Text(
+                                                'Status',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.logoBlue,
+                                                  height: 1.15,
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                          ],
-                                        ),
-                                      ),
-                                      const _FilterDivider(),
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          12,
-                                          _filtersContentHorizontalPadding,
-                                          0,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            const Text(
-                                              'Created at',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.logoBlue,
-                                                height: 1.15,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: SizedBox(
-                                                width: _filtersFieldWidth,
-                                                child: _DateField(
-                                                  label: createdAtFilter == null
-                                                      ? 'Any'
-                                                      : formatAsOfDate(
-                                                          createdAtFilter!,
+                                              const SizedBox(height: 10),
+                                              Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: SizedBox(
+                                                  width: _filtersFieldWidth,
+                                                  child: AppPopupMenuField<String>(
+                                                    value: statusFilter,
+                                                    decoration:
+                                                        _filterDropdownDecoration(
+                                                          'Status',
                                                         ),
-                                                  decoration:
-                                                      _filterDropdownDecoration(
-                                                        'Created at',
+                                                    options: const [
+                                                      AppPopupMenuOption<
+                                                        String?
+                                                      >(
+                                                        value: null,
+                                                        label: 'Any',
                                                       ),
-                                                  icon: Icons
-                                                      .calendar_month_rounded,
-                                                  onTap: () async {
-                                                    final now = DateTime.now();
-                                                    final earliestDate =
-                                                        allCategories
-                                                            .map(
-                                                              (
-                                                                category,
-                                                              ) => category
-                                                                  .createdAt,
-                                                            )
-                                                            .reduce(
-                                                              (
-                                                                value,
-                                                                element,
-                                                              ) =>
-                                                                  value
-                                                                      .isBefore(
-                                                                        element,
-                                                                      )
-                                                                  ? value
-                                                                  : element,
-                                                            );
-                                                    final pickedDate =
-                                                        await showDatePicker(
-                                                          context: context,
-                                                          firstDate: DateTime(
-                                                            earliestDate.year -
-                                                                1,
-                                                          ),
-                                                          lastDate: DateTime(
-                                                            now.year + 2,
-                                                            12,
-                                                            31,
-                                                          ),
-                                                          initialDate:
-                                                              createdAtFilter ??
-                                                              now,
-                                                          currentDate: now,
-                                                        );
-                                                    if (pickedDate == null ||
-                                                        !context.mounted) {
-                                                      return;
-                                                    }
-                                                    _setFilters(() {
-                                                      createdAtFilter =
-                                                          pickedDate;
-                                                    });
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                          ],
-                                        ),
-                                      ),
-                                      const _FilterDivider(),
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          12,
-                                          _filtersContentHorizontalPadding,
-                                          0,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            const Text(
-                                              'Updated at',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.logoBlue,
-                                                height: 1.15,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: SizedBox(
-                                                width: _filtersFieldWidth,
-                                                child: _DateField(
-                                                  label: updatedAtFilter == null
-                                                      ? 'Any'
-                                                      : formatAsOfDate(
-                                                          updatedAtFilter!,
+                                                      AppPopupMenuOption<
+                                                        String?
+                                                      >(
+                                                        value: 'active',
+                                                        label: 'Active',
+                                                      ),
+                                                      AppPopupMenuOption<
+                                                        String?
+                                                      >(
+                                                        value: 'inactive',
+                                                        label: 'Inactive',
+                                                      ),
+                                                    ],
+                                                    onChanged: (value) =>
+                                                        _setFilters(
+                                                          () => statusFilter =
+                                                              value,
                                                         ),
-                                                  decoration:
-                                                      _filterDropdownDecoration(
-                                                        'Updated at',
-                                                      ),
-                                                  icon: Icons
-                                                      .calendar_month_rounded,
-                                                  onTap: () async {
-                                                    final now = DateTime.now();
-                                                    final earliestDate =
-                                                        allCategories
-                                                            .map(
-                                                              (
-                                                                category,
-                                                              ) => category
-                                                                  .updatedAt,
-                                                            )
-                                                            .reduce(
-                                                              (
-                                                                value,
-                                                                element,
-                                                              ) =>
-                                                                  value
-                                                                      .isBefore(
-                                                                        element,
-                                                                      )
-                                                                  ? value
-                                                                  : element,
-                                                            );
-                                                    final pickedDate =
-                                                        await showDatePicker(
-                                                          context: context,
-                                                          firstDate: DateTime(
-                                                            earliestDate.year -
-                                                                1,
-                                                          ),
-                                                          lastDate: DateTime(
-                                                            now.year + 2,
-                                                            12,
-                                                            31,
-                                                          ),
-                                                          initialDate:
-                                                              updatedAtFilter ??
-                                                              now,
-                                                          currentDate: now,
-                                                        );
-                                                    if (pickedDate == null ||
-                                                        !context.mounted) {
-                                                      return;
-                                                    }
-                                                    _setFilters(() {
-                                                      updatedAtFilter =
-                                                          pickedDate;
-                                                    });
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                          ],
-                                        ),
-                                      ),
-                                      const _FilterDivider(),
-                                      Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          _filtersContentHorizontalPadding,
-                                          12,
-                                          _filtersContentHorizontalPadding,
-                                          _filtersContentHorizontalPadding,
-                                        ),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: SizedBox(
-                                            width: _filtersFieldWidth,
-                                            child: MousePressable(
-                                              onTap: () {
-                                                _setFilters(() {
-                                                  createdAtFilter = null;
-                                                  updatedAtFilter = null;
-                                                  statusFilter = null;
-                                                });
-                                              },
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              child: Container(
-                                                width: double.infinity,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 14,
-                                                      vertical: 10,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  border: Border.all(
-                                                    color: const Color(
-                                                      0xFFE4E7EC,
-                                                    ),
                                                   ),
                                                 ),
-                                                alignment: Alignment.center,
-                                                child: const Text(
-                                                  'Clear',
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.w700,
-                                                    height: 1.15,
+                                              ),
+                                              const SizedBox(height: 12),
+                                            ],
+                                          ),
+                                        ),
+                                        const _FilterDivider(),
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            _filtersContentHorizontalPadding,
+                                            12,
+                                            _filtersContentHorizontalPadding,
+                                            0,
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              const Text(
+                                                'Created at',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.logoBlue,
+                                                  height: 1.15,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: SizedBox(
+                                                  width: _filtersFieldWidth,
+                                                  child: _DateField(
+                                                    label:
+                                                        createdAtFilter == null
+                                                        ? 'Any'
+                                                        : formatAsOfDate(
+                                                            createdAtFilter!,
+                                                          ),
+                                                    decoration:
+                                                        _filterDropdownDecoration(
+                                                          'Created at',
+                                                        ),
+                                                    icon: Icons
+                                                        .calendar_month_rounded,
+                                                    onTap: () async {
+                                                      final now =
+                                                          DateTime.now();
+                                                      final earliestDate =
+                                                          allCategories
+                                                              .map(
+                                                                (
+                                                                  category,
+                                                                ) => category
+                                                                    .createdAt,
+                                                              )
+                                                              .reduce(
+                                                                (
+                                                                  value,
+                                                                  element,
+                                                                ) =>
+                                                                    value.isBefore(
+                                                                      element,
+                                                                    )
+                                                                    ? value
+                                                                    : element,
+                                                              );
+                                                      final pickedDate =
+                                                          await showDatePicker(
+                                                            context: context,
+                                                            firstDate: DateTime(
+                                                              earliestDate
+                                                                      .year -
+                                                                  1,
+                                                            ),
+                                                            lastDate: DateTime(
+                                                              now.year + 2,
+                                                              12,
+                                                              31,
+                                                            ),
+                                                            initialDate:
+                                                                createdAtFilter ??
+                                                                now,
+                                                            currentDate: now,
+                                                          );
+                                                      if (pickedDate == null ||
+                                                          !context.mounted) {
+                                                        return;
+                                                      }
+                                                      _setFilters(() {
+                                                        createdAtFilter =
+                                                            pickedDate;
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                            ],
+                                          ),
+                                        ),
+                                        const _FilterDivider(),
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            _filtersContentHorizontalPadding,
+                                            12,
+                                            _filtersContentHorizontalPadding,
+                                            0,
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              const Text(
+                                                'Updated at',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.logoBlue,
+                                                  height: 1.15,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: SizedBox(
+                                                  width: _filtersFieldWidth,
+                                                  child: _DateField(
+                                                    label:
+                                                        updatedAtFilter == null
+                                                        ? 'Any'
+                                                        : formatAsOfDate(
+                                                            updatedAtFilter!,
+                                                          ),
+                                                    decoration:
+                                                        _filterDropdownDecoration(
+                                                          'Updated at',
+                                                        ),
+                                                    icon: Icons
+                                                        .calendar_month_rounded,
+                                                    onTap: () async {
+                                                      final now =
+                                                          DateTime.now();
+                                                      final earliestDate =
+                                                          allCategories
+                                                              .map(
+                                                                (
+                                                                  category,
+                                                                ) => category
+                                                                    .updatedAt,
+                                                              )
+                                                              .reduce(
+                                                                (
+                                                                  value,
+                                                                  element,
+                                                                ) =>
+                                                                    value.isBefore(
+                                                                      element,
+                                                                    )
+                                                                    ? value
+                                                                    : element,
+                                                              );
+                                                      final pickedDate =
+                                                          await showDatePicker(
+                                                            context: context,
+                                                            firstDate: DateTime(
+                                                              earliestDate
+                                                                      .year -
+                                                                  1,
+                                                            ),
+                                                            lastDate: DateTime(
+                                                              now.year + 2,
+                                                              12,
+                                                              31,
+                                                            ),
+                                                            initialDate:
+                                                                updatedAtFilter ??
+                                                                now,
+                                                            currentDate: now,
+                                                          );
+                                                      if (pickedDate == null ||
+                                                          !context.mounted) {
+                                                        return;
+                                                      }
+                                                      _setFilters(() {
+                                                        updatedAtFilter =
+                                                            pickedDate;
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                            ],
+                                          ),
+                                        ),
+                                        const _FilterDivider(),
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            _filtersContentHorizontalPadding,
+                                            12,
+                                            _filtersContentHorizontalPadding,
+                                            _filtersContentHorizontalPadding,
+                                          ),
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: SizedBox(
+                                              width: _filtersFieldWidth,
+                                              child: MousePressable(
+                                                onTap: () {
+                                                  _setFilters(() {
+                                                    createdAtFilter = null;
+                                                    updatedAtFilter = null;
+                                                    statusFilter = null;
+                                                  });
+                                                },
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                child: Container(
+                                                  width: double.infinity,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 14,
+                                                        vertical: 10,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: const Color(
+                                                        0xFFE4E7EC,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  alignment: Alignment.center,
+                                                  child: const Text(
+                                                    'Clear',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      height: 1.15,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
                                 ),
                               ],
                               builder: (context, controller, child) {
@@ -1187,13 +1213,10 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                               );
                                             },
                                         itemCount: categories.length,
-                                        onReorder: (oldIndex, newIndex) {
+                                        onReorderItem: (oldIndex, newIndex) {
                                           final nextCategories = [
                                             ...categories,
                                           ];
-                                          if (newIndex > oldIndex) {
-                                            newIndex -= 1;
-                                          }
                                           final moved = nextCategories.removeAt(
                                             oldIndex,
                                           );
@@ -1257,11 +1280,8 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
                                             );
                                           },
                                       itemCount: categories.length,
-                                      onReorder: (oldIndex, newIndex) {
+                                      onReorderItem: (oldIndex, newIndex) {
                                         final nextCategories = [...categories];
-                                        if (newIndex > oldIndex) {
-                                          newIndex -= 1;
-                                        }
                                         final moved = nextCategories.removeAt(
                                           oldIndex,
                                         );
@@ -2097,12 +2117,14 @@ extension on _AdminCategoriesPageState {
                   }
                   setState(() => isSubmitting = true);
                   try {
-                    await ref.read(appControllerProvider.notifier).saveCategory(
-                      category.copyWith(
-                        isActive: nextIsActive,
-                        updatedAt: DateTime.now(),
-                      ),
-                    );
+                    await ref
+                        .read(appControllerProvider.notifier)
+                        .saveCategory(
+                          category.copyWith(
+                            isActive: nextIsActive,
+                            updatedAt: DateTime.now(),
+                          ),
+                        );
                     if (dialogContext.mounted) {
                       Navigator.of(dialogContext).pop();
                     }
@@ -2197,10 +2219,9 @@ extension on _AdminCategoriesPageState {
       isSubmitting = true;
       try {
         final fallbackNextCategoryId =
-            (categories.map((item) => item.id).fold<int>(
-                  0,
-                  (max, value) => value > max ? value : max,
-                )) +
+            (categories
+                .map((item) => item.id)
+                .fold<int>(0, (max, value) => value > max ? value : max)) +
             1;
         final resolvedCategoryId =
             initial?.id ??

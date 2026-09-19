@@ -181,6 +181,9 @@ class AppController extends Notifier<AppState> {
   bool _realtimeSyncScheduled = false;
   int _catalogRefreshRetryAttempt = 0;
   int _ordersRefreshRetryAttempt = 0;
+  // Persisted orders may be client-scoped, so never use their metadata to skip
+  // the first full load after entering an admin context.
+  bool _adminOrdersHydratedForContext = false;
   bool _disposeSyncRegistered = false;
   static const _defaultStoreContactNumber = '09064493206';
   static const _defaultFacebookMessengerUrl =
@@ -350,6 +353,7 @@ class AppController extends Notifier<AppState> {
     }
     _ordersRealtimeScopeKey = nextScopeKey;
     if (hasActiveAdminContext) {
+      _adminOrdersHydratedForContext = false;
       unawaited(_ordersSubscription?.cancel());
       _ordersSubscription = null;
       unawaited(_adminOrdersMetaSubscription?.cancel());
@@ -368,6 +372,7 @@ class AppController extends Notifier<AppState> {
 
     unawaited(_adminOrdersMetaSubscription?.cancel());
     _adminOrdersMetaSubscription = null;
+    _adminOrdersHydratedForContext = false;
     unawaited(_ordersSubscription?.cancel());
     final stream = _firestoreCatalog.watchOrdersForNormalizedPhones(
       trackedPhones,
@@ -2513,6 +2518,7 @@ class AppController extends Notifier<AppState> {
           ? remoteMeta ?? await _firestoreCatalog.loadOrdersMeta()
           : null;
       if (hasActiveAdminContext &&
+          _adminOrdersHydratedForContext &&
           resolvedMeta != null &&
           _sameMoment(resolvedMeta.updatedAt, state.ordersMetaUpdatedAt)) {
         return;
@@ -2542,6 +2548,9 @@ class AppController extends Notifier<AppState> {
               ).products
             : state.products,
       );
+      if (hasActiveAdminContext) {
+        _adminOrdersHydratedForContext = true;
+      }
       await _persist();
       if (hasActiveAdminContext) {
         final soldSync = _reconcileProductSoldWithOrders(
