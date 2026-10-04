@@ -465,7 +465,9 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
         };
         final importedCategoryLocalIdToFinalId = <int, int>{};
         final categoriesToSave = <Category>[];
-        final newImportedCategories = resolvedImport.categories.where((category) {
+        final newImportedCategories = resolvedImport.categories.where((
+          category,
+        ) {
           return !existingCategoryIdByNormalizedName.containsKey(
             category.normalizedName,
           );
@@ -477,7 +479,10 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
               count: newImportedCategories.length,
               fallbackNextCategoryId: currentState.categories.isEmpty
                   ? 1
-                  : currentState.categories.map((item) => item.id).reduce(math.max) + 1,
+                  : currentState.categories
+                            .map((item) => item.id)
+                            .reduce(math.max) +
+                        1,
             );
         var reservedCategoryIndex = 0;
         for (final category in resolvedImport.categories) {
@@ -505,7 +510,10 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
               count: resolvedImport.products.length,
               fallbackNextProductId: currentState.products.isEmpty
                   ? 1
-                  : currentState.products.map((item) => item.id).reduce(math.max) + 1,
+                  : currentState.products
+                            .map((item) => item.id)
+                            .reduce(math.max) +
+                        1,
             );
         final productsToSave = <Product>[
           for (var index = 0; index < resolvedImport.products.length; index++)
@@ -513,9 +521,10 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
               id: reservedProductIds[index],
               category: resolvedImport.products[index].category <= 0
                   ? 0
-                  : (importedCategoryLocalIdToFinalId[
-                          resolvedImport.products[index].category] ??
-                      resolvedImport.products[index].category),
+                  : (importedCategoryLocalIdToFinalId[resolvedImport
+                            .products[index]
+                            .category] ??
+                        resolvedImport.products[index].category),
             ),
         ];
         importStage = 'saving imported products';
@@ -615,10 +624,12 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     updatedAtFilter = _parseRouteDate(
       uri.queryParameters['filters[updated_at]'],
     );
-    categoryFilter = _parseCategoryFilter(
-      uri.queryParameters['filters[category]'],
-      categories,
-    );
+    categoryFilter = query.trim().isEmpty
+        ? _parseCategoryFilter(
+            uri.queryParameters['filters[category]'],
+            categories,
+          )
+        : null;
     statusFilter = _normalizeNullable(uri.queryParameters['filters[status]']);
     priceSort = _normalizeNullable(uri.queryParameters['filters[price]']);
     nameSort = _normalizeNullable(uri.queryParameters['filters[name]']);
@@ -635,7 +646,8 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     if (!mounted) {
       return;
     }
-    final anchorBox = anchorKey.currentContext?.findRenderObject() as RenderBox?;
+    final anchorBox =
+        anchorKey.currentContext?.findRenderObject() as RenderBox?;
     final overlayState = Overlay.of(context);
     final overlayBox = overlayState.context.findRenderObject() as RenderBox?;
     if (anchorBox == null ||
@@ -657,15 +669,15 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
     );
     final desiredLeft = anchorTopLeft.dx.clamp(
       horizontalInset,
-      math.max(horizontalInset, overlayBox.size.width - menuWidth - horizontalInset),
+      math.max(
+        horizontalInset,
+        overlayBox.size.width - menuWidth - horizontalInset,
+      ),
     );
     final followerOffsetX = desiredLeft - anchorTopLeft.dx;
     final maxMenuHeight = math.max(
       0.0,
-      overlayBox.size.height -
-          mediaQuery.padding.bottom -
-          anchorBottom -
-          28,
+      overlayBox.size.height - mediaQuery.padding.bottom - anchorBottom - 28,
     );
 
     await showGeneralDialog<void>(
@@ -818,17 +830,16 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
               height: 1.15,
             );
 
-    final normalizedQuery = query.trim().toLowerCase();
     final products = [...state.products];
     final filteredProducts =
         products.where((product) {
           final categoryName = categoryById[product.categoryId] ?? '';
-          final matchesQuery =
-              normalizedQuery.isEmpty ||
-              product.name.toLowerCase().contains(normalizedQuery) ||
-              product.details.toLowerCase().contains(normalizedQuery) ||
-              categoryName.toLowerCase().contains(normalizedQuery) ||
-              '${product.id}'.contains(normalizedQuery);
+          final matchesQuery = matchesLenientSearch(query, [
+            product.name,
+            product.details,
+            categoryName,
+            '${product.id}',
+          ]);
           final createdAt = product.createdAt;
           final updatedAt = product.updatedAt;
           final matchesCreatedAt =
@@ -901,8 +912,12 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                         Expanded(
                           child: TextField(
                             controller: _queryController,
-                            onChanged: (value) =>
-                                _setFilters(() => query = value),
+                            onChanged: (value) => _setFilters(() {
+                              query = value;
+                              if (value.trim().isNotEmpty) {
+                                categoryFilter = null;
+                              }
+                            }),
                             decoration: InputDecoration(
                               hintText: 'Search',
                               hintStyle: const TextStyle(
@@ -964,8 +979,12 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                           width: 280,
                           child: TextField(
                             controller: _queryController,
-                            onChanged: (value) =>
-                                _setFilters(() => query = value),
+                            onChanged: (value) => _setFilters(() {
+                              query = value;
+                              if (value.trim().isNotEmpty) {
+                                categoryFilter = null;
+                              }
+                            }),
                             decoration: InputDecoration(
                               hintText: 'Search',
                               hintStyle: const TextStyle(
@@ -1856,12 +1875,14 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                   }
                   setState(() => isSubmitting = true);
                   try {
-                    await ref.read(appControllerProvider.notifier).saveProduct(
-                      product.copyWith(
-                        isActive: nextIsActive,
-                        updatedAt: DateTime.now(),
-                      ),
-                    );
+                    await ref
+                        .read(appControllerProvider.notifier)
+                        .saveProduct(
+                          product.copyWith(
+                            isActive: nextIsActive,
+                            updatedAt: DateTime.now(),
+                          ),
+                        );
                     if (dialogContext.mounted) {
                       Navigator.of(dialogContext).pop();
                     }

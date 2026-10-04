@@ -42,7 +42,11 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow create: if
         (request.resource.data.status == 'new_request' || request.resource.data.status == 'waiting') &&
-        (request.resource.data.items.size() > 0 || request.resource.data.products.size() > 0) &&
+        (
+          request.resource.data.items.size() > 0 ||
+          request.resource.data.products.size() > 0 ||
+          request.resource.data.requestedListItems.size() > 0
+        ) &&
         request.resource.data.estimatedTotalCentavos >= 0 &&
         request.resource.data.finalQuotedTotalCentavos >= 0 &&
         request.resource.data.customer.name is string &&

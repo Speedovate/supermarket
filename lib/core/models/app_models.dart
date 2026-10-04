@@ -740,6 +740,7 @@ class OrderRequest {
     this.addressStreet = '',
     this.addressLandmark = '',
     required this.products,
+    this.requestedListItems = const [],
   });
 
   final int id;
@@ -754,6 +755,7 @@ class OrderRequest {
   final String addressStreet;
   final String addressLandmark;
   final List<OrderItem> products;
+  final List<RequestedListItem> requestedListItems;
 
   CustomerDraft get customer => CustomerDraft(
     name: name,
@@ -770,6 +772,13 @@ class OrderRequest {
   );
 
   List<OrderItem> get items => products;
+
+  int get requestedItemCount =>
+      products.fold<int>(0, (sum, item) => sum + item.requestedQuantity) +
+      requestedListItems.length;
+
+  bool get hasPendingRequestedListItems =>
+      requestedListItems.any((item) => !item.isHandled);
 
   int get estimatedTotalCentavos => total;
 
@@ -806,6 +815,7 @@ class OrderRequest {
     String? addressStreet,
     String? addressLandmark,
     List<OrderItem>? products,
+    List<RequestedListItem>? requestedListItems,
     CustomerDraft? customer,
     List<OrderItem>? items,
     int? estimatedTotalCentavos,
@@ -835,6 +845,7 @@ class OrderRequest {
           effectiveCustomer?.addressLandmark ??
           this.addressLandmark,
       products: products ?? items ?? this.products,
+      requestedListItems: requestedListItems ?? this.requestedListItems,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -856,6 +867,9 @@ class OrderRequest {
         ? addressLandmark
         : '',
     'products': products.map((item) => item.toMap()).toList(),
+    'requestedListItems': requestedListItems
+        .map((item) => item.toMap())
+        .toList(),
   };
 
   factory OrderRequest.fromMap(Map<String, dynamic> map) {
@@ -910,6 +924,61 @@ class OrderRequest {
           customerMap?.addressLandmark ??
           '',
       products: parsedProducts,
+      requestedListItems: (map['requestedListItems'] as List<dynamic>? ?? [])
+          .map(
+            (item) => RequestedListItem.fromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class RequestedListItem {
+  const RequestedListItem({
+    required this.id,
+    required this.text,
+    required this.createdAt,
+    required this.updatedAt,
+    this.handledProductId,
+  });
+
+  final int id;
+  final String text;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final int? handledProductId;
+
+  bool get isHandled => handledProductId != null && handledProductId! > 0;
+
+  RequestedListItem copyWith({int? handledProductId, DateTime? updatedAt}) =>
+      RequestedListItem(
+        id: id,
+        text: text,
+        createdAt: createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+        handledProductId: handledProductId ?? this.handledProductId,
+      );
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'text': text,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    'handledProductId': handledProductId,
+  };
+
+  factory RequestedListItem.fromMap(Map<String, dynamic> map) {
+    final now = DateTime.now();
+    return RequestedListItem(
+      id: _parseInt(map['id']),
+      text: map['text'] as String? ?? '',
+      createdAt: _parseDateTime(map['createdAt']) ?? now,
+      updatedAt: _parseDateTime(map['updatedAt']) ?? now,
+      handledProductId: _parseInt(map['handledProductId']) > 0
+          ? _parseInt(map['handledProductId'])
+          : null,
     );
   }
 }
@@ -1268,6 +1337,7 @@ class PersistedData {
     required this.settings,
     this.settingsMetaUpdatedAt,
     required this.cart,
+    this.requestedListItems = const [],
     required this.customerDraft,
     this.adminSession,
     this.createdAt,
@@ -1289,6 +1359,7 @@ class PersistedData {
   final AppSettings settings;
   final DateTime? settingsMetaUpdatedAt;
   final List<CartItem> cart;
+  final List<RequestedListItem> requestedListItems;
   final CustomerDraft customerDraft;
   final AdminSession? adminSession;
   final DateTime? createdAt;
@@ -1310,6 +1381,9 @@ class PersistedData {
     'settings': settings.toMap(),
     'settingsMetaUpdatedAt': settingsMetaUpdatedAt?.toIso8601String(),
     'cart': cart.map((item) => item.toMap()).toList(),
+    'requestedListItems': requestedListItems
+        .map((item) => item.toMap())
+        .toList(),
     'customerDraft': customerDraft.toMap(),
     'adminSession': adminSession?.toMap(),
     'createdAt': createdAt?.toIso8601String(),
@@ -1380,6 +1454,14 @@ class PersistedData {
             (item) => CartItem.fromMap(Map<String, dynamic>.from(item as Map)),
           )
           .toList(),
+      requestedListItems:
+          (map['requestedListItems'] as List<dynamic>? ?? const <dynamic>[])
+              .map(
+                (item) => RequestedListItem.fromMap(
+                  Map<String, dynamic>.from(item as Map),
+                ),
+              )
+              .toList(),
       customerDraft: CustomerDraft.fromMap(
         Map<String, dynamic>.from(map['customerDraft'] as Map),
       ),

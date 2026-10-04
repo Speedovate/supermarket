@@ -58,8 +58,12 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
         selection: TextSelection.collapsed(offset: query.length),
       );
     }
-    createdAtFilter = _parseRouteDate(uri.queryParameters['filters[created_at]']);
-    updatedAtFilter = _parseRouteDate(uri.queryParameters['filters[updated_at]']);
+    createdAtFilter = _parseRouteDate(
+      uri.queryParameters['filters[created_at]'],
+    );
+    updatedAtFilter = _parseRouteDate(
+      uri.queryParameters['filters[updated_at]'],
+    );
     statusFilter = _normalizeNullable(uri.queryParameters['filters[status]']);
   }
 
@@ -112,18 +116,19 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
               height: 1.15,
             );
 
-    final normalizedQuery = query.trim().toLowerCase();
     final banners = [...state.banners]..sort((a, b) => b.id.compareTo(a.id));
     final filteredBanners = banners.where((banner) {
-      final matchesQuery =
-          normalizedQuery.isEmpty ||
-          banner.imageUrl.toLowerCase().contains(normalizedQuery) ||
-          (banner.externalUrl ?? '').toLowerCase().contains(normalizedQuery) ||
-          '${banner.id}'.contains(normalizedQuery);
+      final matchesQuery = matchesLenientSearch(query, [
+        banner.imageUrl,
+        banner.externalUrl ?? '',
+        '${banner.id}',
+      ]);
       final matchesCreatedAt =
-          createdAtFilter == null || _isSameDay(banner.createdAt, createdAtFilter!);
+          createdAtFilter == null ||
+          _isSameDay(banner.createdAt, createdAtFilter!);
       final matchesUpdatedAt =
-          updatedAtFilter == null || _isSameDay(banner.updatedAt, updatedAtFilter!);
+          updatedAtFilter == null ||
+          _isSameDay(banner.updatedAt, updatedAtFilter!);
       final matchesStatus = switch (statusFilter) {
         'active' => banner.isActive,
         'inactive' => !banner.isActive,
@@ -157,7 +162,8 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                         Expanded(
                           child: TextField(
                             controller: _queryController,
-                            onChanged: (value) => _setFilters(() => query = value),
+                            onChanged: (value) =>
+                                _setFilters(() => query = value),
                             decoration: InputDecoration(
                               hintText: 'Search',
                               hintStyle: const TextStyle(
@@ -244,7 +250,8 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                           width: 280,
                           child: TextField(
                             controller: _queryController,
-                            onChanged: (value) => _setFilters(() => query = value),
+                            onChanged: (value) =>
+                                _setFilters(() => query = value),
                             decoration: InputDecoration(
                               hintText: 'Search',
                               hintStyle: const TextStyle(
@@ -315,8 +322,8 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                      const Text(
-                                        'Filters',
+                                    const Text(
+                                      'Filters',
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w700,
@@ -393,7 +400,8 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                   widths.updatedAt +
                   gap +
                   _actionsWidth;
-              final effectiveTableWidth = constraints.maxWidth > contentWidth + 40
+              final effectiveTableWidth =
+                  constraints.maxWidth > contentWidth + 40
                   ? constraints.maxWidth
                   : contentWidth + 40;
               final trailingSpace = effectiveTableWidth - (contentWidth + 40);
@@ -412,7 +420,7 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
               final contentHeightEstimate = filteredBanners.isEmpty
                   ? emptyStateHeight
                   : rowHeights.fold<double>(0, (sum, height) => sum + height) +
-                      math.max(0, filteredBanners.length - 1) * dividerHeight;
+                        math.max(0, filteredBanners.length - 1) * dividerHeight;
               final maxTableHeight = constraints.maxHeight.isFinite
                   ? constraints.maxHeight
                   : headerHeight + dividerHeight + contentHeightEstimate;
@@ -443,13 +451,20 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                             Container(
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                color: AppColors.logoBlue.withValues(alpha: 0.10),
+                                color: AppColors.logoBlue.withValues(
+                                  alpha: 0.10,
+                                ),
                                 borderRadius: const BorderRadius.only(
                                   topLeft: Radius.circular(16),
                                   topRight: Radius.circular(16),
                                 ),
                               ),
-                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                16,
+                                20,
+                                16,
+                              ),
                               child: _BannerHeaderRow(
                                 widths: widths,
                                 trailingSpace: trailingSpace,
@@ -527,9 +542,11 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                                   : Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        for (var i = 0;
-                                            i < filteredBanners.length;
-                                            i++) ...[
+                                        for (
+                                          var i = 0;
+                                          i < filteredBanners.length;
+                                          i++
+                                        ) ...[
                                           _BannerRow(
                                             banner: filteredBanners[i],
                                             widths: widths,
@@ -722,7 +739,10 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                     alignment: Alignment.center,
                     child: const Text(
                       'Clear',
-                      style: TextStyle(fontWeight: FontWeight.w700, height: 1.15),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                      ),
                     ),
                   ),
                 ),
@@ -816,10 +836,12 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
     return _BannerColumnWidths(
       gap: _columnGapForWidth(screenWidth),
       id: maxWidth('ID', banners.map((item) => '${item.id}')),
-      status: maxWidth(
-        'Status',
-        banners.map((item) => item.isActive ? 'Active' : 'Inactive'),
-      ) + _statusBadgeHorizontalPadding,
+      status:
+          maxWidth(
+            'Status',
+            banners.map((item) => item.isActive ? 'Active' : 'Inactive'),
+          ) +
+          _statusBadgeHorizontalPadding,
       imageUrl: cappedMaxWidth(
         'Image URL',
         banners.map((item) => item.imageUrl),
@@ -830,20 +852,24 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
         banners.map((item) => item.externalUrl ?? ''),
         max: screenWidth < 700 ? 220 : 300,
       ),
-      createdAt: maxWidth(
-        'Created at',
-        banners.map(
-          (item) =>
-              '${formatOrderDate(item.createdAt)}\n${formatOrderTimeWithSeconds(item.createdAt)}',
-        ),
-      ) + _dateHeaderExtraAllowance,
-      updatedAt: maxWidth(
-        'Updated at',
-        banners.map(
-          (item) =>
-              '${formatOrderDate(item.updatedAt)}\n${formatOrderTimeWithSeconds(item.updatedAt)}',
-        ),
-      ) + _dateHeaderExtraAllowance,
+      createdAt:
+          maxWidth(
+            'Created at',
+            banners.map(
+              (item) =>
+                  '${formatOrderDate(item.createdAt)}\n${formatOrderTimeWithSeconds(item.createdAt)}',
+            ),
+          ) +
+          _dateHeaderExtraAllowance,
+      updatedAt:
+          maxWidth(
+            'Updated at',
+            banners.map(
+              (item) =>
+                  '${formatOrderDate(item.updatedAt)}\n${formatOrderTimeWithSeconds(item.updatedAt)}',
+            ),
+          ) +
+          _dateHeaderExtraAllowance,
     );
   }
 
@@ -880,15 +906,30 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
         widths.status,
         maxLines: 1,
       ),
-      _measureTextHeight(banner.imageUrl, bodyStyle, widths.imageUrl, maxLines: 2),
+      _measureTextHeight(
+        banner.imageUrl,
+        bodyStyle,
+        widths.imageUrl,
+        maxLines: 2,
+      ),
       _measureTextHeight(
         (banner.externalUrl ?? '').isEmpty ? '-' : banner.externalUrl!,
         bodyStyle,
         widths.externalUrl,
         maxLines: 2,
       ),
-      _measureTextHeight(createdAtText, bodyStyle, widths.createdAt, maxLines: 2),
-      _measureTextHeight(updatedAtText, bodyStyle, widths.updatedAt, maxLines: 2),
+      _measureTextHeight(
+        createdAtText,
+        bodyStyle,
+        widths.createdAt,
+        maxLines: 2,
+      ),
+      _measureTextHeight(
+        updatedAtText,
+        bodyStyle,
+        widths.updatedAt,
+        maxLines: 2,
+      ),
       34,
     ].reduce(math.max);
 
@@ -986,12 +1027,14 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                   }
                   setState(() => isSubmitting = true);
                   try {
-                    await ref.read(appControllerProvider.notifier).saveBanner(
-                      banner.copyWith(
-                        isActive: nextIsActive,
-                        updatedAt: DateTime.now(),
-                      ),
-                    );
+                    await ref
+                        .read(appControllerProvider.notifier)
+                        .saveBanner(
+                          banner.copyWith(
+                            isActive: nextIsActive,
+                            updatedAt: DateTime.now(),
+                          ),
+                        );
                     if (dialogContext.mounted) {
                       Navigator.of(dialogContext).pop();
                     }
@@ -1030,9 +1073,9 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
     final currentState = ref.read(appControllerProvider);
     final fallbackNextBannerId =
         (currentState.banners
-                .map((item) => item.id)
-                .fold<int>(0, (max, value) => value > max ? value : max)) +
-            1;
+            .map((item) => item.id)
+            .fold<int>(0, (max, value) => value > max ? value : max)) +
+        1;
     final resolvedBanner = initial == null
         ? banner.copyWith(
             id: await ref
@@ -1134,10 +1177,7 @@ class _DateField extends StatelessWidget {
 }
 
 class _BannerHeaderRow extends StatelessWidget {
-  const _BannerHeaderRow({
-    required this.widths,
-    required this.trailingSpace,
-  });
+  const _BannerHeaderRow({required this.widths, required this.trailingSpace});
 
   final _BannerColumnWidths widths;
   final double trailingSpace;
@@ -1152,9 +1192,15 @@ class _BannerHeaderRow extends StatelessWidget {
     );
     return Row(
       children: [
-        SizedBox(width: widths.id, child: Text('ID', style: labelStyle)),
+        SizedBox(
+          width: widths.id,
+          child: Text('ID', style: labelStyle),
+        ),
         SizedBox(width: widths.gap),
-        SizedBox(width: widths.status, child: Text('Status', style: labelStyle)),
+        SizedBox(
+          width: widths.status,
+          child: Text('Status', style: labelStyle),
+        ),
         SizedBox(width: widths.gap),
         SizedBox(
           width: widths.imageUrl,
@@ -1181,7 +1227,11 @@ class _BannerHeaderRow extends StatelessWidget {
           width: _AdminBannersPageState._actionsWidth,
           child: Align(
             alignment: Alignment.centerRight,
-            child: Text('Actions', style: labelStyle, textAlign: TextAlign.right),
+            child: Text(
+              'Actions',
+              style: labelStyle,
+              textAlign: TextAlign.right,
+            ),
           ),
         ),
       ],
@@ -1231,7 +1281,10 @@ class _BannerRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            SizedBox(width: widths.id, child: Text('${banner.id}', style: bodyStyle)),
+            SizedBox(
+              width: widths.id,
+              child: Text('${banner.id}', style: bodyStyle),
+            ),
             SizedBox(width: widths.gap),
             SizedBox(
               width: widths.status,
@@ -1378,8 +1431,7 @@ double _textScaleForWidth(double width) {
 }
 
 Future<AppBanner?> showAdminBannerDialog(
-  BuildContext context,
-  {
+  BuildContext context, {
   AppBanner? initial,
   required int nextId,
 }) async {

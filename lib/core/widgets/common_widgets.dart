@@ -870,9 +870,7 @@ class AppModalFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final maxDialogHeight =
-        mediaQuery.size.height -
-        mediaQuery.viewInsets.bottom -
-        (24 * 2);
+        mediaQuery.size.height - mediaQuery.viewInsets.bottom - (24 * 2);
     final dialog = Dialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
@@ -1060,6 +1058,7 @@ class CartFab extends StatelessWidget {
     required this.itemCount,
     required this.totalCentavos,
     required this.onTap,
+    this.totalLabel,
     this.fullWidth = false,
     this.horizontalMargin = 0,
   });
@@ -1069,6 +1068,7 @@ class CartFab extends StatelessWidget {
   final bool fullWidth;
   final double horizontalMargin;
   final VoidCallback onTap;
+  final String? totalLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1102,7 +1102,7 @@ class CartFab extends StatelessWidget {
                 const Icon(Icons.shopping_cart_checkout, color: Colors.white),
                 const SizedBox(width: 10),
                 Text(
-                  '$itemCount item${itemCount == 1 ? '' : 's'} • ${formatPesos(totalCentavos)}',
+                  '$itemCount item${itemCount == 1 ? '' : 's'} • ${totalLabel ?? formatPesos(totalCentavos)}',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,

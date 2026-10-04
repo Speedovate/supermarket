@@ -143,18 +143,17 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
 
     final orders = [...ref.watch(appControllerProvider).orders]
       ..sort((a, b) => b.id.compareTo(a.id));
-    final normalized = query.trim().toLowerCase();
     final filteredOrders = orders.where((order) {
-      final matchesQuery =
-          normalized.isEmpty ||
-          order.name.toLowerCase().contains(normalized) ||
-          order.phone.toLowerCase().contains(normalized) ||
-          order.place.toLowerCase().contains(normalized) ||
-          order.addressStreet.toLowerCase().contains(normalized) ||
-          order.addressLandmark.toLowerCase().contains(normalized) ||
-          displayFulfillment(order.method).toLowerCase().contains(normalized) ||
-          displayStatus(order.status).toLowerCase().contains(normalized) ||
-          '${order.id}'.contains(normalized);
+      final matchesQuery = matchesLenientSearch(query, [
+        order.name,
+        order.phone,
+        order.place,
+        order.addressStreet,
+        order.addressLandmark,
+        displayFulfillment(order.method),
+        displayStatus(order.status),
+        '${order.id}',
+      ]);
       final matchesCreatedAt =
           createdAtFilter == null ||
           _isSameDay(order.createdAt, createdAtFilter!);
@@ -947,10 +946,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
           _statusBadgeHorizontalPadding,
       items: maxWidth(
         'Items',
-        orders.map(
-          (item) =>
-              '${item.items.fold<int>(0, (sum, entry) => sum + entry.requestedQuantity)}',
-        ),
+        orders.map((item) => '${item.requestedItemCount}'),
       ),
       createdAt:
           maxWidth(
@@ -1008,15 +1004,15 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                   : order.addressLandmark.trim(),
           ]
         : const <String>[];
-    final productLines = order.products.isEmpty
-        ? ['Items: -']
-        : [
-            'Items:',
-            ...order.products.map(
-              (item) =>
-                  '- ${item.productName} | ${item.unit} | x${item.requestedQuantity}',
-            ),
-          ];
+    final productLines = [
+      'Items:',
+      ...order.products.map(
+        (item) =>
+            '- ${item.productName} | ${item.unit} | x${item.requestedQuantity}',
+      ),
+      ...order.requestedListItems.map((item) => '- ${item.text}'),
+      if (order.products.isEmpty && order.requestedListItems.isEmpty) '-',
+    ];
     final summary = [
       'Order #${order.id}',
       methodLine,
@@ -1142,6 +1138,14 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                   ),
                 ),
               ),
+              if (order.requestedListItems.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text('Lista', style: labelStyle),
+                const SizedBox(height: 4),
+                ...order.requestedListItems.map(
+                  (item) => Text('- ${item.text}', style: bodyStyle),
+                ),
+              ],
             ],
           ),
         );
@@ -1323,6 +1327,17 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
     );
 
     if (shouldSave != true || !mounted) {
+      return;
+    }
+    if (selectedStatus != OrderStatus.waiting &&
+        order.hasPendingRequestedListItems) {
+      final messenger = ScaffoldMessenger.of(this.context);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        errorSnackBar(
+          'Open the order and add every lista item to Products first.',
+        ),
+      );
       return;
     }
 
@@ -1561,10 +1576,7 @@ class _OrderRow extends StatelessWidget {
       fontSize: (DefaultTextStyle.of(context).style.fontSize ?? 14) * scale,
       height: 1.15,
     );
-    final itemCount = order.items.fold<int>(
-      0,
-      (sum, item) => sum + item.requestedQuantity,
-    );
+    final itemCount = order.requestedItemCount;
 
     return DecoratedBox(
       decoration: BoxDecoration(

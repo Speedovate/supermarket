@@ -56,6 +56,7 @@ class AppState {
     this.products = const [],
     this.productsMetaUpdatedAt,
     this.cart = const [],
+    this.requestedListItems = const [],
     this.orders = const [],
     this.ordersMetaUpdatedAt,
     this.settings = const AppSettings(),
@@ -80,6 +81,7 @@ class AppState {
   final List<Product> products;
   final DateTime? productsMetaUpdatedAt;
   final List<CartItem> cart;
+  final List<RequestedListItem> requestedListItems;
   final List<OrderRequest> orders;
   final DateTime? ordersMetaUpdatedAt;
   final AppSettings settings;
@@ -108,6 +110,7 @@ class AppState {
     List<Product>? products,
     Object? productsMetaUpdatedAt = _sentinel,
     List<CartItem>? cart,
+    List<RequestedListItem>? requestedListItems,
     List<OrderRequest>? orders,
     Object? ordersMetaUpdatedAt = _sentinel,
     AppSettings? settings,
@@ -144,6 +147,7 @@ class AppState {
           ? this.productsMetaUpdatedAt
           : productsMetaUpdatedAt as DateTime?,
       cart: cart ?? this.cart,
+      requestedListItems: requestedListItems ?? this.requestedListItems,
       orders: orders ?? this.orders,
       ordersMetaUpdatedAt: ordersMetaUpdatedAt == _sentinel
           ? this.ordersMetaUpdatedAt
@@ -515,6 +519,7 @@ class AppController extends Notifier<AppState> {
       settings: const AppSettings(),
       settingsMetaUpdatedAt: null,
       cart: const [],
+      requestedListItems: const [],
       customerDraft: const CustomerDraft(),
       adminSession: null,
       catalogHydrated: false,
@@ -574,6 +579,7 @@ class AppController extends Notifier<AppState> {
           persisted.settings.updatedAt ??
           persisted.settings.createdAt,
       cart: syncedCart,
+      requestedListItems: persisted.requestedListItems,
       customerDraft: _resolveAutofillDraft(
         currentDraft: persisted.customerDraft,
         orders: sanitizedOrders,
@@ -1521,7 +1527,6 @@ class AppController extends Notifier<AppState> {
     required String query,
   }) {
     final activeCategoryIds = publicCategories.map((item) => item.id).toSet();
-    final normalizedQuery = query.trim().toLowerCase();
     return state.products.where((product) {
       final isUnassignedCategory =
           product.category <= 0 ||
@@ -1535,10 +1540,11 @@ class AppController extends Notifier<AppState> {
           product.active &&
           (activeCategoryIds.contains(product.category) ||
               isUnassignedCategory);
-      final searchMatch = normalizedQuery.isEmpty
-          ? true
-          : product.normalizedName.contains(normalizedQuery) ||
-                product.details.toLowerCase().contains(normalizedQuery);
+      final searchMatch = matchesLenientSearch(query, [
+        product.name,
+        product.details,
+        '${product.id}',
+      ]);
       return categoryMatch && publiclyVisible && searchMatch;
     }).toList();
   }
@@ -1765,6 +1771,64 @@ class AppController extends Notifier<AppState> {
     await _persist();
   }
 
+  Future<void> addRequestedListItem(String value) async {
+    final text = value.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    final now = DateTime.now();
+    final nextId =
+        state.requestedListItems.fold<int>(
+          0,
+          (highest, item) => math.max(highest, item.id),
+        ) +
+        1;
+    state = state.copyWith(
+      requestedListItems: [
+        ...state.requestedListItems,
+        RequestedListItem(
+          id: nextId,
+          text: text,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ],
+    );
+    await _persist();
+  }
+
+  Future<void> removeRequestedListItem(int itemId) async {
+    state = state.copyWith(
+      requestedListItems: state.requestedListItems
+          .where((item) => item.id != itemId)
+          .toList(),
+    );
+    await _persist();
+  }
+
+  Future<void> updateRequestedListItem(int itemId, String value) async {
+    final text = value.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    final now = DateTime.now();
+    state = state.copyWith(
+      requestedListItems: state.requestedListItems
+          .map(
+            (item) => item.id == itemId
+                ? RequestedListItem(
+                    id: item.id,
+                    text: text,
+                    createdAt: item.createdAt,
+                    updatedAt: now,
+                  )
+                : item,
+          )
+          .toList(),
+    );
+    await _persist();
+  }
+
   Future<void> addOrderToCart(OrderRequest order) async {
     final now = DateTime.now();
     final nextCart = order.items
@@ -1785,6 +1849,16 @@ class AppController extends Notifier<AppState> {
 
     state = state.copyWith(
       cart: nextCart,
+      requestedListItems: order.requestedListItems
+          .map(
+            (item) => RequestedListItem(
+              id: item.id,
+              text: item.text,
+              createdAt: now,
+              updatedAt: now,
+            ),
+          )
+          .toList(),
       customerDraft: order.customer.copyWith(
         normalizedMobileNumber: normalizePhoneNumber(
           order.customer.mobileNumber,
@@ -1835,7 +1909,8 @@ class AppController extends Notifier<AppState> {
     if (requiresPlace && draft.barangay.trim().isEmpty) {
       return 'Please select a barangay';
     }
-    if (draft.fulfillmentMethod == FulfillmentMethod.delivery &&
+    if (state.cart.isNotEmpty &&
+        draft.fulfillmentMethod == FulfillmentMethod.delivery &&
         draft.barangay.trim().isNotEmpty &&
         !serviceableBarangays.contains(draft.barangay.trim())) {
       return 'Please select a serviceable barangay';
@@ -1849,8 +1924,8 @@ class AppController extends Notifier<AppState> {
         state.cartTotalCentavos < state.settings.minimumDeliveryOrderAmount) {
       return '${formatPesos(state.settings.minimumDeliveryOrderAmount)} min order amount for delivery.';
     }
-    if (state.cart.isEmpty) {
-      return 'Add at least one product before submitting.';
+    if (state.cart.isEmpty && state.requestedListItems.isEmpty) {
+      return 'Add at least one product or lista item before submitting.';
     }
     return null;
   }
@@ -1868,6 +1943,7 @@ class AppController extends Notifier<AppState> {
     try {
       state = state.copyWith(submittingOrder: true, errorMessage: null);
       final currentCart = [...state.cart];
+      final currentRequestedListItems = [...state.requestedListItems];
       final currentOrders = [...state.orders];
       final currentCartTotalCentavos = state.cartTotalCentavos;
       final now = DateTime.now();
@@ -1921,6 +1997,7 @@ class AppController extends Notifier<AppState> {
         addressStreet: normalizedCustomer.addressStreet,
         addressLandmark: normalizedCustomer.addressLandmark,
         products: items,
+        requestedListItems: currentRequestedListItems,
       );
 
       debugPrint('[OrderSubmission] saving orders/$orderId');
@@ -1929,6 +2006,7 @@ class AppController extends Notifier<AppState> {
       state = state.copyWith(
         orders: [order, ...currentOrders],
         cart: const [],
+        requestedListItems: const [],
         lastSubmittedOrderId: orderId,
         customerDraft: normalizedCustomer.copyWith(
           createdAt: normalizedCustomer.createdAt ?? now,
@@ -2862,6 +2940,7 @@ class AppController extends Notifier<AppState> {
           settings: state.settings,
           settingsMetaUpdatedAt: state.settingsMetaUpdatedAt,
           cart: state.cart,
+          requestedListItems: state.requestedListItems,
           customerDraft: state.customerDraft,
           adminSession: state.adminSession,
           createdAt: state.initialized

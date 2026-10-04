@@ -29,6 +29,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
   late CustomerDraft _originalDraft;
   bool initialized = false;
   bool _restoredPreviewState = false;
+  bool _initializationScheduled = false;
 
   String _displayBarangayWithCutoff(OrderRequest order) {
     if (order.method != FulfillmentMethod.delivery) {
@@ -51,11 +52,14 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
     return '$place - ${formatBarangayCutoffValue(barangay)}';
   }
 
-  void _initializeOrderPreview() {
+  bool _initializeOrderPreview() {
     final appState = ref.read(appControllerProvider);
-    final order = appState.orders.firstWhere(
-      (item) => item.id == widget.orderId,
-    );
+    final order = appState.orders
+        .where((item) => item.id == widget.orderId)
+        .firstOrNull;
+    if (order == null) {
+      return false;
+    }
     editableOrder = order;
     _originalCart = [...appState.cart];
     _originalDraft = appState.customerDraft;
@@ -67,6 +71,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
       }
       ref.read(appControllerProvider.notifier).addOrderToCart(order);
     });
+    return true;
   }
 
   @override
@@ -119,7 +124,19 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
         .firstOrNull;
 
     if (persistedOrder == null) {
-      return const Center(child: Text('Order not found.'));
+      return state.loading
+          ? const Center(child: CircularProgressIndicator())
+          : const Center(child: Text('Order not found.'));
+    }
+    if (!initialized && !_initializationScheduled) {
+      _initializationScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _initializationScheduled = false;
+        if (!mounted || initialized) {
+          return;
+        }
+        _initializeOrderPreview();
+      });
     }
     if (initialized &&
         (persistedOrder.updatedAt != editableOrder.updatedAt ||
@@ -160,6 +177,16 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
           onEdit: () => _showEditOrderDialog(context, order),
           onAddProduct: () => _showAddProductDialog(context),
         ),
+        if (order.requestedListItems.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _RequestedListaCard(
+            items: order.requestedListItems,
+            onAddProduct: (item) => _addRequestedListaProduct(context, item),
+            onEdit: (item) => _editRequestedListaItem(context, item),
+            onRemove: (item) => _removeRequestedListaItem(context, item),
+            onAdd: () => _addRequestedListaItem(context),
+          ),
+        ],
         const SizedBox(height: 12),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -360,15 +387,15 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                   : order.addressLandmark.trim(),
           ]
         : const <String>[];
-    final productLines = order.items.isEmpty
-        ? ['Items: -']
-        : [
-            'Items:',
-            ...order.items.map(
-              (item) =>
-                  '- ${item.productName} | ${item.unit} | x${item.requestedQuantity}',
-            ),
-          ];
+    final productLines = [
+      'Items:',
+      ...order.items.map(
+        (item) =>
+            '- ${item.productName} | ${item.unit} | x${item.requestedQuantity}',
+      ),
+      ...order.requestedListItems.map((item) => '- ${item.text}'),
+      if (order.items.isEmpty && order.requestedListItems.isEmpty) '-',
+    ];
     final summary = [
       'Order #${order.id}',
       methodLine,
@@ -394,10 +421,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
     BuildContext context,
     OrderRequest order,
   ) async {
-    final itemCount = order.products.fold<int>(
-      0,
-      (sum, item) => sum + item.requestedQuantity,
-    );
+    final itemCount = order.requestedItemCount;
     final bodyStyle = Theme.of(
       context,
     ).textTheme.bodyMedium?.copyWith(height: 1.15);
@@ -491,6 +515,14 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                   ),
                 ),
               ),
+              if (order.requestedListItems.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text('Lista', style: labelStyle),
+                const SizedBox(height: 4),
+                ...order.requestedListItems.map(
+                  (item) => Text('- ${item.text}', style: bodyStyle),
+                ),
+              ],
             ],
           ),
         );
@@ -498,22 +530,241 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
     );
   }
 
+  Future<void> _addRequestedListaProduct(
+    BuildContext context,
+    RequestedListItem item,
+  ) async {
+    final parts = item.text.split('|').map((part) => part.trim()).toList();
+    final product = await showAdminProductDialog(
+      context,
+      ref,
+      initialName: parts.firstOrNull ?? item.text,
+      initialDetails: parts.length > 1 ? parts[1] : '',
+    );
+    if (product == null || !mounted) {
+      return;
+    }
+    final now = DateTime.now();
+    final updatedOrder = editableOrder.copyWith(
+      requestedListItems: editableOrder.requestedListItems
+          .map(
+            (entry) => entry.id == item.id
+                ? entry.copyWith(handledProductId: product.id, updatedAt: now)
+                : entry,
+          )
+          .toList(),
+      updatedAt: now,
+    );
+    await ref.read(appControllerProvider.notifier).updateOrder(updatedOrder);
+    if (!mounted) {
+      return;
+    }
+    setState(() => editableOrder = updatedOrder);
+  }
+
+  Future<void> _editRequestedListaItem(
+    BuildContext context,
+    RequestedListItem item,
+  ) async {
+    final controller = TextEditingController(text: item.text);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AppModalFrame(
+        title: 'Edit Lista Item',
+        actions: [
+          AppModalButton(
+            label: 'Close',
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+          const SizedBox(width: 8),
+          AppModalButton(
+            label: 'Save',
+            isPrimary: true,
+            onPressed: () {
+              final nextText = controller.text.trim();
+              if (nextText.isNotEmpty) {
+                Navigator.of(dialogContext).pop(nextText);
+              }
+            },
+          ),
+        ],
+        child: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 1,
+          decoration: const InputDecoration(
+            hintText: 'Product | Unit | Quantity',
+          ),
+        ),
+      ),
+    );
+    controller.dispose();
+    if (value == null || !mounted) {
+      return;
+    }
+    final now = DateTime.now();
+    final updatedOrder = editableOrder.copyWith(
+      requestedListItems: editableOrder.requestedListItems
+          .map(
+            (entry) => entry.id == item.id
+                ? RequestedListItem(
+                    id: entry.id,
+                    text: value,
+                    createdAt: entry.createdAt,
+                    updatedAt: now,
+                  )
+                : entry,
+          )
+          .toList(),
+      updatedAt: now,
+    );
+    await ref.read(appControllerProvider.notifier).updateOrder(updatedOrder);
+    if (mounted) {
+      setState(() => editableOrder = updatedOrder);
+    }
+  }
+
+  Future<void> _addRequestedListaItem(BuildContext context) async {
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AppModalFrame(
+        title: 'Add Lista Item',
+        actions: [
+          AppModalButton(
+            label: 'Close',
+            onPressed: () => Navigator.of(dialogContext).pop(),
+          ),
+          const SizedBox(width: 8),
+          AppModalButton(
+            label: 'Add',
+            isPrimary: true,
+            onPressed: () {
+              final nextText = controller.text.trim();
+              if (nextText.isNotEmpty) {
+                Navigator.of(dialogContext).pop(nextText);
+              }
+            },
+          ),
+        ],
+        child: AnimatedBuilder(
+          animation: focusNode,
+          builder: (context, child) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: controller,
+                focusNode: focusNode,
+                autofocus: true,
+                maxLines: 1,
+                decoration: const InputDecoration(
+                  hintText: 'Product | Unit | Quantity',
+                ),
+              ),
+              if (focusNode.hasFocus)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, left: 4),
+                  child: Text(
+                    'Example: Rebisco Cracker | 1 pack | x2',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF667085),
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    controller.dispose();
+    focusNode.dispose();
+    if (value == null || !mounted) {
+      return;
+    }
+    final now = DateTime.now();
+    final nextId =
+        editableOrder.requestedListItems.fold<int>(
+          0,
+          (highest, item) => math.max(highest, item.id),
+        ) +
+        1;
+    final updatedOrder = editableOrder.copyWith(
+      requestedListItems: [
+        ...editableOrder.requestedListItems,
+        RequestedListItem(
+          id: nextId,
+          text: value,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ],
+      updatedAt: now,
+    );
+    await ref.read(appControllerProvider.notifier).updateOrder(updatedOrder);
+    if (mounted) {
+      setState(() => editableOrder = updatedOrder);
+    }
+  }
+
+  Future<void> _removeRequestedListaItem(
+    BuildContext context,
+    RequestedListItem item,
+  ) async {
+    final shouldRemove = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AppModalFrame(
+        title: 'Remove Lista Item?',
+        actions: [
+          AppModalButton(
+            label: 'Close',
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+          ),
+          const SizedBox(width: 8),
+          AppModalButton(
+            label: 'Remove',
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+          ),
+        ],
+        child: Text(
+          'Remove "${item.text}" from this order? Use this when Andrew\'s does not sell the requested item.',
+        ),
+      ),
+    );
+    if (shouldRemove != true || !mounted) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final updatedOrder = editableOrder.copyWith(
+      requestedListItems: editableOrder.requestedListItems
+          .where((entry) => entry.id != item.id)
+          .toList(),
+      updatedAt: now,
+    );
+    await ref.read(appControllerProvider.notifier).updateOrder(updatedOrder);
+    if (mounted) {
+      setState(() => editableOrder = updatedOrder);
+    }
+  }
+
   Future<void> _showAddProductDialog(BuildContext context) async {
     final state = ref.read(appControllerProvider);
     final categoriesById = {
       for (final category in state.categories) category.id: category.name,
     };
-    final activeCategories = [
-      ...state.categories.where((item) => item.isActive),
-    ]..sort((a, b) {
-      final nameCompare = a.name.toLowerCase().compareTo(
-        b.name.toLowerCase(),
-      );
-      if (nameCompare != 0) {
-        return nameCompare;
-      }
-      return a.id.compareTo(b.id);
-    });
+    final activeCategories =
+        [...state.categories.where((item) => item.isActive)]..sort((a, b) {
+          final nameCompare = a.name.toLowerCase().compareTo(
+            b.name.toLowerCase(),
+          );
+          if (nameCompare != 0) {
+            return nameCompare;
+          }
+          return a.id.compareTo(b.id);
+        });
     final activeProducts = [...state.products.where((item) => item.isActive)]
       ..sort((a, b) {
         final createdAtCompare = b.createdAt.compareTo(a.createdAt);
@@ -565,12 +816,12 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                   final matchesCategory =
                       selectedCategoryId == 'all' ||
                       product.categoryId.toString() == selectedCategoryId;
-                  final matchesQuery =
-                      query.isEmpty ||
-                      product.name.toLowerCase().contains(query) ||
-                      product.displayUnit.toLowerCase().contains(query) ||
-                      categoryName.toLowerCase().contains(query) ||
-                      '${product.id}'.contains(query);
+                  final matchesQuery = matchesLenientSearch(query, [
+                    product.name,
+                    product.displayUnit,
+                    categoryName,
+                    '${product.id}',
+                  ]);
                   return matchesCategory && matchesQuery;
                 }).toList()..sort((a, b) {
                   switch (selectedSort) {
@@ -1196,6 +1447,15 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
     if (shouldSave != true || !mounted) {
       return;
     }
+    if (selectedStatus != OrderStatus.waiting &&
+        order.hasPendingRequestedListItems) {
+      final messenger = ScaffoldMessenger.of(this.context);
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        errorSnackBar('Add every lista item to Products before proceeding.'),
+      );
+      return;
+    }
 
     if (selectedMethod == FulfillmentMethod.delivery &&
         selectedPlace.trim().isEmpty) {
@@ -1236,6 +1496,89 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
     final messenger = ScaffoldMessenger.of(this.context);
     messenger.clearSnackBars();
     messenger.showSnackBar(successSnackBar('Order updated.'));
+  }
+}
+
+class _RequestedListaCard extends StatelessWidget {
+  const _RequestedListaCard({
+    required this.items,
+    required this.onAddProduct,
+    required this.onEdit,
+    required this.onRemove,
+    required this.onAdd,
+  });
+
+  final List<RequestedListItem> items;
+  final Future<void> Function(RequestedListItem item) onAddProduct;
+  final Future<void> Function(RequestedListItem item) onEdit;
+  final Future<void> Function(RequestedListItem item) onRemove;
+  final Future<void> Function() onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Lista',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.logoBlue,
+                  fontWeight: FontWeight.w800,
+                  height: 1.15,
+                ),
+              ),
+              const Spacer(),
+              TextButton(onPressed: onAdd, child: const Text('Add')),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final item in items) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => onEdit(item),
+                    child: Text('- ${item.text}'),
+                  ),
+                ),
+                if (item.isHandled)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Icon(Icons.check_rounded, color: Color(0xFF16A34A)),
+                  ),
+                if (!item.isHandled)
+                  IconButton(
+                    tooltip: 'Add Product',
+                    onPressed: () => onAddProduct(item),
+                    icon: const Icon(
+                      Icons.add_rounded,
+                      color: AppColors.logoBlue,
+                    ),
+                  ),
+                IconButton(
+                  tooltip: 'Remove lista item',
+                  onPressed: () => onRemove(item),
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Color(0xFFE31E24),
+                  ),
+                ),
+              ],
+            ),
+            if (item != items.last) const Divider(height: 16),
+          ],
+        ],
+      ),
+    );
   }
 }
 

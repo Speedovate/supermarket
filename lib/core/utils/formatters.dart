@@ -10,6 +10,143 @@ final _orderTime = DateFormat('h:mm a');
 final _orderTimeWithSeconds = DateFormat('hh:mm:ss a');
 final _cutoffTime = DateFormat('hh:mm a');
 
+/// Matches the forgiving product-style searches used throughout the app.
+/// It accepts case, spacing, punctuation, common abbreviations, missing
+/// characters, and small spelling mistakes without changing remote queries.
+bool matchesLenientSearch(String query, Iterable<String> candidates) {
+  final normalizedQuery = _normalizeSearchText(query);
+  if (normalizedQuery.compact.isEmpty) {
+    return true;
+  }
+
+  for (final candidate in candidates) {
+    final normalizedCandidate = _normalizeSearchText(candidate);
+    if (normalizedCandidate.compact.contains(normalizedQuery.compact)) {
+      return true;
+    }
+    if (_containsFuzzySearchPhrase(
+      normalizedQuery.compact,
+      normalizedCandidate.compact,
+    )) {
+      return true;
+    }
+    if (normalizedQuery.tokens.isNotEmpty &&
+        normalizedQuery.tokens.every(
+          (queryToken) => normalizedCandidate.tokens.any(
+            (candidateToken) => _matchesSearchToken(queryToken, candidateToken),
+          ),
+        )) {
+      return true;
+    }
+  }
+  return false;
+}
+
+({String compact, List<String> tokens}) _normalizeSearchText(String value) {
+  const abbreviations = <String, String>{
+    'sta': 'santa',
+    'sto': 'santo',
+    'pck': 'pack',
+    'sk': 'sack',
+    'sck': 'sack',
+  };
+  final tokens = value
+      .toLowerCase()
+      .split(RegExp(r'[^a-z0-9]+'))
+      .where((token) => token.isNotEmpty)
+      .map((token) => abbreviations[token] ?? _expandPackagingShorthand(token))
+      .toList();
+  return (compact: tokens.join(), tokens: tokens);
+}
+
+String _expandPackagingShorthand(String token) {
+  return token
+      .replaceFirst(RegExp(r'^pck(?=\d|$)'), 'pack')
+      .replaceFirst(RegExp(r'^(?:sck|sk)(?=\d|$)'), 'sack');
+}
+
+bool _matchesSearchToken(String queryToken, String candidateToken) {
+  if (candidateToken.contains(queryToken) ||
+      queryToken.contains(candidateToken)) {
+    return true;
+  }
+  if (queryToken.length >= 3 &&
+      candidateToken.length >= queryToken.length &&
+      _isSubsequence(queryToken, candidateToken)) {
+    return true;
+  }
+  if (queryToken.length < 3 || candidateToken.length < 3) {
+    return false;
+  }
+  final allowedDistance = queryToken.length <= 5 ? 1 : 2;
+  if ((queryToken.length - candidateToken.length).abs() > allowedDistance) {
+    return false;
+  }
+  return _levenshteinDistance(queryToken, candidateToken) <= allowedDistance;
+}
+
+bool _isSubsequence(String query, String candidate) {
+  var queryIndex = 0;
+  for (
+    var candidateIndex = 0;
+    candidateIndex < candidate.length && queryIndex < query.length;
+    candidateIndex++
+  ) {
+    if (query.codeUnitAt(queryIndex) == candidate.codeUnitAt(candidateIndex)) {
+      queryIndex++;
+    }
+  }
+  return queryIndex == query.length;
+}
+
+int _levenshteinDistance(String first, String second) {
+  var previous = List<int>.generate(second.length + 1, (index) => index);
+  for (var firstIndex = 0; firstIndex < first.length; firstIndex++) {
+    final current = <int>[firstIndex + 1];
+    for (var secondIndex = 0; secondIndex < second.length; secondIndex++) {
+      final substitutionCost =
+          first.codeUnitAt(firstIndex) == second.codeUnitAt(secondIndex)
+          ? 0
+          : 1;
+      current.add(
+        [
+          current[secondIndex] + 1,
+          previous[secondIndex + 1] + 1,
+          previous[secondIndex] + substitutionCost,
+        ].reduce((lowest, value) => lowest < value ? lowest : value),
+      );
+    }
+    previous = current;
+  }
+  return previous.last;
+}
+
+bool _containsFuzzySearchPhrase(String query, String candidate) {
+  if (query.length < 6 || candidate.length < 6) {
+    return false;
+  }
+  final allowedDistance = query.length <= 5
+      ? 1
+      : query.length <= 9
+      ? 2
+      : 3;
+  final minLength = (query.length - allowedDistance).clamp(1, candidate.length);
+  final maxLength = (query.length + allowedDistance).clamp(1, candidate.length);
+  for (var start = 0; start < candidate.length; start++) {
+    for (var length = minLength; length <= maxLength; length++) {
+      final end = start + length;
+      if (end > candidate.length) {
+        break;
+      }
+      if (_levenshteinDistance(query, candidate.substring(start, end)) <=
+          allowedDistance) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 String formatPesosValue(int centavos) {
   final pesos = centavos / 100;
   return _pesoValue.format(pesos);
@@ -33,13 +170,15 @@ String formatPesos(int centavos) {
 
 String formatAsOfDate(DateTime date) => _shortDate.format(date);
 
-String formatOrderThreadDateTime(DateTime date) => _orderThreadDateTime.format(date);
+String formatOrderThreadDateTime(DateTime date) =>
+    _orderThreadDateTime.format(date);
 
 String formatOrderDate(DateTime date) => _orderDate.format(date);
 
 String formatOrderTime(DateTime date) => _orderTime.format(date);
 
-String formatOrderTimeWithSeconds(DateTime date) => _orderTimeWithSeconds.format(date);
+String formatOrderTimeWithSeconds(DateTime date) =>
+    _orderTimeWithSeconds.format(date);
 
 String formatCompactCount(int value) {
   if (value < 1000) {

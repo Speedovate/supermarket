@@ -17,21 +17,25 @@ Future<Product?> showAdminProductDialog(
   BuildContext context,
   WidgetRef ref, {
   Product? initial,
+  String? initialName,
+  String? initialDetails,
 }) async {
   final state = ref.read(appControllerProvider);
   final categories = state.categories.toList()
     ..sort((a, b) {
-      final nameCompare = a.name.toLowerCase().compareTo(
-        b.name.toLowerCase(),
-      );
+      final nameCompare = a.name.toLowerCase().compareTo(b.name.toLowerCase());
       if (nameCompare != 0) {
         return nameCompare;
       }
       return a.id.compareTo(b.id);
     });
   final formKey = GlobalKey<FormState>();
-  final nameController = TextEditingController(text: initial?.name ?? '');
-  final detailsController = TextEditingController(text: initial?.details ?? '');
+  final nameController = TextEditingController(
+    text: initial?.name ?? initialName ?? '',
+  );
+  final detailsController = TextEditingController(
+    text: initial?.details ?? initialDetails ?? '',
+  );
   final priceController = TextEditingController(
     text: initial == null
         ? ''
@@ -56,9 +60,9 @@ Future<Product?> showAdminProductDialog(
           parsePesosValueToCentavos(priceController.text.trim()) ?? 0;
       final fallbackNextProductId =
           (state.products
-                  .map((item) => item.id)
-                  .fold<int>(0, (max, value) => value > max ? value : max)) +
-              1;
+              .map((item) => item.id)
+              .fold<int>(0, (max, value) => value > max ? value : max)) +
+          1;
       final resolvedProductId =
           initial?.id ??
           await ref
@@ -235,12 +239,14 @@ Future<Product?> showAdminProductDialog(
                                 icon: const Icon(Icons.close),
                               ),
                       ),
-                      items: categories.map(
-                        (item) => DropdownMenuItem<int?>(
-                          value: item.id,
-                          child: Text(item.name),
-                        ),
-                      ).toList(),
+                      items: categories
+                          .map(
+                            (item) => DropdownMenuItem<int?>(
+                              value: item.id,
+                              child: Text(item.name),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (value) =>
                           setState(() => selectedCategory = value),
                     ),
@@ -275,8 +281,7 @@ Future<Product?> showAdminProductDialog(
                         if (text.isEmpty) {
                           return 'Price is required.';
                         }
-                        final parsedCentavos =
-                            parsePesosValueToCentavos(text);
+                        final parsedCentavos = parsePesosValueToCentavos(text);
                         if (parsedCentavos == null) {
                           return 'Enter a valid price.';
                         }

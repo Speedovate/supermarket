@@ -138,10 +138,10 @@ class _AdminCategoriesPageState extends ConsumerState<AdminCategoriesPage> {
     }
     final normalizedQuery = query.trim().toLowerCase();
     final categories = allCategories.where((category) {
-      final matchesQuery =
-          normalizedQuery.isEmpty ||
-          category.name.toLowerCase().contains(normalizedQuery) ||
-          '${category.id}'.contains(normalizedQuery);
+      final matchesQuery = matchesLenientSearch(query, [
+        category.name,
+        '${category.id}',
+      ]);
       final matchesCreatedAt =
           createdAtFilter == null ||
           _isSameDay(category.createdAt, createdAtFilter!);

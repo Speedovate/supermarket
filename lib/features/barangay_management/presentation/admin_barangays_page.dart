@@ -59,8 +59,12 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
         selection: TextSelection.collapsed(offset: query.length),
       );
     }
-    createdAtFilter = _parseRouteDate(uri.queryParameters['filters[created_at]']);
-    updatedAtFilter = _parseRouteDate(uri.queryParameters['filters[updated_at]']);
+    createdAtFilter = _parseRouteDate(
+      uri.queryParameters['filters[created_at]'],
+    );
+    updatedAtFilter = _parseRouteDate(
+      uri.queryParameters['filters[updated_at]'],
+    );
     statusFilter = _normalizeNullable(uri.queryParameters['filters[status]']);
   }
 
@@ -113,17 +117,19 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
               height: 1.15,
             );
 
-    final barangays = [...state.barangays]..sort((a, b) => b.id.compareTo(a.id));
-    final normalizedQuery = query.trim().toLowerCase();
+    final barangays = [...state.barangays]
+      ..sort((a, b) => b.id.compareTo(a.id));
     final filteredBarangays = barangays.where((barangay) {
-      final matchesQuery =
-          normalizedQuery.isEmpty ||
-          barangay.name.toLowerCase().contains(normalizedQuery) ||
-          '${barangay.id}'.contains(normalizedQuery);
+      final matchesQuery = matchesLenientSearch(query, [
+        barangay.name,
+        '${barangay.id}',
+      ]);
       final matchesCreatedAt =
-          createdAtFilter == null || _isSameDay(barangay.createdAt, createdAtFilter!);
+          createdAtFilter == null ||
+          _isSameDay(barangay.createdAt, createdAtFilter!);
       final matchesUpdatedAt =
-          updatedAtFilter == null || _isSameDay(barangay.updatedAt, updatedAtFilter!);
+          updatedAtFilter == null ||
+          _isSameDay(barangay.updatedAt, updatedAtFilter!);
       final matchesStatus = switch (statusFilter) {
         'active' => barangay.isActive,
         'inactive' => !barangay.isActive,
@@ -158,7 +164,8 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                         Expanded(
                           child: TextField(
                             controller: _queryController,
-                            onChanged: (value) => _setFilters(() => query = value),
+                            onChanged: (value) =>
+                                _setFilters(() => query = value),
                             decoration: InputDecoration(
                               hintText: 'Search',
                               hintStyle: const TextStyle(
@@ -185,12 +192,18 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                         const SizedBox(width: 8),
                         MenuAnchor(
                           style: const MenuStyle(
-                            backgroundColor: WidgetStatePropertyAll(Colors.white),
-                            surfaceTintColor: WidgetStatePropertyAll(Colors.white),
+                            backgroundColor: WidgetStatePropertyAll(
+                              Colors.white,
+                            ),
+                            surfaceTintColor: WidgetStatePropertyAll(
+                              Colors.white,
+                            ),
                             padding: WidgetStatePropertyAll(EdgeInsets.zero),
                             shape: WidgetStatePropertyAll(
                               RoundedRectangleBorder(
-                                borderRadius: BorderRadius.all(Radius.circular(16)),
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(16),
+                                ),
                               ),
                             ),
                           ),
@@ -238,7 +251,8 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                           width: 280,
                           child: TextField(
                             controller: _queryController,
-                            onChanged: (value) => _setFilters(() => query = value),
+                            onChanged: (value) =>
+                                _setFilters(() => query = value),
                             decoration: InputDecoration(
                               hintText: 'Search',
                               hintStyle: const TextStyle(
@@ -264,12 +278,18 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                         ),
                         MenuAnchor(
                           style: const MenuStyle(
-                            backgroundColor: WidgetStatePropertyAll(Colors.white),
-                            surfaceTintColor: WidgetStatePropertyAll(Colors.white),
+                            backgroundColor: WidgetStatePropertyAll(
+                              Colors.white,
+                            ),
+                            surfaceTintColor: WidgetStatePropertyAll(
+                              Colors.white,
+                            ),
                             padding: WidgetStatePropertyAll(EdgeInsets.zero),
                             shape: WidgetStatePropertyAll(
                               RoundedRectangleBorder(
-                                borderRadius: BorderRadius.all(Radius.circular(16)),
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(16),
+                                ),
                               ),
                             ),
                           ),
@@ -365,223 +385,223 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
         Flexible(
           fit: FlexFit.loose,
           child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final contentWidth =
-                        widths.id +
-                        gap +
-                        widths.name +
-                        gap +
-                        widths.status +
-                        gap +
-                        widths.cutoff +
-                        gap +
-                        widths.createdAt +
-                        gap +
-                        widths.updatedAt +
-                        gap +
-                        _actionsWidth;
-                    final effectiveWidth = constraints.maxWidth > contentWidth + 40
-                        ? constraints.maxWidth
-                        : contentWidth + 40;
-                    final trailingSpace = effectiveWidth - (contentWidth + 40);
-                    const headerHeight = 53.0;
-                    const dividerHeight = 0.6;
-                    const emptyStateHeight = 232.0;
-                    final rowHeights = filteredBarangays
-                        .map(
-                          (barangay) => _measureBarangayRowHeight(
-                            barangay: barangay,
-                            widths: widths,
-                            bodyStyle: bodyStyle,
-                          ),
-                        )
-                        .toList(growable: false);
-                    final contentHeightEstimate = filteredBarangays.isEmpty
-                        ? emptyStateHeight
-                        : rowHeights.fold<double>(0, (sum, height) => sum + height) +
-                            math.max(0, filteredBarangays.length - 1) *
-                                dividerHeight;
-                    final maxTableHeight = constraints.maxHeight.isFinite
-                        ? constraints.maxHeight
-                        : headerHeight + dividerHeight + contentHeightEstimate;
-                    final targetTableHeight = math.min(
-                      maxTableHeight,
-                      headerHeight + dividerHeight + contentHeightEstimate,
-                    );
-                    final shouldScrollBody =
-                        headerHeight + dividerHeight + contentHeightEstimate >
-                        maxTableHeight;
+            builder: (context, constraints) {
+              final contentWidth =
+                  widths.id +
+                  gap +
+                  widths.name +
+                  gap +
+                  widths.status +
+                  gap +
+                  widths.cutoff +
+                  gap +
+                  widths.createdAt +
+                  gap +
+                  widths.updatedAt +
+                  gap +
+                  _actionsWidth;
+              final effectiveWidth = constraints.maxWidth > contentWidth + 40
+                  ? constraints.maxWidth
+                  : contentWidth + 40;
+              final trailingSpace = effectiveWidth - (contentWidth + 40);
+              const headerHeight = 53.0;
+              const dividerHeight = 0.6;
+              const emptyStateHeight = 232.0;
+              final rowHeights = filteredBarangays
+                  .map(
+                    (barangay) => _measureBarangayRowHeight(
+                      barangay: barangay,
+                      widths: widths,
+                      bodyStyle: bodyStyle,
+                    ),
+                  )
+                  .toList(growable: false);
+              final contentHeightEstimate = filteredBarangays.isEmpty
+                  ? emptyStateHeight
+                  : rowHeights.fold<double>(0, (sum, height) => sum + height) +
+                        math.max(0, filteredBarangays.length - 1) *
+                            dividerHeight;
+              final maxTableHeight = constraints.maxHeight.isFinite
+                  ? constraints.maxHeight
+                  : headerHeight + dividerHeight + contentHeightEstimate;
+              final targetTableHeight = math.min(
+                maxTableHeight,
+                headerHeight + dividerHeight + contentHeightEstimate,
+              );
+              final shouldScrollBody =
+                  headerHeight + dividerHeight + contentHeightEstimate >
+                  maxTableHeight;
 
-                    return SectionCard(
-                      showShadow: false,
-                      padding: EdgeInsets.zero,
-                      borderRadius: 16,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: ColoredBox(
-                          color: Colors.white,
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: SizedBox(
-                              width: effectiveWidth,
-                              height: shouldScrollBody ? targetTableHeight : null,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: double.infinity,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.logoBlue.withValues(
-                                        alpha: 0.10,
-                                      ),
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(16),
-                                        topRight: Radius.circular(16),
-                                      ),
-                                    ),
-                                    padding: const EdgeInsets.fromLTRB(
-                                      20,
-                                      16,
-                                      20,
-                                      16,
-                                    ),
-                                    child: _BarangayHeaderRow(
-                                      widths: widths,
-                                      trailingSpace: trailingSpace,
-                                    ),
-                                  ),
-                                  const Divider(
-                                    height: 0,
-                                    thickness: 0.6,
-                                    color: Color(0xFFE4E7EC),
-                                  ),
-                                  if (filteredBarangays.isEmpty)
-                                    if (shouldScrollBody)
-                                      Expanded(
-                                        child: ClipRRect(
-                                          borderRadius: const BorderRadius.only(
-                                            bottomLeft: Radius.circular(16),
-                                            bottomRight: Radius.circular(16),
-                                          ),
-                                          child: const EmptyStateCard(
-                                            title: 'No barangays found',
-                                            message:
-                                                'Adjust filters or add a new barangay.',
-                                            showBorder: false,
-                                          ),
-                                        ),
-                                      )
-                                    else
-                                      ClipRRect(
-                                        borderRadius: const BorderRadius.only(
-                                          bottomLeft: Radius.circular(16),
-                                          bottomRight: Radius.circular(16),
-                                        ),
-                                        child: const EmptyStateCard(
-                                          title: 'No barangays found',
-                                          message:
-                                              'Adjust filters or add a new barangay.',
-                                          showBorder: false,
-                                        ),
-                                      )
-                                  else
-                                    shouldScrollBody
-                                        ? Expanded(
-                                            child: ListView.separated(
-                                              padding: EdgeInsets.zero,
-                                              itemCount: filteredBarangays.length,
-                                              itemBuilder: (context, index) {
-                                                final barangay =
-                                                    filteredBarangays[index];
-                                                return _BarangayRow(
-                                                  barangay: barangay,
-                                                  widths: widths,
-                                                  trailingSpace: trailingSpace,
-                                                  isLast: index ==
-                                                      filteredBarangays.length - 1,
-                                                  onPreview: () =>
-                                                      _showBarangayPreviewDialog(
-                                                        context,
-                                                        barangay,
-                                                      ),
-                                                  onEdit: () =>
-                                                      _showBarangayDialog(
-                                                        context,
-                                                        barangay: barangay,
-                                                      ),
-                                                  onToggleStatus: () =>
-                                                      _showToggleBarangayStatusDialog(
-                                                        context,
-                                                        barangay,
-                                                      ),
-                                                  onDelete: () =>
-                                                      _confirmDeleteBarangay(
-                                                        context,
-                                                        barangay,
-                                                      ),
-                                                );
-                                              },
-                                              separatorBuilder: (context, index) =>
-                                                  const Divider(
-                                                    height: 0,
-                                                    thickness: 0.6,
-                                                    color: Color(0xFFE4E7EC),
-                                                  ),
-                                            ),
-                                          )
-                                        : Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              for (var i = 0;
-                                                  i < filteredBarangays.length;
-                                                  i++) ...[
-                                                _BarangayRow(
-                                                  barangay: filteredBarangays[i],
-                                                  widths: widths,
-                                                  trailingSpace: trailingSpace,
-                                                  isLast: i ==
-                                                      filteredBarangays.length - 1,
-                                                  onPreview: () =>
-                                                      _showBarangayPreviewDialog(
-                                                        context,
-                                                        filteredBarangays[i],
-                                                      ),
-                                                  onEdit: () =>
-                                                      _showBarangayDialog(
-                                                        context,
-                                                        barangay:
-                                                            filteredBarangays[i],
-                                                      ),
-                                                  onToggleStatus: () =>
-                                                      _showToggleBarangayStatusDialog(
-                                                        context,
-                                                        filteredBarangays[i],
-                                                      ),
-                                                  onDelete: () =>
-                                                      _confirmDeleteBarangay(
-                                                        context,
-                                                        filteredBarangays[i],
-                                                      ),
-                                                ),
-                                                if (i !=
-                                                    filteredBarangays.length - 1)
-                                                  const Divider(
-                                                    height: 0,
-                                                    thickness: 0.6,
-                                                    color: Color(0xFFE4E7EC),
-                                                  ),
-                                              ],
-                                            ],
-                                          ),
-                                ],
+              return SectionCard(
+                showShadow: false,
+                padding: EdgeInsets.zero,
+                borderRadius: 16,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: ColoredBox(
+                    color: Colors.white,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: effectiveWidth,
+                        height: shouldScrollBody ? targetTableHeight : null,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: AppColors.logoBlue.withValues(
+                                  alpha: 0.10,
+                                ),
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(16),
+                                  topRight: Radius.circular(16),
+                                ),
+                              ),
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                16,
+                                20,
+                                16,
+                              ),
+                              child: _BarangayHeaderRow(
+                                widths: widths,
+                                trailingSpace: trailingSpace,
                               ),
                             ),
-                          ),
+                            const Divider(
+                              height: 0,
+                              thickness: 0.6,
+                              color: Color(0xFFE4E7EC),
+                            ),
+                            if (filteredBarangays.isEmpty)
+                              if (shouldScrollBody)
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadius.only(
+                                      bottomLeft: Radius.circular(16),
+                                      bottomRight: Radius.circular(16),
+                                    ),
+                                    child: const EmptyStateCard(
+                                      title: 'No barangays found',
+                                      message:
+                                          'Adjust filters or add a new barangay.',
+                                      showBorder: false,
+                                    ),
+                                  ),
+                                )
+                              else
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.only(
+                                    bottomLeft: Radius.circular(16),
+                                    bottomRight: Radius.circular(16),
+                                  ),
+                                  child: const EmptyStateCard(
+                                    title: 'No barangays found',
+                                    message:
+                                        'Adjust filters or add a new barangay.',
+                                    showBorder: false,
+                                  ),
+                                )
+                            else
+                              shouldScrollBody
+                                  ? Expanded(
+                                      child: ListView.separated(
+                                        padding: EdgeInsets.zero,
+                                        itemCount: filteredBarangays.length,
+                                        itemBuilder: (context, index) {
+                                          final barangay =
+                                              filteredBarangays[index];
+                                          return _BarangayRow(
+                                            barangay: barangay,
+                                            widths: widths,
+                                            trailingSpace: trailingSpace,
+                                            isLast:
+                                                index ==
+                                                filteredBarangays.length - 1,
+                                            onPreview: () =>
+                                                _showBarangayPreviewDialog(
+                                                  context,
+                                                  barangay,
+                                                ),
+                                            onEdit: () => _showBarangayDialog(
+                                              context,
+                                              barangay: barangay,
+                                            ),
+                                            onToggleStatus: () =>
+                                                _showToggleBarangayStatusDialog(
+                                                  context,
+                                                  barangay,
+                                                ),
+                                            onDelete: () =>
+                                                _confirmDeleteBarangay(
+                                                  context,
+                                                  barangay,
+                                                ),
+                                          );
+                                        },
+                                        separatorBuilder: (context, index) =>
+                                            const Divider(
+                                              height: 0,
+                                              thickness: 0.6,
+                                              color: Color(0xFFE4E7EC),
+                                            ),
+                                      ),
+                                    )
+                                  : Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        for (
+                                          var i = 0;
+                                          i < filteredBarangays.length;
+                                          i++
+                                        ) ...[
+                                          _BarangayRow(
+                                            barangay: filteredBarangays[i],
+                                            widths: widths,
+                                            trailingSpace: trailingSpace,
+                                            isLast:
+                                                i ==
+                                                filteredBarangays.length - 1,
+                                            onPreview: () =>
+                                                _showBarangayPreviewDialog(
+                                                  context,
+                                                  filteredBarangays[i],
+                                                ),
+                                            onEdit: () => _showBarangayDialog(
+                                              context,
+                                              barangay: filteredBarangays[i],
+                                            ),
+                                            onToggleStatus: () =>
+                                                _showToggleBarangayStatusDialog(
+                                                  context,
+                                                  filteredBarangays[i],
+                                                ),
+                                            onDelete: () =>
+                                                _confirmDeleteBarangay(
+                                                  context,
+                                                  filteredBarangays[i],
+                                                ),
+                                          ),
+                                          if (i != filteredBarangays.length - 1)
+                                            const Divider(
+                                              height: 0,
+                                              thickness: 0.6,
+                                              color: Color(0xFFE4E7EC),
+                                            ),
+                                        ],
+                                      ],
+                                    ),
+                          ],
                         ),
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
+              );
+            },
+          ),
         ),
       ],
     );
@@ -810,10 +830,16 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
               }
 
               final now = DateTime.now();
-              final currentBarangays = ref.read(appControllerProvider).barangays;
+              final currentBarangays = ref
+                  .read(appControllerProvider)
+                  .barangays;
               final fallbackNextBarangayId =
-                  (currentBarangays.map((item) => item.id).fold<int>(0, _mathMax)) + 1;
-              final cutoffMinutes = (selectedTime.hour * 60) + selectedTime.minute;
+                  (currentBarangays
+                      .map((item) => item.id)
+                      .fold<int>(0, _mathMax)) +
+                  1;
+              final cutoffMinutes =
+                  (selectedTime.hour * 60) + selectedTime.minute;
 
               setState(() => isSubmitting = true);
               try {
@@ -824,17 +850,19 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                         .reserveNextBarangayId(
                           fallbackNextBarangayId: fallbackNextBarangayId,
                         );
-                await ref.read(appControllerProvider.notifier).saveBarangay(
-                  Barangay(
-                    id: resolvedBarangayId,
-                    name: trimmedName,
-                    isActive: selectedActive,
-                    cutoffWeekday: selectedWeekday,
-                    cutoffMinutes: cutoffMinutes,
-                    createdAt: barangay?.createdAt ?? now,
-                    updatedAt: now,
-                  ),
-                );
+                await ref
+                    .read(appControllerProvider.notifier)
+                    .saveBarangay(
+                      Barangay(
+                        id: resolvedBarangayId,
+                        name: trimmedName,
+                        isActive: selectedActive,
+                        cutoffWeekday: selectedWeekday,
+                        cutoffMinutes: cutoffMinutes,
+                        createdAt: barangay?.createdAt ?? now,
+                        updatedAt: now,
+                      ),
+                    );
                 if (!dialogContext.mounted) {
                   return;
                 }
@@ -885,15 +913,14 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                     initialValue: selectedWeekday,
                     isExpanded: true,
                     decoration: _filterDropdownDecoration('Cutoff Day'),
-                    items: List.generate(
-                      7,
-                      (index) => DateTime.monday + index,
-                    ).map((weekday) {
-                      return DropdownMenuItem<int>(
-                        value: weekday,
-                        child: Text(displayWeekday(weekday)),
-                      );
-                    }).toList(),
+                    items: List.generate(7, (index) => DateTime.monday + index)
+                        .map((weekday) {
+                          return DropdownMenuItem<int>(
+                            value: weekday,
+                            child: Text(displayWeekday(weekday)),
+                          );
+                        })
+                        .toList(),
                     onChanged: (value) {
                       if (value == null) {
                         return;
@@ -933,7 +960,10 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                     isExpanded: true,
                     decoration: _filterDropdownDecoration('Status'),
                     items: const [
-                      DropdownMenuItem<bool>(value: true, child: Text('Active')),
+                      DropdownMenuItem<bool>(
+                        value: true,
+                        child: Text('Active'),
+                      ),
                       DropdownMenuItem<bool>(
                         value: false,
                         child: Text('Inactive'),
@@ -953,7 +983,6 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
         );
       },
     );
-
   }
 
   Future<void> _confirmDeleteBarangay(
@@ -997,7 +1026,9 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                     }
                     final messenger = ScaffoldMessenger.of(this.context);
                     messenger.clearSnackBars();
-                    messenger.showSnackBar(successSnackBar('Barangay deleted.'));
+                    messenger.showSnackBar(
+                      successSnackBar('Barangay deleted.'),
+                    );
                   } finally {
                     if (dialogContext.mounted) {
                       setState(() => isDeleting = false);
@@ -1045,9 +1076,11 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
                   }
                   setState(() => isSubmitting = true);
                   try {
-                    await ref.read(appControllerProvider.notifier).saveBarangay(
-                      barangay.copyWith(isActive: nextIsActive),
-                    );
+                    await ref
+                        .read(appControllerProvider.notifier)
+                        .saveBarangay(
+                          barangay.copyWith(isActive: nextIsActive),
+                        );
                     if (!dialogContext.mounted) {
                       return;
                     }
@@ -1129,14 +1162,10 @@ class _AdminBarangaysPageState extends ConsumerState<AdminBarangaysPage> {
       ),
     );
   }
-
 }
 
 class _BarangayHeaderRow extends StatelessWidget {
-  const _BarangayHeaderRow({
-    required this.widths,
-    required this.trailingSpace,
-  });
+  const _BarangayHeaderRow({required this.widths, required this.trailingSpace});
 
   final _BarangayColumnWidths widths;
   final double trailingSpace;
@@ -1282,7 +1311,10 @@ class _BarangayRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            SizedBox(width: widths.id, child: Text('${barangay.id}', style: bodyStyle)),
+            SizedBox(
+              width: widths.id,
+              child: Text('${barangay.id}', style: bodyStyle),
+            ),
             SizedBox(width: widths.gap),
             SizedBox(
               width: widths.name,
@@ -1459,14 +1491,16 @@ _BarangayColumnWidths _computeBarangayColumnWidths({
   }) {
     painter.text = TextSpan(text: header, style: headerStyle);
     painter.layout();
-    var width = painter.width.ceilToDouble() +
+    var width =
+        painter.width.ceilToDouble() +
         _AdminBarangaysPageState._columnWidthAllowance +
         _AdminBarangaysPageState._headerLabelExtraAllowance;
     final effectiveValuesStyle = valuesStyle ?? bodyStyle;
     for (final value in values) {
       painter.text = TextSpan(text: value, style: effectiveValuesStyle);
       painter.layout(maxWidth: screenWidth);
-      final current = painter.width.ceilToDouble() +
+      final current =
+          painter.width.ceilToDouble() +
           _AdminBarangaysPageState._columnWidthAllowance;
       if (current > width) {
         width = current;
@@ -1486,31 +1520,34 @@ _BarangayColumnWidths _computeBarangayColumnWidths({
       barangays.map((item) => item.name),
       max: screenWidth < 700 ? 160 : 220,
     ),
-    status: maxWidth(
-      'Status',
-      barangays.map((item) => displayBarangayStatus(item.isActive)),
-      valuesStyle: badgeTextStyle,
-    ) +
+    status:
+        maxWidth(
+          'Status',
+          barangays.map((item) => displayBarangayStatus(item.isActive)),
+          valuesStyle: badgeTextStyle,
+        ) +
         _AdminBarangaysPageState._statusBadgeHorizontalPadding,
     cutoff: maxWidth(
       'Cutoff',
       barangays.map((item) => formatBarangayCutoffValue(item)),
     ),
-    createdAt: maxWidth(
-      'Created at',
-      barangays.map(
-        (item) =>
-            '${formatOrderDate(item.createdAt)}\n${formatOrderTimeWithSeconds(item.createdAt)}',
-      ),
-    ) +
+    createdAt:
+        maxWidth(
+          'Created at',
+          barangays.map(
+            (item) =>
+                '${formatOrderDate(item.createdAt)}\n${formatOrderTimeWithSeconds(item.createdAt)}',
+          ),
+        ) +
         _AdminBarangaysPageState._dateHeaderExtraAllowance,
-    updatedAt: maxWidth(
-      'Updated at',
-      barangays.map(
-        (item) =>
-            '${formatOrderDate(item.updatedAt)}\n${formatOrderTimeWithSeconds(item.updatedAt)}',
-      ),
-    ) +
+    updatedAt:
+        maxWidth(
+          'Updated at',
+          barangays.map(
+            (item) =>
+                '${formatOrderDate(item.updatedAt)}\n${formatOrderTimeWithSeconds(item.updatedAt)}',
+          ),
+        ) +
         _AdminBarangaysPageState._dateHeaderExtraAllowance,
   );
 }

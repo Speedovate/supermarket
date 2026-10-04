@@ -65,7 +65,11 @@ Future<Product?> _showClientAdminProductDialog(
   Product product,
 ) async {
   final latestProduct =
-      ref.read(appControllerProvider).products.where((item) => item.id == product.id).firstOrNull ??
+      ref
+          .read(appControllerProvider)
+          .products
+          .where((item) => item.id == product.id)
+          .firstOrNull ??
       product;
   final updatedProduct = await showAdminProductDialog(
     context,
@@ -366,7 +370,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                 child: _DesktopCartPanel(
                                   width: MediaQuery.of(sheetContext).size.width,
                                   isBottomSheet: true,
-                                  scrollController: _desktopCartScrollController,
+                                  scrollController:
+                                      _desktopCartScrollController,
                                   customerDraft: appState.customerDraft,
                                   customerControllers: _customerControllers,
                                   cart: appState.cart,
@@ -376,7 +381,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                       localPreviousOrdersExpanded,
                                   totalCentavos: appState.cartTotalCentavos,
                                   submitting: appState.submittingOrder,
-                                  onClose: () => Navigator.of(sheetContext).pop(),
+                                  onClose: () =>
+                                      Navigator.of(sheetContext).pop(),
                                   onContactUs: () => _showContactUsDialog(
                                     sheetContext,
                                     appState.settings,
@@ -402,7 +408,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                       localPreviousOrdersExpanded = value;
                                     });
                                     if (mounted) {
-                                      setState(() => _previousOrdersExpanded = value);
+                                      setState(
+                                        () => _previousOrdersExpanded = value,
+                                      );
                                     }
                                   },
                                   onDraftChanged: _persistCustomerDraft,
@@ -421,16 +429,24 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                         .validateCheckoutDraft(nextDraft);
                                     if (error != null) {
                                       messenger?.clearSnackBars();
-                                      messenger?.showSnackBar(errorSnackBar(error));
+                                      messenger?.showSnackBar(
+                                        errorSnackBar(error),
+                                      );
                                       return;
                                     }
-                                    final itemCount = ref
-                                        .read(appControllerProvider)
-                                        .cart
-                                        .fold<int>(
-                                          0,
-                                          (sum, item) => sum + item.quantity,
-                                        );
+                                    final itemCount =
+                                        ref
+                                            .read(appControllerProvider)
+                                            .cart
+                                            .fold<int>(
+                                              0,
+                                              (sum, item) =>
+                                                  sum + item.quantity,
+                                            ) +
+                                        ref
+                                            .read(appControllerProvider)
+                                            .requestedListItems
+                                            .length;
                                     if (!sheetContext.mounted) {
                                       return;
                                     }
@@ -449,7 +465,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                       return;
                                     }
                                     if (orderId == null) {
-                                      final submitError = ref
+                                      final submitError =
+                                          ref
                                               .read(appControllerProvider)
                                               .errorMessage ??
                                           'Unable to submit your order right now.';
@@ -479,7 +496,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                   },
                                   onOrderAgain: (order) async {
                                     final shouldOrderAgain =
-                                        await _showOrderAgainDialog(sheetContext);
+                                        await _showOrderAgainDialog(
+                                          sheetContext,
+                                        );
                                     if (!mounted || shouldOrderAgain != true) {
                                       return;
                                     }
@@ -492,7 +511,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                     final nextDraft = ref
                                         .read(appControllerProvider)
                                         .customerDraft;
-                                    _customerNameController.text = nextDraft.name;
+                                    _customerNameController.text =
+                                        nextDraft.name;
                                     _customerMobileController.text =
                                         nextDraft.mobileNumber;
                                     _customerBarangayController.text =
@@ -633,7 +653,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final hasSelectedVisibleCategory =
         _categoryId == 'all' ||
         (_categoryId == 'others' && hasOtherProducts) ||
-        visibleCategories.any((category) => category.id.toString() == _categoryId);
+        visibleCategories.any(
+          (category) => category.id.toString() == _categoryId,
+        );
     if (!hasSelectedVisibleCategory) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _categoryId == 'all') {
@@ -718,14 +740,19 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     _scheduleBestSellersVisibilityRefresh();
     final gridCardDensity = _cardDensityForWidth(resolvedCardWidth);
     final resolvedCardHeight = switch (columns) {
-      1 => lerpDouble(210.0, 202.0, gridCardDensity)!,
+      1 => (resolvedCardWidth / (16 / 9)) + 190,
       2 => resolvedCardWidth + lerpDouble(201.0, 188.0, gridCardDensity)!,
       3 => resolvedCardWidth + lerpDouble(206.0, 190.0, gridCardDensity)!,
       4 => resolvedCardWidth + lerpDouble(197.0, 184.0, gridCardDensity)!,
       _ => resolvedCardWidth + lerpDouble(189.0, 176.0, gridCardDensity)!,
     };
     final gridAspectRatio = resolvedCardWidth / resolvedCardHeight;
-    final bottomScrollPadding = vm.cartCount > 0 && !showDesktopCartPanel
+    final cartItemCount = vm.cartCount + appState.requestedListItems.length;
+    final hasRequestedListItems = appState.requestedListItems.isNotEmpty;
+    final cartTotalLabel = vm.cartCount == 0 && hasRequestedListItems
+        ? 'To be quoted'
+        : '${formatPesos(vm.cartTotalCentavos)}${hasRequestedListItems ? ' +' : ''}';
+    final bottomScrollPadding = cartItemCount > 0 && !showDesktopCartPanel
         ? (_kFloatingCartButtonBottomOffset * 2) + _kFloatingCartButtonHeight
         : gridPadding;
     final matchingOrders = _matchingCustomerOrders(appState);
@@ -740,8 +767,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         vm.categories.isNotEmpty ||
         appState.products.isNotEmpty ||
         activeBanners.isNotEmpty;
-    final isDefaultCatalogView =
-        _query.trim().isEmpty && _categoryId == 'all';
+    final isDefaultCatalogView = _query.trim().isEmpty && _categoryId == 'all';
     final showCatalogLoading =
         (!appState.catalogHydrated && !hasAnyCatalogContent) ||
         (isDefaultCatalogView && sortedProducts.isEmpty);
@@ -760,12 +786,15 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                 query: _query,
                 onSearchChanged: (value) {
                   _debounce?.cancel();
+                  if (value.trim().isNotEmpty && _categoryId != 'all') {
+                    setState(() => _categoryId = 'all');
+                  }
                   _debounce = Timer(const Duration(milliseconds: 250), () {
                     final normalizedValue = value.trim().toLowerCase();
                     setState(() => _query = normalizedValue);
                   });
                 },
-                cartCount: vm.cartCount,
+                cartCount: cartItemCount,
                 loading: showCatalogLoading,
                 hasOtherProducts: hasOtherProducts,
                 categories: visibleCategories,
@@ -792,245 +821,250 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                         ),
                       )
                     else ...[
-                    if (activeBanners.isNotEmpty)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(0, 18, 0, 0),
-                          child: _HeroBanner(
-                            banners: activeBanners,
-                            isMobile: isMobile,
-                            horizontalPadding: gridPadding,
-                            columns: columns,
-                            cardWidth: resolvedCardWidth,
-                            gridSpacing: gridSpacing,
-                          ),
-                        ),
-                      ),
-                    if (vm.bestSellers.isNotEmpty)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            gridPadding,
-                            activeBanners.isNotEmpty ? 2 : 18,
-                            gridPadding,
-                            0,
-                          ),
-                          child: _SectionHeader(
-                            title: 'Best Sellers',
-                            icon: Icons.local_fire_department_rounded,
-                            iconColor: const Color(0xFFE31E24),
-                            titleFontSize: isMobile ? 14 : null,
-                            trailing: _SortButton(
-                              selected: _bestSellersSortOption,
-                              onSelected: (value) {
-                                setState(() => _bestSellersSortOption = value);
-                              },
+                      if (activeBanners.isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(0, 18, 0, 0),
+                            child: _HeroBanner(
+                              banners: activeBanners,
+                              isMobile: isMobile,
+                              horizontalPadding: gridPadding,
+                              columns: columns,
+                              cardWidth: resolvedCardWidth,
+                              gridSpacing: gridSpacing,
                             ),
                           ),
                         ),
-                      ),
-                    if (vm.bestSellers.isNotEmpty)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(0, 18, 0, 0),
-                          child: SizedBox(
-                            height: resolvedCardHeight,
-                            child: Stack(
-                              children: [
-                                NotificationListener<ScrollNotification>(
-                                  onNotification: (notification) =>
-                                      _handleBestSellerSnapNotification(
-                                        notification,
-                                        _currentBestSellerItemExtent!,
-                                      ),
-                                  child: ListView.separated(
-                                    controller: _bestSellersScrollController,
-                                    scrollDirection: Axis.horizontal,
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: gridPadding,
-                                    ),
-                                    physics: const ClampingScrollPhysics(),
-                                    itemCount: sortedBestSellers.length,
-                                    separatorBuilder: (context, index) =>
-                                        const SizedBox(width: 16),
-                                    itemBuilder: (context, index) => SizedBox(
-                                      width: resolvedCardWidth,
-                                      height: resolvedCardHeight,
-                                      child: ProductCard(
-                                        key: ValueKey(
-                                          'best-seller-${sortedBestSellers[index].id}',
-                                        ),
-                                        product: sortedBestSellers[index],
-                                        adaptiveSizing: true,
-                                        showImage: columns != 1,
-                                        showModalEditAction:
-                                            _hasClientAdminProductEditAccess(
-                                              ref,
-                                            ),
-                                        onModalEditProduct:
-                                            _hasClientAdminProductEditAccess(
-                                              ref,
-                                            )
-                                            ? (context) =>
-                                                  _showClientAdminProductDialog(
-                                                    context,
-                                                    ref,
-                                                    sortedBestSellers[index],
-                                                  )
-                                            : null,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                if (!_isBestSellersInteracting)
-                                  IgnorePointer(
-                                    child: _HorizontalEdgeMasks(
-                                      sideWidth: gridPadding,
-                                    ),
-                                  ),
-                                if (_showBestSellersLeftControl)
-                                  Positioned(
-                                    left:
-                                        gridPadding -
-                                        (_controlExtentForWidth(
-                                              mainContentWidth,
-                                            ) /
-                                            2) +
-                                        2,
-                                    top: 0,
-                                    bottom: 0,
-                                    child: Center(
-                                      child: _ScrollChevronButton(
-                                        icon: Icons.chevron_left_rounded,
-                                        size: _controlExtentForWidth(
-                                          mainContentWidth,
-                                        ),
-                                        onTap: () => _scrollBestSellersBy(
-                                          -_currentBestSellerItemExtent!,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                if (_showBestSellersRightControl)
-                                  Positioned(
-                                    right:
-                                        gridPadding -
-                                        (_controlExtentForWidth(
-                                              mainContentWidth,
-                                            ) /
-                                            2) +
-                                        2,
-                                    top: 0,
-                                    bottom: 0,
-                                    child: Center(
-                                      child: _ScrollChevronButton(
-                                        icon: Icons.chevron_right_rounded,
-                                        size: _controlExtentForWidth(
-                                          mainContentWidth,
-                                        ),
-                                        onTap: () => _scrollBestSellersBy(
-                                          _currentBestSellerItemExtent!,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
+                      if (vm.bestSellers.isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              gridPadding,
+                              activeBanners.isNotEmpty ? 2 : 18,
+                              gridPadding,
+                              0,
                             ),
-                          ),
-                        ),
-                      ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          gridPadding,
-                          18,
-                          gridPadding,
-                          0,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _SectionHeader(
-                                title: selectedCategoryTitle,
-                                icon: Icons.grid_view_outlined,
-                                iconColor: AppColors.logoBlue,
-                                titleFontSize: isMobile ? 14 : null,
+                            child: _SectionHeader(
+                              title: 'Best Sellers',
+                              icon: Icons.local_fire_department_rounded,
+                              iconColor: const Color(0xFFE31E24),
+                              titleFontSize: isMobile ? 14 : null,
+                              trailing: _SortButton(
+                                selected: _bestSellersSortOption,
+                                onSelected: (value) {
+                                  setState(
+                                    () => _bestSellersSortOption = value,
+                                  );
+                                },
                               ),
                             ),
-                            _SortButton(
-                              selected: _sortOption,
-                              onSelected: (value) {
-                                setState(() => _sortOption = value);
-                              },
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                    if (showProductsEmptyState)
+                      if (vm.bestSellers.isNotEmpty)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(0, 18, 0, 0),
+                            child: SizedBox(
+                              height: resolvedCardHeight,
+                              child: Stack(
+                                children: [
+                                  NotificationListener<ScrollNotification>(
+                                    onNotification: (notification) =>
+                                        _handleBestSellerSnapNotification(
+                                          notification,
+                                          _currentBestSellerItemExtent!,
+                                        ),
+                                    child: ListView.separated(
+                                      controller: _bestSellersScrollController,
+                                      scrollDirection: Axis.horizontal,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: gridPadding,
+                                      ),
+                                      physics: const ClampingScrollPhysics(),
+                                      itemCount: sortedBestSellers.length,
+                                      separatorBuilder: (context, index) =>
+                                          const SizedBox(width: 16),
+                                      itemBuilder: (context, index) => SizedBox(
+                                        width: resolvedCardWidth,
+                                        height: resolvedCardHeight,
+                                        child: ProductCard(
+                                          key: ValueKey(
+                                            'best-seller-${sortedBestSellers[index].id}',
+                                          ),
+                                          product: sortedBestSellers[index],
+                                          adaptiveSizing: true,
+                                          showImage: true,
+                                          wideImage: columns == 1,
+                                          showModalEditAction:
+                                              _hasClientAdminProductEditAccess(
+                                                ref,
+                                              ),
+                                          onModalEditProduct:
+                                              _hasClientAdminProductEditAccess(
+                                                ref,
+                                              )
+                                              ? (context) =>
+                                                    _showClientAdminProductDialog(
+                                                      context,
+                                                      ref,
+                                                      sortedBestSellers[index],
+                                                    )
+                                              : null,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (!_isBestSellersInteracting)
+                                    IgnorePointer(
+                                      child: _HorizontalEdgeMasks(
+                                        sideWidth: gridPadding,
+                                      ),
+                                    ),
+                                  if (_showBestSellersLeftControl)
+                                    Positioned(
+                                      left:
+                                          gridPadding -
+                                          (_controlExtentForWidth(
+                                                mainContentWidth,
+                                              ) /
+                                              2) +
+                                          2,
+                                      top: 0,
+                                      bottom: 0,
+                                      child: Center(
+                                        child: _ScrollChevronButton(
+                                          icon: Icons.chevron_left_rounded,
+                                          size: _controlExtentForWidth(
+                                            mainContentWidth,
+                                          ),
+                                          onTap: () => _scrollBestSellersBy(
+                                            -_currentBestSellerItemExtent!,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (_showBestSellersRightControl)
+                                    Positioned(
+                                      right:
+                                          gridPadding -
+                                          (_controlExtentForWidth(
+                                                mainContentWidth,
+                                              ) /
+                                              2) +
+                                          2,
+                                      top: 0,
+                                      bottom: 0,
+                                      child: Center(
+                                        child: _ScrollChevronButton(
+                                          icon: Icons.chevron_right_rounded,
+                                          size: _controlExtentForWidth(
+                                            mainContentWidth,
+                                          ),
+                                          onTap: () => _scrollBestSellersBy(
+                                            _currentBestSellerItemExtent!,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.fromLTRB(
                             gridPadding,
                             18,
                             gridPadding,
-                            bottomScrollPadding,
+                            0,
                           ),
-                          child: EmptyStateCard(
-                            title: 'No products found',
-                            message: _query.isNotEmpty
-                                ? 'Try a different search term or switch categories.'
-                                : 'There are no active products in this section yet.',
-                            actionLabel: 'Reset Filters',
-                            onAction: () {
-                              _searchController.clear();
-                              setState(() {
-                                _query = '';
-                                _categoryId = 'all';
-                              });
-                            },
-                          ),
-                        ),
-                      )
-                    else
-                      SliverPadding(
-                        padding: EdgeInsets.fromLTRB(
-                          gridPadding,
-                          18,
-                          gridPadding,
-                          bottomScrollPadding,
-                        ),
-                        sliver: SliverGrid(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: columns,
-                                mainAxisSpacing: gridSpacing,
-                                crossAxisSpacing: gridSpacing,
-                                childAspectRatio: gridAspectRatio,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _SectionHeader(
+                                  title: selectedCategoryTitle,
+                                  icon: Icons.grid_view_outlined,
+                                  iconColor: AppColors.logoBlue,
+                                  titleFontSize: isMobile ? 14 : null,
+                                ),
                               ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => ProductCard(
-                              key: ValueKey(
-                                'catalog-${sortedProducts[index].id}',
+                              _SortButton(
+                                selected: _sortOption,
+                                onSelected: (value) {
+                                  setState(() => _sortOption = value);
+                                },
                               ),
-                              product: sortedProducts[index],
-                              adaptiveSizing: true,
-                              showImage: columns != 1,
-                              showModalEditAction:
-                                  _hasClientAdminProductEditAccess(ref),
-                              onModalEditProduct:
-                                  _hasClientAdminProductEditAccess(ref)
-                                  ? (context) => _showClientAdminProductDialog(
-                                        context,
-                                        ref,
-                                        sortedProducts[index],
-                                      )
-                                  : null,
-                            ),
-                            childCount: sortedProducts.length,
+                            ],
                           ),
                         ),
                       ),
+                      if (showProductsEmptyState)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              gridPadding,
+                              18,
+                              gridPadding,
+                              bottomScrollPadding,
+                            ),
+                            child: EmptyStateCard(
+                              title: 'No products found',
+                              message: _query.isNotEmpty
+                                  ? 'Try a different search term or switch categories.'
+                                  : 'There are no active products in this section yet.',
+                              actionLabel: 'Reset Filters',
+                              onAction: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _query = '';
+                                  _categoryId = 'all';
+                                });
+                              },
+                            ),
+                          ),
+                        )
+                      else
+                        SliverPadding(
+                          padding: EdgeInsets.fromLTRB(
+                            gridPadding,
+                            18,
+                            gridPadding,
+                            bottomScrollPadding,
+                          ),
+                          sliver: SliverGrid(
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  mainAxisSpacing: gridSpacing,
+                                  crossAxisSpacing: gridSpacing,
+                                  childAspectRatio: gridAspectRatio,
+                                ),
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) => ProductCard(
+                                key: ValueKey(
+                                  'catalog-${sortedProducts[index].id}',
+                                ),
+                                product: sortedProducts[index],
+                                adaptiveSizing: true,
+                                showImage: true,
+                                wideImage: columns == 1,
+                                showModalEditAction:
+                                    _hasClientAdminProductEditAccess(ref),
+                                onModalEditProduct:
+                                    _hasClientAdminProductEditAccess(ref)
+                                    ? (context) =>
+                                          _showClientAdminProductDialog(
+                                            context,
+                                            ref,
+                                            sortedProducts[index],
+                                          )
+                                    : null,
+                              ),
+                              childCount: sortedProducts.length,
+                            ),
+                          ),
+                        ),
                     ],
                   ],
                 ),
@@ -1050,8 +1084,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       floatingActionButton: showDesktopCartPanel
           ? null
           : CartFab(
-              itemCount: vm.cartCount,
+              itemCount: cartItemCount,
               totalCentavos: vm.cartTotalCentavos,
+              totalLabel: cartTotalLabel,
               fullWidth: columns <= 2,
               horizontalMargin: gridPadding,
               onTap: () => _handleCartTap(mainContentWidth),
@@ -1105,10 +1140,15 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                       messenger.showSnackBar(errorSnackBar(error));
                       return;
                     }
-                    final itemCount = ref
-                        .read(appControllerProvider)
-                        .cart
-                        .fold<int>(0, (sum, item) => sum + item.quantity);
+                    final itemCount =
+                        ref
+                            .read(appControllerProvider)
+                            .cart
+                            .fold<int>(0, (sum, item) => sum + item.quantity) +
+                        ref
+                            .read(appControllerProvider)
+                            .requestedListItems
+                            .length;
                     if (!context.mounted) {
                       return;
                     }
@@ -1127,9 +1167,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                       return;
                     }
                     if (orderId == null) {
-                      final submitError = ref
-                              .read(appControllerProvider)
-                              .errorMessage ??
+                      final submitError =
+                          ref.read(appControllerProvider).errorMessage ??
                           'Unable to submit your order right now.';
                       messenger.clearSnackBars();
                       messenger.showSnackBar(errorSnackBar(submitError));
@@ -1479,9 +1518,7 @@ class _Header extends StatelessWidget {
                     cartCount: cartCount,
                     showLabel: !hideCartLabel,
                     onTap: onCartTap,
-                    iconColor: adminMode
-                        ? Colors.white
-                        : null,
+                    iconColor: adminMode ? Colors.white : null,
                     labelColor: adminMode ? Colors.white : null,
                   ),
               ],
@@ -1652,10 +1689,7 @@ class _CartButton extends StatelessWidget {
                 child: Badge(
                   isLabelVisible: cartCount > 0,
                   alignment: AlignmentDirectional.topEnd,
-                  label: Text(
-                    badgeLabel,
-                    style: badgeTextStyle,
-                  ),
+                  label: Text(badgeLabel, style: badgeTextStyle),
                   child: Icon(
                     Icons.shopping_cart_outlined,
                     size: 28,
@@ -1892,9 +1926,7 @@ class _CatalogLoadingProductCard extends StatelessWidget {
           Expanded(
             flex: 10,
             child: _ShimmerSurface(
-              child: Container(
-                color: const Color(0xFFF2F4F7),
-              ),
+              child: Container(color: const Color(0xFFF2F4F7)),
             ),
           ),
           const Divider(height: 1, thickness: 1, color: Color(0xFFE4E7EC)),
@@ -2824,17 +2856,30 @@ class _DesktopCartPanel extends ConsumerWidget {
       0,
       (sum, item) => sum + item.quantity,
     );
+    final requestedListItems = ref.watch(
+      appControllerProvider.select((state) => state.requestedListItems),
+    );
     final isCurrentSelection = selectedOrder == null;
-    final showPrimaryAction = isCurrentSelection ? cart.isNotEmpty : true;
+    final showPrimaryAction = isCurrentSelection
+        ? cart.isNotEmpty || requestedListItems.isNotEmpty
+        : true;
     final selectedItemCount = isCurrentSelection
-        ? finalCartCount
-        : selectedOrder.items.fold<int>(
-            0,
-            (sum, item) => sum + item.requestedQuantity,
-          );
+        ? finalCartCount + requestedListItems.length
+        : selectedOrder.requestedItemCount;
     final selectedTotalCentavos = isCurrentSelection
         ? totalCentavos
         : selectedOrder.estimatedTotalCentavos;
+    final selectedRequestedListItems = isCurrentSelection
+        ? requestedListItems
+        : selectedOrder.requestedListItems;
+    final hasSelectedRequestedListItems = selectedRequestedListItems.isNotEmpty;
+    final hasSelectedPricedItems = isCurrentSelection
+        ? cart.isNotEmpty
+        : selectedOrder.items.isNotEmpty;
+    final selectedTotalLabel =
+        !hasSelectedPricedItems && hasSelectedRequestedListItems
+        ? 'To be quoted'
+        : '${formatPesos(selectedTotalCentavos)}${hasSelectedRequestedListItems ? ' +' : ''}';
 
     return SafeArea(
       left: false,
@@ -2893,10 +2938,7 @@ class _DesktopCartPanel extends ConsumerWidget {
                       child: SizedBox(
                         height: 48,
                         child: Padding(
-                          padding: const EdgeInsets.only(
-                            left: 6,
-                            right: 12,
-                          ),
+                          padding: const EdgeInsets.only(left: 6, right: 12),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -2986,13 +3028,25 @@ class _DesktopCartPanel extends ConsumerWidget {
                           settings: settings,
                           serviceableBarangays: serviceableBarangays,
                           draft: customerDraft,
-                        controllers: customerControllers,
-                        selectedOrder: selectedOrder,
-                        onContactUs: onContactUs,
-                        onDraftChanged: onDraftChanged,
-                        onBarangayActivated: _scrollToRevealBarangayField,
+                          controllers: customerControllers,
+                          selectedOrder: selectedOrder,
+                          onContactUs: onContactUs,
+                          onDraftChanged: onDraftChanged,
+                          onBarangayActivated: _scrollToRevealBarangayField,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isBottomSheet ? 24 : 0,
+                        ),
+                        child: _RequestedListSection(
+                          items:
+                              selectedOrder?.requestedListItems ??
+                              requestedListItems,
+                          isReadOnly: selectedOrder != null,
+                        ),
+                      ),
                       const SizedBox(height: 12),
                       Padding(
                         padding: EdgeInsets.symmetric(
@@ -3024,7 +3078,7 @@ class _DesktopCartPanel extends ConsumerWidget {
                                 ),
                               ),
                               Text(
-                                formatPesos(selectedTotalCentavos),
+                                selectedTotalLabel,
                                 style: _clientPriceTextStyle(context),
                               ),
                             ],
@@ -3172,173 +3226,383 @@ class _DesktopCartCustomerCardState
         border: Border.all(color: const Color(0xFFE4E7EC)),
       ),
       padding: const EdgeInsets.all(12),
+      child: Material(
+        color: Colors.transparent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Details',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF172033),
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+                if (isReadOnly)
+                  const Icon(
+                    Icons.lock_rounded,
+                    size: 18,
+                    color: Color(0xFF667085),
+                  )
+                else
+                  MousePressable(
+                    onTap: widget.onContactUs,
+                    hoverOverlayAlpha: 0,
+                    pressedOverlayAlpha: 0,
+                    child: Text(
+                      'Need Help?',
+                      style: _cartPanelActionTextStyle(
+                        color: AppColors.logoBlue,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (isReadOnly) ...[
+              _ReadOnlyDetailsField(
+                label: 'Name/Store',
+                value: effectiveDraft.name,
+              ),
+              const SizedBox(height: 12),
+              _ReadOnlyDetailsField(
+                label: 'Mobile Number',
+                value: effectiveDraft.mobileNumber,
+              ),
+            ] else ...[
+              TextField(
+                controller: controllers.name,
+                onChanged: (_) => widget.onDraftChanged(),
+                decoration: const InputDecoration(labelText: 'Name/Store'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controllers.mobile,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(11),
+                  _PhilippineMobileInputFormatter(),
+                ],
+                onChanged: (_) => widget.onDraftChanged(),
+                decoration: const InputDecoration(labelText: 'Mobile Number'),
+              ),
+            ],
+            if ((settings.requirePlaceForDeliveryOnly &&
+                    effectiveDraft.fulfillmentMethod ==
+                        FulfillmentMethod.delivery) ||
+                (!settings.requirePlaceForDeliveryOnly)) ...[
+              const SizedBox(height: 12),
+              if (isReadOnly)
+                _ReadOnlyDetailsField(
+                  label: 'Barangay',
+                  value: effectiveDraft.barangay,
+                )
+              else
+                _BarangayField(
+                  controller: controllers.barangay,
+                  items: barangays,
+                  onActivated: widget.onBarangayActivated,
+                  onMenuVisibilityChanged: (isOpen) {
+                    if (!mounted || _isBarangayMenuOpen == isOpen) {
+                      return;
+                    }
+                    setState(() => _isBarangayMenuOpen = isOpen);
+                  },
+                  onChanged: () async {
+                    await widget.onDraftChanged();
+                  },
+                ),
+              if (effectiveDraft.fulfillmentMethod ==
+                      FulfillmentMethod.delivery &&
+                  effectiveDraft.barangay.trim().isNotEmpty) ...[
+                const SizedBox(height: 12),
+                if (isReadOnly)
+                  _ReadOnlyDetailsField(
+                    label: 'Street/Landmark',
+                    value: effectiveDraft.addressStreet.trim().isNotEmpty
+                        ? effectiveDraft.addressStreet
+                        : effectiveDraft.addressLandmark,
+                  )
+                else
+                  TextField(
+                    controller: controllers.street,
+                    onChanged: (_) => widget.onDraftChanged(),
+                    decoration: InputDecoration(
+                      labelText: hideStreetLabel ? null : 'Street/Landmark',
+                    ),
+                  ),
+              ],
+            ],
+            const SizedBox(height: 12),
+            IgnorePointer(
+              ignoring: isReadOnly,
+              child: Opacity(
+                opacity: isReadOnly ? 0.72 : 1,
+                child: RadioGroup<FulfillmentMethod>(
+                  groupValue: effectiveDraft.fulfillmentMethod,
+                  onChanged: (value) async {
+                    await widget.onDraftChanged(method: value);
+                  },
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: RadioListTile<FulfillmentMethod>(
+                          value: FulfillmentMethod.pickup,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: const VisualDensity(
+                            horizontal: -4,
+                            vertical: -4,
+                          ),
+                          title: const Text('Pickup'),
+                        ),
+                      ),
+                      Expanded(
+                        child: RadioListTile<FulfillmentMethod>(
+                          value: FulfillmentMethod.delivery,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: const VisualDensity(
+                            horizontal: -4,
+                            vertical: -4,
+                          ),
+                          title: const Text('Delivery'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (deliveryAdvisoryMessage != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                deliveryAdvisoryMessage,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isDeliveryAdvisoryHighlighted
+                      ? const Color(0xFFE31E24)
+                      : const Color(0xFF667085),
+                  height: 1.25,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RequestedListSection extends ConsumerWidget {
+  const _RequestedListSection({required this.items, required this.isReadOnly});
+
+  final List<RequestedListItem> items;
+  final bool isReadOnly;
+
+  Future<void> _addItem(BuildContext context, WidgetRef ref) async {
+    final value = await _showRequestedListItemDialog(context);
+    if (value == null || !context.mounted) {
+      return;
+    }
+    await ref.read(appControllerProvider.notifier).addRequestedListItem(value);
+  }
+
+  Future<void> _editItem(
+    BuildContext context,
+    WidgetRef ref,
+    RequestedListItem item,
+  ) async {
+    final value = await _showRequestedListItemDialog(
+      context,
+      initialValue: item.text,
+    );
+    if (value == null || !context.mounted) {
+      return;
+    }
+    await ref
+        .read(appControllerProvider.notifier)
+        .updateRequestedListItem(item.id, value);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final labelStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: const Color(0xFF172033),
+      height: 1.15,
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
-                child: Text(
-                  'Details',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF172033),
-                    height: 1.15,
-                  ),
-                ),
-              ),
-              if (isReadOnly)
-                const Icon(
-                  Icons.lock_rounded,
-                  size: 18,
-                  color: Color(0xFF667085),
-                )
-              else
+              Text('Lista', style: labelStyle),
+              const Spacer(),
+              if (!isReadOnly)
                 MousePressable(
-                  onTap: widget.onContactUs,
-                  hoverOverlayAlpha: 0,
-                  pressedOverlayAlpha: 0,
-                  child: Text(
-                    'Need Help?',
-                    style: _cartPanelActionTextStyle(color: AppColors.logoBlue),
+                  onTap: () => _addItem(context, ref),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Add',
+                          style: _cartPanelActionTextStyle(
+                            color: AppColors.logoBlue,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.add_rounded,
+                          color: AppColors.logoBlue,
+                          size: 18,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 14),
-          if (isReadOnly) ...[
-            _ReadOnlyDetailsField(
-              label: 'Name/Store',
-              value: effectiveDraft.name,
-            ),
-            const SizedBox(height: 12),
-            _ReadOnlyDetailsField(
-              label: 'Mobile Number',
-              value: effectiveDraft.mobileNumber,
-            ),
-          ] else ...[
-            TextField(
-              controller: controllers.name,
-              onChanged: (_) => widget.onDraftChanged(),
-              decoration: const InputDecoration(labelText: 'Name/Store'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controllers.mobile,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                LengthLimitingTextInputFormatter(11),
-                _PhilippineMobileInputFormatter(),
-              ],
-              onChanged: (_) => widget.onDraftChanged(),
-              decoration: const InputDecoration(labelText: 'Mobile Number'),
-            ),
-          ],
-          if ((settings.requirePlaceForDeliveryOnly &&
-                  effectiveDraft.fulfillmentMethod ==
-                      FulfillmentMethod.delivery) ||
-              (!settings.requirePlaceForDeliveryOnly)) ...[
-            const SizedBox(height: 12),
-            if (isReadOnly)
-              _ReadOnlyDetailsField(
-                label: 'Barangay',
-                value: effectiveDraft.barangay,
-              )
-            else
-              _BarangayField(
-                controller: controllers.barangay,
-                items: barangays,
-                onActivated: widget.onBarangayActivated,
-                onMenuVisibilityChanged: (isOpen) {
-                  if (!mounted || _isBarangayMenuOpen == isOpen) {
-                    return;
-                  }
-                  setState(() => _isBarangayMenuOpen = isOpen);
-                },
-                onChanged: () async {
-                  await widget.onDraftChanged();
-                },
-              ),
-            if (effectiveDraft.fulfillmentMethod ==
-                    FulfillmentMethod.delivery &&
-                effectiveDraft.barangay.trim().isNotEmpty) ...[
-              const SizedBox(height: 12),
-              if (isReadOnly)
-                _ReadOnlyDetailsField(
-                  label: 'Street/Landmark',
-                  value: effectiveDraft.addressStreet.trim().isNotEmpty
-                      ? effectiveDraft.addressStreet
-                      : effectiveDraft.addressLandmark,
-                )
-              else
-                TextField(
-                  controller: controllers.street,
-                  onChanged: (_) => widget.onDraftChanged(),
-                  decoration: InputDecoration(
-                    labelText: hideStreetLabel ? null : 'Street/Landmark',
-                  ),
-                ),
-            ],
-          ],
-          const SizedBox(height: 12),
-          IgnorePointer(
-            ignoring: isReadOnly,
-            child: Opacity(
-              opacity: isReadOnly ? 0.72 : 1,
-              child: RadioGroup<FulfillmentMethod>(
-                groupValue: effectiveDraft.fulfillmentMethod,
-                onChanged: (value) async {
-                  await widget.onDraftChanged(method: value);
-                },
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: RadioListTile<FulfillmentMethod>(
-                        value: FulfillmentMethod.pickup,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: const VisualDensity(
-                          horizontal: -4,
-                          vertical: -4,
-                        ),
-                        title: const Text('Pickup'),
-                      ),
-                    ),
-                    Expanded(
-                      child: RadioListTile<FulfillmentMethod>(
-                        value: FulfillmentMethod.delivery,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: const VisualDensity(
-                          horizontal: -4,
-                          vertical: -4,
-                        ),
-                        title: const Text('Delivery'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          if (deliveryAdvisoryMessage != null) ...[
+          if (items.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(
-              deliveryAdvisoryMessage,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: isDeliveryAdvisoryHighlighted
-                    ? const Color(0xFFE31E24)
-                    : const Color(0xFF667085),
-                height: 1.25,
+            for (final item in items) ...[
+              GestureDetector(
+                onTap: isReadOnly ? null : () => _editItem(context, ref, item),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE4E7EC)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.text,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: const Color(0xFF344054),
+                                height: 1.2,
+                              ),
+                        ),
+                      ),
+                      if (!isReadOnly)
+                        IconButton(
+                          tooltip: 'Remove lista item',
+                          onPressed: () => ref
+                              .read(appControllerProvider.notifier)
+                              .removeRequestedListItem(item.id),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: Color(0xFF667085),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+              if (item != items.last) const SizedBox(height: 8),
+            ],
           ],
         ],
       ),
     );
   }
+}
+
+Future<String?> _showRequestedListItemDialog(
+  BuildContext context, {
+  String initialValue = '',
+}) async {
+  final controller = TextEditingController(text: initialValue);
+  final focusNode = FocusNode();
+  return showDialog<String>(
+    context: context,
+    builder: (dialogContext) => AppModalFrame(
+      title: initialValue.isEmpty ? 'Add Lista Item' : 'Edit Lista Item',
+      actions: [
+        AppModalButton(
+          label: 'Close',
+          onPressed: () => Navigator.of(dialogContext).pop(),
+        ),
+        const SizedBox(width: 8),
+        AppModalButton(
+          label: initialValue.isEmpty ? 'Add' : 'Save',
+          isPrimary: true,
+          onPressed: () {
+            final value = controller.text.trim();
+            if (value.isNotEmpty) {
+              Navigator.of(dialogContext).pop(value);
+            }
+          },
+        ),
+      ],
+      child: AnimatedBuilder(
+        animation: focusNode,
+        builder: (context, child) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: controller,
+              focusNode: focusNode,
+              autofocus: true,
+              maxLines: 1,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                hintText: 'Product | Unit | Quantity',
+              ),
+              onSubmitted: (_) {
+                final value = controller.text.trim();
+                if (value.isNotEmpty) {
+                  Navigator.of(dialogContext).pop(value);
+                }
+              },
+            ),
+            if (initialValue.isEmpty && focusNode.hasFocus)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 4),
+                child: Text(
+                  'Example: Rebisco Cracker | 1 pack | x2',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF667085),
+                    height: 1.15,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  ).whenComplete(() {
+    controller.dispose();
+    focusNode.dispose();
+  });
 }
 
 class _ReadOnlyDetailsField extends StatelessWidget {
@@ -3431,9 +3695,9 @@ class _BarangayFieldState extends State<_BarangayField> {
   }
 
   List<String> get _matches {
-    final query = _searchController.text.trim().toLowerCase();
+    final query = _searchController.text;
     return widget.items
-        .where((item) => query.isEmpty || item.toLowerCase().contains(query))
+        .where((item) => matchesLenientSearch(query, [item]))
         .toList();
   }
 
@@ -3523,7 +3787,9 @@ class _BarangayFieldState extends State<_BarangayField> {
                   child: Material(
                     color: Colors.transparent,
                     child: Padding(
-                      padding: const EdgeInsets.only(bottom: bottomOuterPadding),
+                      padding: const EdgeInsets.only(
+                        bottom: bottomOuterPadding,
+                      ),
                       child: Container(
                         width: size.width,
                         decoration: BoxDecoration(
@@ -3533,7 +3799,9 @@ class _BarangayFieldState extends State<_BarangayField> {
                         ),
                         clipBehavior: Clip.antiAlias,
                         child: ConstrainedBox(
-                          constraints: BoxConstraints(maxHeight: resolvedMaxHeight),
+                          constraints: BoxConstraints(
+                            maxHeight: resolvedMaxHeight,
+                          ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -3551,8 +3819,12 @@ class _BarangayFieldState extends State<_BarangayField> {
                                   decoration: InputDecoration(
                                     hintText: 'Search barangay...',
                                     suffixIcon:
-                                        widget.controller.text.trim().isNotEmpty ||
-                                            _searchController.text.trim().isNotEmpty
+                                        widget.controller.text
+                                                .trim()
+                                                .isNotEmpty ||
+                                            _searchController.text
+                                                .trim()
+                                                .isNotEmpty
                                         ? IconButton(
                                             tooltip: 'Clear barangay',
                                             onPressed: () async {
@@ -3577,7 +3849,9 @@ class _BarangayFieldState extends State<_BarangayField> {
                                   ),
                                   child: Text(
                                     'No matching barangays',
-                                    style: Theme.of(context).textTheme.bodyMedium
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
                                         ?.copyWith(
                                           color: const Color(0xFF667085),
                                           height: 1.15,
@@ -3593,11 +3867,14 @@ class _BarangayFieldState extends State<_BarangayField> {
                                     itemBuilder: (context, index) {
                                       return MousePressable(
                                         onTap: () async {
-                                          widget.controller.text = matches[index];
+                                          widget.controller.text =
+                                              matches[index];
                                           widget.controller.selection =
                                               TextSelection.collapsed(
-                                                offset:
-                                                    widget.controller.text.length,
+                                                offset: widget
+                                                    .controller
+                                                    .text
+                                                    .length,
                                               );
                                           _removeOverlay();
                                           await widget.onChanged();
@@ -3631,7 +3908,9 @@ class _BarangayFieldState extends State<_BarangayField> {
                                                 .bodyLarge
                                                 ?.copyWith(
                                                   height: 1.15,
-                                                  color: const Color(0xFF101828),
+                                                  color: const Color(
+                                                    0xFF101828,
+                                                  ),
                                                 ),
                                           ),
                                         ),
@@ -4177,13 +4456,12 @@ class _CurrentCartItemCard extends ConsumerWidget {
                           item.productName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleMedium?.copyWith(
-                            fontSize: titleFontSize,
-                            fontWeight: FontWeight.w800,
-                            height: 1.15,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontSize: titleFontSize,
+                                fontWeight: FontWeight.w800,
+                                height: 1.15,
+                              ),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -4206,7 +4484,9 @@ class _CurrentCartItemCard extends ConsumerWidget {
                                 runSpacing: 4,
                                 children: [
                                   Text(
-                                    formatPesos(item.referenceUnitPriceCentavos),
+                                    formatPesos(
+                                      item.referenceUnitPriceCentavos,
+                                    ),
                                     style: _clientPriceTextStyle(
                                       context,
                                       fontSize: priceFontSize,
@@ -4429,6 +4709,7 @@ class ProductCard extends ConsumerStatefulWidget {
     this.adaptiveSizing = false,
     this.posterMode = false,
     this.showImage = true,
+    this.wideImage = false,
     this.modalDisplayUnit,
     this.modalDisplayPriceCentavos,
     this.modalDisplayPriceUpdatedAt,
@@ -4445,6 +4726,7 @@ class ProductCard extends ConsumerStatefulWidget {
   final bool adaptiveSizing;
   final bool posterMode;
   final bool showImage;
+  final bool wideImage;
   final String? modalDisplayUnit;
   final int? modalDisplayPriceCentavos;
   final DateTime? modalDisplayPriceUpdatedAt;
@@ -4464,7 +4746,11 @@ class _ProductCardState extends ConsumerState<ProductCard> {
 
   Future<void> _showProductModal(BuildContext context, int cartQuantity) async {
     final latestProduct =
-        ref.read(appControllerProvider).products.where((item) => item.id == widget.product.id).firstOrNull ??
+        ref
+            .read(appControllerProvider)
+            .products
+            .where((item) => item.id == widget.product.id)
+            .firstOrNull ??
         widget.product;
     await _showProductDetailsModal(
       context,
@@ -4486,11 +4772,10 @@ class _ProductCardState extends ConsumerState<ProductCard> {
     final liveProduct =
         ref.watch(
           appControllerProvider.select(
-            (state) =>
-                state.products
-                    .where((item) => item.id == widget.product.id)
-                    .cast<Product?>()
-                    .firstWhere((item) => item != null, orElse: () => null),
+            (state) => state.products
+                .where((item) => item.id == widget.product.id)
+                .cast<Product?>()
+                .firstWhere((item) => item != null, orElse: () => null),
           ),
         ) ??
         widget.product;
@@ -4545,7 +4830,7 @@ class _ProductCardState extends ConsumerState<ProductCard> {
               children: [
                 if (widget.showImage) ...[
                   AspectRatio(
-                    aspectRatio: 1,
+                    aspectRatio: widget.wideImage ? 16 / 9 : 1,
                     child: ProductPlaceholder(
                       label: displayName,
                       posterMode: widget.posterMode,
@@ -4970,11 +5255,10 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
     final liveProduct =
         ref.watch(
           appControllerProvider.select(
-            (state) =>
-                state.products
-                    .where((item) => item.id == widget.product.id)
-                    .cast<Product?>()
-                    .firstWhere((item) => item != null, orElse: () => null),
+            (state) => state.products
+                .where((item) => item.id == widget.product.id)
+                .cast<Product?>()
+                .firstWhere((item) => item != null, orElse: () => null),
           ),
         ) ??
         widget.product;
@@ -5464,12 +5748,11 @@ class _ProductModalState extends ConsumerState<_ProductModal> {
                                 );
                                 if (nextQuantity != cartQuantity) {
                                   if (nextQuantity <= 0) {
-                                    final shouldRemove =
-                                        cartQuantity > 0
-                                            ? await _showRemoveProductDialog(
-                                              context,
-                                            )
-                                            : true;
+                                    final shouldRemove = cartQuantity > 0
+                                        ? await _showRemoveProductDialog(
+                                            context,
+                                          )
+                                        : true;
                                     if (shouldRemove != true) {
                                       return;
                                     }
