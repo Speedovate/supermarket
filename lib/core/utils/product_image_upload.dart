@@ -9,9 +9,11 @@ const _initialProductImageQuality = 55;
 const _minimumProductImageQuality = 28;
 const _maxProductImageBytes = 120 * 1024;
 
-Future<String?> pickCompressedProductImageDataUrl() async {
+Future<String?> pickCompressedProductImageDataUrl({
+  required ImageSource source,
+}) async {
   final picker = ImagePicker();
-  final file = await picker.pickImage(source: ImageSource.gallery);
+  final file = await picker.pickImage(source: source);
   if (file == null) {
     return null;
   }

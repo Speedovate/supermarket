@@ -162,7 +162,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                 : (width - ((columns - 1) * gridSpacing)) / columns;
             final gridCardDensity = _homeCardDensityForWidth(resolvedCardWidth);
             final resolvedCardHeight = switch (columns) {
-              1 => lerpDouble(194.0, 186.0, gridCardDensity)!,
+              1 => (resolvedCardWidth / (16 / 9)) + 190,
               2 =>
                 resolvedCardWidth + lerpDouble(185.0, 172.0, gridCardDensity)!,
               3 =>
@@ -190,7 +190,8 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                   key: ValueKey(orderItem.id),
                   product: orderProducts[i],
                   adaptiveSizing: true,
-                  showImage: columns != 1,
+                  showImage: true,
+                  wideImage: columns == 1,
                   modalDisplayName: orderItem.productName,
                   modalDisplayUnit: orderItem.unit,
                   modalDisplayPriceCentavos:

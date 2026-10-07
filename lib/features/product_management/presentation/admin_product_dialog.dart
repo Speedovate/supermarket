@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/models/app_models.dart';
@@ -109,13 +110,15 @@ Future<Product?> showAdminProductDialog(
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, setState) {
-          Future<void> pickImage() async {
+          Future<void> pickImage(ImageSource source) async {
             if (isSubmitting || isPickingImage) {
               return;
             }
             setState(() => isPickingImage = true);
             try {
-              final pickedImage = await pickCompressedProductImageDataUrl();
+              final pickedImage = await pickCompressedProductImageDataUrl(
+                source: source,
+              );
               if (pickedImage == null) {
                 return;
               }
@@ -134,6 +137,49 @@ Future<Product?> showAdminProductDialog(
               } else {
                 isPickingImage = false;
               }
+            }
+          }
+
+          Future<void> chooseImageSource() async {
+            if (isSubmitting || isPickingImage) {
+              return;
+            }
+            final source = await showDialog<ImageSource>(
+              context: dialogContext,
+              builder: (sourceContext) => AppModalFrame(
+                title: 'Add Image',
+                actions: [
+                  AppModalButton(
+                    label: 'Close',
+                    onPressed: () => Navigator.of(sourceContext).pop(),
+                  ),
+                ],
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            Navigator.of(sourceContext).pop(ImageSource.camera),
+                        icon: const Icon(Icons.camera_alt_outlined),
+                        label: const Text('Camera'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(
+                          sourceContext,
+                        ).pop(ImageSource.gallery),
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: const Text('Gallery'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+            if (source != null && dialogContext.mounted) {
+              await pickImage(source);
             }
           }
 
@@ -183,7 +229,7 @@ Future<Product?> showAdminProductDialog(
                     ),
                     const SizedBox(height: 12),
                     MousePressable(
-                      onTap: isPickingImage ? null : pickImage,
+                      onTap: isPickingImage ? null : chooseImageSource,
                       borderRadius: BorderRadius.circular(16),
                       child: InputDecorator(
                         decoration: InputDecoration(

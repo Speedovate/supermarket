@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Andrew's Supermarket uses the camera to add product images.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Andrew's Supermarket uses your photo library to add product images.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
