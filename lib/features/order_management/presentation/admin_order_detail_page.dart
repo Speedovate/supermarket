@@ -25,10 +25,7 @@ class AdminOrderDetailPage extends ConsumerStatefulWidget {
 
 class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
   late OrderRequest editableOrder;
-  late List<CartItem> _originalCart;
-  late CustomerDraft _originalDraft;
   bool initialized = false;
-  bool _restoredPreviewState = false;
   bool _initializationScheduled = false;
 
   String _displayBarangayWithCutoff(OrderRequest order) {
@@ -61,16 +58,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
       return false;
     }
     editableOrder = order;
-    _originalCart = [...appState.cart];
-    _originalDraft = appState.customerDraft;
     initialized = true;
-    _restoredPreviewState = false;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      ref.read(appControllerProvider.notifier).addOrderToCart(order);
-    });
     return true;
   }
 
@@ -89,31 +77,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
       return;
     }
 
-    if (!_restoredPreviewState) {
-      _restoredPreviewState = true;
-      ref
-          .read(appControllerProvider.notifier)
-          .replaceCartAndDraft(
-            cart: _originalCart,
-            customerDraft: _originalDraft,
-          );
-    }
-
     _initializeOrderPreview();
-  }
-
-  @override
-  void dispose() {
-    if (!_restoredPreviewState && initialized) {
-      _restoredPreviewState = true;
-      ref
-          .read(appControllerProvider.notifier)
-          .replaceCartAndDraft(
-            cart: _originalCart,
-            customerDraft: _originalDraft,
-          );
-    }
-    super.dispose();
   }
 
   @override
@@ -350,9 +314,6 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                     await ref
                         .read(appControllerProvider.notifier)
                         .updateOrder(updatedOrder);
-                    await ref
-                        .read(appControllerProvider.notifier)
-                        .addOrderToCart(updatedOrder);
                     if (!mounted) {
                       return;
                     }
@@ -592,6 +553,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
           controller: controller,
           autofocus: true,
           maxLines: 1,
+          textCapitalization: TextCapitalization.words,
           decoration: const InputDecoration(
             hintText: 'Product | Unit | Quantity',
           ),
@@ -659,6 +621,7 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
                 focusNode: focusNode,
                 autofocus: true,
                 maxLines: 1,
+                textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
                   hintText: 'Product | Unit | Quantity',
                 ),
@@ -1285,7 +1248,6 @@ class _AdminOrderDetailPageState extends ConsumerState<AdminOrderDetailPage> {
     );
 
     await ref.read(appControllerProvider.notifier).updateOrder(updatedOrder);
-    await ref.read(appControllerProvider.notifier).addOrderToCart(updatedOrder);
     if (!mounted) {
       searchController.dispose();
       return;

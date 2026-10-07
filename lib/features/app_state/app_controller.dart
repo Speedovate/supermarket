@@ -1771,6 +1771,11 @@ class AppController extends Notifier<AppState> {
     await _persist();
   }
 
+  Future<void> clearCart() async {
+    state = state.copyWith(cart: const [], requestedListItems: const []);
+    await _persist();
+  }
+
   Future<void> addRequestedListItem(String value) async {
     final text = value.trim();
     if (text.isEmpty) {

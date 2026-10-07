@@ -547,7 +547,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   }
 
   List<OrderRequest> _matchingCustomerOrders(AppState state) {
-    return state.orders;
+    final currentPhone = normalizePhoneNumber(state.customerDraft.mobileNumber);
+    if (currentPhone.isEmpty) {
+      return const [];
+    }
+    return state.orders.where((order) {
+      return normalizePhoneNumber(order.phone) == currentPhone;
+    }).toList();
   }
 
   Future<void> _snapBestSellersToNearest(double itemExtent) async {
@@ -2780,6 +2786,32 @@ class _DesktopCartPanel extends ConsumerWidget {
   final Future<void> Function(OrderRequest order) onOrderAgain;
   final bool isBottomSheet;
 
+  Future<void> _clearCurrentCart(BuildContext context, WidgetRef ref) async {
+    final shouldClear = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AppModalFrame(
+        title: 'Clear Cart?',
+        actions: [
+          AppModalButton(
+            label: 'Close',
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+          ),
+          const SizedBox(width: 8),
+          AppModalButton(
+            label: 'Clear Cart',
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+          ),
+        ],
+        child: const AppModalBodyText(
+          'Remove all products and Lista items from your current cart?',
+        ),
+      ),
+    );
+    if (shouldClear == true) {
+      await ref.read(appControllerProvider.notifier).clearCart();
+    }
+  }
+
   Future<void> _scrollToRevealBarangayField(BuildContext fieldContext) async {
     if (!isBottomSheet || !scrollController.hasClients) {
       return;
@@ -2880,6 +2912,9 @@ class _DesktopCartPanel extends ConsumerWidget {
         !hasSelectedPricedItems && hasSelectedRequestedListItems
         ? 'To be quoted'
         : '${formatPesos(selectedTotalCentavos)}${hasSelectedRequestedListItems ? ' +' : ''}';
+    final canClearCurrentCart =
+        isCurrentSelection &&
+        (cart.isNotEmpty || requestedListItems.isNotEmpty);
 
     return SafeArea(
       left: false,
@@ -2945,10 +2980,10 @@ class _DesktopCartPanel extends ConsumerWidget {
                               Padding(
                                 padding: const EdgeInsets.only(right: 10),
                                 child: Badge(
-                                  isLabelVisible: finalCartCount > 0,
+                                  isLabelVisible: selectedItemCount > 0,
                                   alignment: AlignmentDirectional.topEnd,
                                   label: Text(
-                                    formatCompactCount(finalCartCount),
+                                    formatCompactCount(selectedItemCount),
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 10,
@@ -3121,6 +3156,34 @@ class _DesktopCartPanel extends ConsumerWidget {
                             ),
                           ),
                         ),
+                        if (canClearCurrentCart) ...[
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isBottomSheet ? 24 : 0,
+                            ),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 40,
+                              child: TextButton.icon(
+                                style: TextButton.styleFrom(
+                                  backgroundColor: const Color(
+                                    0xFFE31E24,
+                                  ).withValues(alpha: 0.10),
+                                  foregroundColor: const Color(0xFFE31E24),
+                                  shape: const StadiumBorder(),
+                                ),
+                                onPressed: () =>
+                                    _clearCurrentCart(context, ref),
+                                icon: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text('Clear Cart'),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ],
                   ),
@@ -3573,7 +3636,7 @@ Future<String?> _showRequestedListItemDialog(
               focusNode: focusNode,
               autofocus: true,
               maxLines: 1,
-              textCapitalization: TextCapitalization.characters,
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 hintText: 'Product | Unit | Quantity',
               ),
